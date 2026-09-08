@@ -1,0 +1,9 @@
+certifi==2026.7.22
+charset-normalizer==3.5.1
+idna==3.19
+numpy==2.5.3
+pillow==12.3.0
+plyfile==1.1.5
+python-dotenv==1.2.3
+requests==2.34.2
+urllib3==2.7.0

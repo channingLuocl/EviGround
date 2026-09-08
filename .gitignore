@@ -1,0 +1,13 @@
+# Credentials and local environments
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+# Generated outputs and downloaded assets
+local_outputs/
+*.pth
+*.pt
+*.pkl

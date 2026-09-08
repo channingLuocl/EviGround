@@ -1,0 +1,39 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+import numpy as np
+import run
+
+class LocalChecks(unittest.TestCase):
+    def test_depth_keeps_front_object(self):
+        with tempfile.TemporaryDirectory() as td:
+            xyz=np.array([[0.,0.,0.],[0.,1.,0.]])
+            meta=run.render(xyz,np.array([[255,0,0],[0,0,255]],dtype=np.uint8),Path(td)/'x.png',eye=[0,-3,0],at=[0,0,0],ids=np.array([1,2]))
+            self.assertEqual(meta['marked_ids'],[1])
+    def test_duplicate_ids_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)/'o.json'
+            p.write_text(json.dumps([{'bbox_id':1,'target':'chair','bbox_3d':[0,0,0,1,1,1]}]*2))
+            with self.assertRaises(ValueError):run.load_objects(p)
+    def test_dry_run_never_calls_network(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td);run.demo(p)
+            args=SimpleNamespace(image=str(p/'scene.png'),objects=str(p/'objects.json'),query='red chair',dry_run=True)
+            with patch('run.requests.post') as request:
+                run.ground(args);request.assert_not_called()
+    def test_mock_api_maps_id_to_bbox(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td);run.demo(p)
+            args=SimpleNamespace(image=str(p/'scene.png'),objects=str(p/'objects.json'),query='laptop',dry_run=False,output=str(p/'result.json'))
+            response=SimpleNamespace(ok=True,json=lambda:{'choices':[{'message':{'content':'Predicted ID: 2\nExplanation: test fixture'}}]})
+            with patch.dict('os.environ',{'SEEGROUND_BASE_URL':'https://example.invalid/v1','SEEGROUND_MODEL':'mock-model','SEEGROUND_API_KEY':'test-only'}),patch('run.requests.post',return_value=response) as request:
+                run.ground(args)
+                self.assertTrue(request.call_args.kwargs['json']['messages'][0]['content'][0]['image_url']['url'].startswith('data:image/png;base64,'))
+            data=json.loads((p/'result.json').read_text())
+            self.assertEqual(data['predicted_id'],2)
+            self.assertEqual(data['bbox_3d'],[-.3,0.,.7,.5,.35,.1])
+
+if __name__=='__main__':unittest.main()
