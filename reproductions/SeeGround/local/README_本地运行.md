@@ -84,3 +84,38 @@ cd paper/reproductions/SeeGround
 下一步：先确认 API 图像请求成功，再补齐真实 scene0000_00 的实例标注与查找表，将真实场景接入；之后再接查询解析与相机策略，最后才评测。
 
 安装依赖的锁定清单：`local/requirements-lock.txt`。检查命令：`.venv/bin/python local/test_local.py`。
+
+## 已跑通：真实场景两阶段试运行（2026-09-08）
+
+最新进展覆盖了上文部分待办：已准备 `scene0011_00` 的真实点云、实例分割、坐标对齐矩阵及作者 Nr3D 查找表，并接入“API 解析查询 → 匹配目标/参照物 → CPU 选视角并标号 → API 选目标”。
+
+- 点数：237,360；作者查找表候选数：27。
+- 逐实例重建包围框与作者 GT 查找表比较，最大坐标差约 `4.53e-7 m`。
+- GT 类别表仅用于核对，模型输入使用作者提供的预测类别表。没有将目标真值编号传给模型。
+- 手写探索查询：`Find the large table surrounded by chairs.`
+- `qwen3-vl-flash` 解析出 table / chairs，最终预测 ID 2；图中对应中央长桌，程序查出了它的包围框。
+- 此查询并非 Nr3D 原始标注，不报告基准准确率。Nr3D 官方 Google Drive 描述下载及在线浏览器目前在本机超时。
+- CPU 投影、类别词匹配、提示词等仍为本地适配，不能等同作者原始实验。稀疏点渲染也与论文图片质量不同。
+
+### 本机重跑
+
+在本目录安装依赖并配置 `.env` 后：
+
+```bash
+# 原始文件放在 local_outputs/downloads，准备时不调用 API
+.venv/bin/python local/prepare_scene.py --scene scene0011_00
+
+# 运行一次新查询会调用 API 两次，可能收费；run-name 必须使用新名称
+.venv/bin/python local/real_scene.py \
+  --query 'Find the large table surrounded by chairs.' \
+  --run-name trial_02
+```
+
+文件来源：
+
+- 作者查找表：[seeground_object_lookup_table.zip](https://github.com/user-attachments/files/18056532/seeground_object_lookup_table.zip)，本机保存为 `local_outputs/downloads/olt.zip`。
+- ScanNet 场景目录：`http://kaldir.vc.in.tum.de/scannet/v2/scans/scene0011_00/`。按数据许可使用以下四个文件：`scene0011_00_vh_clean_2.ply`、`scene0011_00.txt`、`scene0011_00.aggregation.json`、`scene0011_00_vh_clean_2.0.010000.segs.json`。
+
+产物目录 `local_outputs/scene0011_00/`：`objects.json`、`objects_gt.json`、`scene.npz`、`overview.png`、`provenance.json`。每次查询独立子目录内保存 `run.json`（解析、相机、标号和适配说明）、`view.png`、`prediction.json`。
+
+这些数据、图像与 API 输出仅留本地，不上传 Git。新机器需自行准备数据和配置。
