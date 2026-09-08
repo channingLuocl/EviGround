@@ -119,3 +119,22 @@ cd paper/reproductions/SeeGround
 产物目录 `local_outputs/scene0011_00/`：`objects.json`、`objects_gt.json`、`scene.npz`、`overview.png`、`provenance.json`。每次查询独立子目录内保存 `run.json`（解析、相机、标号和适配说明）、`view.png`、`prediction.json`。
 
 这些数据、图像与 API 输出仅留本地，不上传 Git。新机器需自行准备数据和配置。
+
+
+## Nr3D 官方描述：10 条真实试跑
+
+已使用官方 Nr3D CSV 中 scene0011_00 的前 10 条 `correct_guess=True` 描述运行本地 API 流程，10 条均完成，按目标编号相等计分为 7/10。选题在推理前固定；没有把正确答案传给模型。单场景小样本、Qwen3-VL API、CPU 渲染及简化类别匹配均不同于论文完整评测，不能用 70% 与论文表格直接比较。
+
+在 SeeGround 目录运行：
+
+```sh
+.venv/bin/python local/batch_nr3d.py
+```
+
+默认读取 `local_outputs/downloads/nr3d_official.csv` 和已准备的 `local_outputs/scene0011_00`。官方描述下载入口：https://drive.google.com/file/d/1qswKclq4BlnHSGMSgzLmUu8iqdUXD8ZC/view 。数据需自行下载，不随代码上传。下载工具若无法连接，可使用本机已配置的系统代理。
+
+结果位于 `local_outputs/nr3d_trial_10/report.html`，包括原文、正确编号、预测编号、模型解释及每题图片；`manifest.json` 保存数据哈希和固定选题，`results.json` 保存统计。重复运行复用已完成预测，只重试失败题；更改模型或代码后，应使用 `--output local_outputs/nr3d_trial_new` 创建新实验，避免混用缓存。失败请求计入总数。
+
+初步错误线索：第 3、6 题的正确目标 15 在作者预测类别表中为 water cooler，而 GT 类别为 trash can；第 4 题正确目标 24 未出现在当次图片的可见编号列表中。这些是可检查的影响因素，尚不能单独确定因果。GT 类别只用于事后分析，没有替换推理输入。
+
+离线校验：`.venv/bin/python -m unittest discover -s local -p 'test*.py'`，6 项通过。

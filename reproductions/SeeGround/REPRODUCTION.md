@@ -24,3 +24,6 @@ CPU 渲染和简化提示不是论文完整实现；更换 API 模型后不能�
 ## 真实场景适配进展（2026-09-08）
 
 新增 `local/prepare_scene.py` 校验真实点云与作者查找表的坐标及实例编号；新增 `local/real_scene.py` 串联两次 API 调用与 CPU 视角渲染。本机已完成 scene0011_00 的手写描述试验，非 Nr3D 基准评测；详见本地运行说明。原始数据和结果不包含在仓库中。
+
+
+A 10-query official Nr3D scene0011_00 trial completed (7 correct by exact target ID). This is a deterministic single-scene API/CPU smoke evaluation, not the paper benchmark. See local/README_本地运行.md and local/batch_nr3d.py. Raw data, credentials, and prediction artifacts remain ignored.
