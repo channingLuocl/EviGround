@@ -75,7 +75,11 @@ def mesh_vertices(path):
         except KeyError as error:
             raise ValueError(f"不支持的 PLY 属性类型：{error.args[0]}") from error
         x_i, y_i, z_i = names.index("x"), names.index("y"), names.index("z")
-        return [tuple(unpacker.unpack(handle.read(unpacker.size))[i] for i in (x_i, y_i, z_i)) for _ in range(count)]
+        vertices = []
+        for _ in range(count):
+            values = unpacker.unpack(handle.read(unpacker.size))
+            vertices.append((values[x_i], values[y_i], values[z_i]))
+        return vertices
 
 
 def aligned_vertices(vertices, metadata_path):
