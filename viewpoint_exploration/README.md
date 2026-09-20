@@ -62,6 +62,34 @@ python3 viewpoint_exploration/run_horizontal_viewpoint_experiment.py \
 `ineligible` 表示当前物体表里少于两个同类非锚点候选、找不到锚点或输入几何不完整；它不应混入
 稳定性比例的分母。正式实验前先固定清单、角度间隔和人工核验规则；不得利用 `target_id` 挑选朝向。
 
+### 从官方 Nr3D CSV 生成审核清单
+
+Nr3D 的官方 `nr3d.csv` 不是本实验的直接输入。先用下面的脚本筛选：人工听者答对、明确提及目标类别、
+含有且只含一种 left/right 词、并且对象表中存在至少两个同类候选的查询。脚本按固定随机种子抽样，
+输出待审核 CSV；它不会猜测锚点，也不会将文本中的方向词直接当作最终关系。
+
+```sh
+python3 viewpoint_exploration/prepare_nr3d_review_sheet.py \
+  --nr3d-csv /path/to/nr3d.csv \
+  --objects-dir /path/to/seeground_object_lookup_table/nr3d/gt \
+  --limit 200 \
+  --seed 20260920 \
+  --output /path/to/review/nr3d_left_right_review.csv
+```
+
+在审核表中逐行填写 `anchor_id` 和最终确认的 `relation`，需要时填写逗号分隔的
+`allowed_headings_deg`，例如 `80,90,100`。只有将 `review_status` 改为 `approved` 的行才会被
+转换。`relation_hint` 和 `candidate_ids` 只辅助人工阅读；`target_id` 保留为评估字段，不能据此填写锚点。
+
+```sh
+python3 viewpoint_exploration/review_sheet_to_manifest.py \
+  --review-csv /path/to/review/nr3d_left_right_review.csv \
+  --output /path/to/review/nr3d_left_right_manifest.jsonl
+```
+
+再将生成的 JSONL 传给上一节的批量实验脚本。第一轮建议审核 100 条而不是直接审核 200 条；
+确认对象表 ID 与 Nr3D 目标 ID 匹配后，再固定规则扩大样本。
+
 ### 本轮范围
 
 本实现只检验水平 `left/right` 的几何稳定性。它没有解析自然语言、预测真实说话者位姿、建模相机
