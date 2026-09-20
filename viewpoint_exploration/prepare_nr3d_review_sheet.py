@@ -20,6 +20,7 @@ REVIEW_FIELDS = [
     "target_id",
     "relation_hint",
     "candidate_ids",
+    "scene_object_catalog",
     "objects_path",
     "anchor_id",
     "relation",
@@ -54,7 +55,8 @@ def eligible_rows(nr3d_csv, objects_dir):
             if scene_path not in cache:
                 cache[scene_path] = load_objects(scene_path)
             target_category = normalized_label(row["instance_type"])
-            candidates = [obj["id"] for obj in cache[scene_path] if obj["label"] == target_category]
+            scene_objects = cache[scene_path]
+            candidates = [obj["id"] for obj in scene_objects if obj["label"] == target_category]
             target_id = int(row["target_id"])
             if len(candidates) < 2 or target_id not in candidates:
                 continue
@@ -67,6 +69,7 @@ def eligible_rows(nr3d_csv, objects_dir):
                     "target_id": target_id,
                     "relation_hint": hint,
                     "candidate_ids": json.dumps(candidates),
+                    "scene_object_catalog": "; ".join(f"{obj['id']}:{obj['label']}" for obj in scene_objects),
                     "objects_path": f"{row['scan_id']}.json",
                     "anchor_id": "",
                     "relation": "",

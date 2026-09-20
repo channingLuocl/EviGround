@@ -79,7 +79,8 @@ python3 viewpoint_exploration/prepare_nr3d_review_sheet.py \
 
 在审核表中逐行填写 `anchor_id` 和最终确认的 `relation`，需要时填写逗号分隔的
 `allowed_headings_deg`，例如 `80,90,100`。只有将 `review_status` 改为 `approved` 的行才会被
-转换。`relation_hint` 和 `candidate_ids` 只辅助人工阅读；`target_id` 保留为评估字段，不能据此填写锚点。
+转换。`relation_hint`、`candidate_ids` 和 `scene_object_catalog` 只辅助人工阅读；其中后者列出同场景
+的 `实例 ID:类别`，可用来填写锚点。`target_id` 保留为评估字段，不能据此填写锚点。
 
 ```sh
 python3 viewpoint_exploration/review_sheet_to_manifest.py \
