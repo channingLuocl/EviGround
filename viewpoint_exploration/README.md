@@ -116,3 +116,14 @@ python3 viewpoint_exploration/run_facing_anchor_pose_experiment.py \
   --mesh-dir data/scannet_minimal \
   --output-dir results/facing_anchor_mesh_reviewed5
 ```
+
+可用下面的脚本将某条结果画成俯视 SVG。蓝框是锚点，橙框是同类候选，圆点是可行观察位置；圆点颜色表示该位置下
+`left/right` 选择的候选。
+
+```sh
+python3 viewpoint_exploration/render_pose_case_svg.py \
+  --per-query results/facing_anchor_mesh_reviewed5/per_query.jsonl \
+  --objects data/seeground_object_lookup_table/nr3d/gt/scene0697_00.json \
+  --query-id 33271 \
+  --output results/facing_anchor_mesh_reviewed5/query_33271_topdown.svg
+```
