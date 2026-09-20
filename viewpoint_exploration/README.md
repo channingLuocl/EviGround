@@ -96,3 +96,22 @@ python3 viewpoint_exploration/review_sheet_to_manifest.py \
 本实现只检验水平 `left/right` 的几何稳定性。它没有解析自然语言、预测真实说话者位姿、建模相机
 位置/高度、过滤遮挡与可达性，也没有调用 VLM。下一阶段才可在固定的冲突样本上增加语言线索、
 可见性过滤或主动感知基线。
+
+### 第二轮：`facing_anchor` 的 mesh 支持位姿近似
+
+完整 360° 朝向枚举会让任何非退化的左右关系翻转，因此它只能作为“语言未约束视角时的下界”诊断，
+不能证明方法有效。`run_facing_anchor_pose_experiment.py` 用于更严格的第二轮：只纳入人工确认包含
+`facing X`、`looking at X` 等单一锚点朝向线索的句子。
+
+它从 ScanNet 的低位 mesh 顶点生成 2D 地面候选格点，并剔除落在 GT 物体框（膨胀一个人体半径）内的
+位置。在每个保留位置，观察者朝向锚点；再计算 left/right 的赢家是否一致。该脚本不使用 `target_id`
+选择位置或赢家。它也没有建模可见性、遮挡、房间连通性、真实说话者位置或相机高度，所以输出必须称为
+“mesh 支持的可行位姿近似”，不能称为真实位姿恢复。
+
+```sh
+python3 viewpoint_exploration/run_facing_anchor_pose_experiment.py \
+  --manifest viewpoint_exploration/review_artifacts/nr3d_facing_anchor_manifest_5.jsonl \
+  --objects-dir data/seeground_object_lookup_table/nr3d/gt \
+  --mesh-dir data/scannet_minimal \
+  --output-dir results/facing_anchor_mesh_reviewed5
+```
