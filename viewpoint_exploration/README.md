@@ -103,8 +103,9 @@ python3 viewpoint_exploration/review_sheet_to_manifest.py \
 不能证明方法有效。`run_facing_anchor_pose_experiment.py` 用于更严格的第二轮：只纳入人工确认包含
 `facing X`、`looking at X` 等单一锚点朝向线索的句子。
 
-它从 ScanNet 的低位 mesh 顶点生成 2D 地面候选格点，并剔除落在 GT 物体框（膨胀一个人体半径）内的
-位置。在每个保留位置，观察者朝向锚点；再计算 left/right 的赢家是否一致。该脚本不使用 `target_id`
+它先使用同场景 `.txt` 中的 `axisAlignment` 将原始 mesh 对齐到 SeeGround GT 对象框坐标系，再从低位
+mesh 顶点生成 2D 地面候选格点，并剔除落在 GT 物体框（膨胀一个人体半径）内的位置。在每个保留位置，
+观察者朝向锚点；再计算 left/right 的赢家是否一致。该脚本不使用 `target_id`
 选择位置或赢家。它也没有建模可见性、遮挡、房间连通性、真实说话者位置或相机高度，所以输出必须称为
 “mesh 支持的可行位姿近似”，不能称为真实位姿恢复。
 

@@ -78,6 +78,23 @@ def mesh_vertices(path):
         return [tuple(unpacker.unpack(handle.read(unpacker.size))[i] for i in (x_i, y_i, z_i)) for _ in range(count)]
 
 
+def aligned_vertices(vertices, metadata_path):
+    line = next((line for line in Path(metadata_path).read_text().splitlines() if line.startswith("axisAlignment")), None)
+    if line is None:
+        raise ValueError(f"场景元数据缺少 axisAlignment：{metadata_path}")
+    values = [float(value) for value in line.split("=", 1)[1].split()]
+    if len(values) != 16:
+        raise ValueError(f"axisAlignment 不是 4x4 矩阵：{metadata_path}")
+    return [
+        (
+            values[0] * x + values[1] * y + values[2] * z + values[3],
+            values[4] * x + values[5] * y + values[6] * z + values[7],
+            values[8] * x + values[9] * y + values[10] * z + values[11],
+        )
+        for x, y, z in vertices
+    ]
+
+
 def load_obstacles(path):
     raw = json.loads(Path(path).read_text())
     obstacles = []
@@ -104,6 +121,7 @@ def is_blocked(x, y, obstacles, radius):
 def pose_result(record, objects_dir, mesh_dir, cell_size, floor_band, body_radius):
     object_path = objects_dir / record.get("objects_path", f"{record['scene_id']}.json")
     mesh_path = mesh_dir / "scans" / record["scene_id"] / f"{record['scene_id']}_vh_clean_2.ply"
+    metadata_path = mesh_dir / "scans" / record["scene_id"] / f"{record['scene_id']}.txt"
     objects = load_objects(object_path)
     anchor = next((obj for obj in objects if obj["id"] == record["anchor_id"]), None)
     if anchor is None:
@@ -111,7 +129,7 @@ def pose_result(record, objects_dir, mesh_dir, cell_size, floor_band, body_radiu
     candidates = [obj for obj in objects if obj["id"] != anchor["id"] and obj["label"] == normalized_label(record["target_category"])]
     if len(candidates) < 2:
         raise ValueError("少于两个同类非锚点候选")
-    cells, floor_z = floor_cells(mesh_vertices(mesh_path), cell_size, floor_band)
+    cells, floor_z = floor_cells(aligned_vertices(mesh_vertices(mesh_path), metadata_path), cell_size, floor_band)
     obstacles = load_obstacles(object_path)
     poses = []
     for cell_x, cell_y in sorted(cells):
