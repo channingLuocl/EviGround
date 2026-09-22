@@ -144,3 +144,18 @@ python3 viewpoint_exploration/run_canonical_anchor_view_experiment.py \
 
 这是墙体/空闲空间的第一种几何代理，尚未显式分割墙面或做射线可见性检测；因此它用于检验假设和暴露失败案例，
 不能称为完整的可达性或可见性模型。
+
+### 未见样本扩展
+
+机制验证完成后，用 `prepare_facing_anchor_manifest.py` 从原始 Nr3D CSV 自动构建未见样本。它只保留：听者答对、
+包含单一 left/right 词、至少两个同类候选、包含 facing/looking-at 线索，并且该线索后的锚点类别在场景中恰好对应
+一个实例的查询。锚点不需要人工填写；`target_id` 只保留为评估字段。
+
+```sh
+python3 viewpoint_exploration/prepare_facing_anchor_manifest.py \
+  --nr3d-csv data/nr3d.csv \
+  --objects-dir data/seeground_object_lookup_table/nr3d/gt \
+  --limit 100 \
+  --seed 20260922 \
+  --output results/manifests/nr3d_facing_anchor_auto100.jsonl
+```
