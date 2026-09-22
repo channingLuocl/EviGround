@@ -127,3 +127,20 @@ python3 viewpoint_exploration/render_pose_case_svg.py \
   --query-id 33271 \
   --output results/facing_anchor_mesh_reviewed5/query_33271_topdown.svg
 ```
+
+### 第三轮：规范锚点视角
+
+`facing_anchor` 的任意可站位置仍可能把同一句话解释成不同方向。第三轮将“面对锚点”近似为锚点每一个可能
+正面对应的一个规范朝向：统计锚点四侧局部带内，既有 mesh 地面支持又不落在物体框内的格点数；保留得分至少为
+最高分 80% 的方向。如果保留方向选出同一目标，结果为稳定；否则保留冲突，而不是用任意位置打破平局。
+
+```sh
+python3 viewpoint_exploration/run_canonical_anchor_view_experiment.py \
+  --manifest viewpoint_exploration/review_artifacts/nr3d_facing_anchor_manifest_5.jsonl \
+  --objects-dir data/seeground_object_lookup_table/nr3d/gt \
+  --mesh-dir data/scannet_minimal \
+  --output-dir results/canonical_anchor_view_reviewed5
+```
+
+这是墙体/空闲空间的第一种几何代理，尚未显式分割墙面或做射线可见性检测；因此它用于检验假设和暴露失败案例，
+不能称为完整的可达性或可见性模型。
