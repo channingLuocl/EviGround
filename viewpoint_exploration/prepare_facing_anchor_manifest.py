@@ -79,24 +79,36 @@ def eligible_rows(csv_path, objects_dir):
     return rows
 
 
+def excluded_query_ids(path):
+    if path is None:
+        return set()
+    return {
+        json.loads(line)["query_id"]
+        for line in Path(path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="自动构建严格的 Nr3D facing-anchor 清单")
     parser.add_argument("--nr3d-csv", type=Path, required=True)
     parser.add_argument("--objects-dir", type=Path, required=True)
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--seed", type=int, default=20260922)
+    parser.add_argument("--exclude-manifest", type=Path, help="排除已查看样本的 JSONL 清单")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
         raise SystemExit("输出文件已存在；请使用新路径")
     if args.limit < 1:
         raise SystemExit("limit 必须大于 0")
-    rows = eligible_rows(args.nr3d_csv, args.objects_dir)
+    excluded = excluded_query_ids(args.exclude_manifest)
+    rows = [row for row in eligible_rows(args.nr3d_csv, args.objects_dir) if row["query_id"] not in excluded]
     random.Random(args.seed).shuffle(rows)
     selected = rows[:args.limit]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in selected), encoding="utf-8")
-    print(json.dumps({"eligible_queries": len(rows), "selected_queries": len(selected), "seed": args.seed}, ensure_ascii=False))
+    print(json.dumps({"eligible_queries": len(rows), "selected_queries": len(selected), "excluded_queries": len(excluded), "seed": args.seed}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

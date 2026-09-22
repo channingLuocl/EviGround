@@ -155,7 +155,8 @@ python3 viewpoint_exploration/run_canonical_anchor_view_experiment.py \
 python3 viewpoint_exploration/prepare_facing_anchor_manifest.py \
   --nr3d-csv data/nr3d.csv \
   --objects-dir data/seeground_object_lookup_table/nr3d/gt \
-  --limit 100 \
+  --limit 50 \
   --seed 20260922 \
-  --output results/manifests/nr3d_facing_anchor_auto100.jsonl
+  --exclude-manifest viewpoint_exploration/review_artifacts/nr3d_facing_anchor_manifest_5.jsonl \
+  --output results/manifests/nr3d_facing_anchor_auto50.jsonl
 ```
