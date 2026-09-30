@@ -21,9 +21,11 @@ RELATION = re.compile(r"\b(left|right)\b")
 COMPOSITION_CUE = re.compile(
     r"\b(?:closest|closer|nearest|farthest|furthest|far|near|next to|middle|upper|lower|top|bottom|"
     r"first|second|third|fourth|fifth|largest|smallest|biggest|corner|headboard|foot|"
-    r"under|underneath|above|below|between|directly|wall|set|two|three|four|five)\b"
+    r"under|underneath|above|below|between|directly|wall|set|two|three|four|five|"
+    r"small|large|big|tiny|square|round|rectangular|front|back|rear|head|feet|"
+    r"complete|completely|facing in from)\b|\b\d+\b"
 )
-SECOND_REFERENCE = re.compile(r"\b(?:left|right)(?: hand)? side of\b")
+SECOND_REFERENCE = re.compile(r"\b(?:left|right)(?: hand)?(?: side)? of\b")
 
 
 def read_objects(path):

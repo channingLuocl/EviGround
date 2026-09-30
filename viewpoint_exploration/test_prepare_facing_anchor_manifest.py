@@ -28,6 +28,12 @@ class FacingAnchorManifestTest(unittest.TestCase):
     def test_rejects_far_and_group_count(self):
         self.assertFalse(is_pure_direction("Facing the bed, choose the far right pillow from the set of two."))
 
+    def test_rejects_attributes_and_noncanonical_view_cues(self):
+        self.assertFalse(is_pure_direction("Facing the bed, choose the small pillow on the right."))
+        self.assertFalse(is_pure_direction("Facing the door, choose the book on the right of the shelves."))
+        self.assertFalse(is_pure_direction("Look at the table with 5 computers and pick the keyboard on the right."))
+        self.assertFalse(is_pure_direction("Facing in from the door, choose the desk on the right."))
+
 
 if __name__ == "__main__":
     unittest.main()
