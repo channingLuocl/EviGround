@@ -132,7 +132,7 @@ def main():
         try:
             results.append(run_record(record, args.objects_dir, args.mesh_dir, args.cell_size, args.floor_band, args.body_radius, args.strip_depth, args.strip_half_width, args.tie_ratio))
         except (OSError, ValueError, json.JSONDecodeError) as error:
-            results.append({"query_id": record["query_id"], "scene_id": record["scene_id"], "status": "ineligible", "reason": str(error)})
+            results.append({"query_id": record["query_id"], "scene_id": record["scene_id"], "utterance": record.get("utterance"), "status": "ineligible", "reason": str(error)})
     counts = Counter(row["status"] for row in results)
     args.output_dir.mkdir(parents=True)
     (args.output_dir / "per_query.jsonl").write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in results), encoding="utf-8")

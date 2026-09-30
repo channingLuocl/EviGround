@@ -19,10 +19,11 @@ from explore_horizontal_viewpoints import normalized_label
 VIEW_CUE = re.compile(r"\b(?:facing|looking at|looking towards|look at)\b")
 RELATION = re.compile(r"\b(left|right)\b")
 COMPOSITION_CUE = re.compile(
-    r"\b(?:closest|nearest|farthest|furthest|near|next to|middle|upper|lower|top|bottom|"
+    r"\b(?:closest|closer|nearest|farthest|furthest|far|near|next to|middle|upper|lower|top|bottom|"
     r"first|second|third|fourth|fifth|largest|smallest|biggest|corner|headboard|foot|"
-    r"under|underneath|above|below|between|directly|wall)\b"
+    r"under|underneath|above|below|between|directly|wall|set|two|three|four|five)\b"
 )
+SECOND_REFERENCE = re.compile(r"\b(?:left|right)(?: hand)? side of\b")
 
 
 def read_objects(path):
@@ -54,7 +55,11 @@ def infer_anchor(utterance, objects):
 def is_pure_direction(utterance):
     """Keep only queries whose target resolution needs no relation beyond left/right."""
     text = normalized_label(utterance)
-    return len(set(RELATION.findall(text))) == 1 and COMPOSITION_CUE.search(text) is None
+    return (
+        len(set(RELATION.findall(text))) == 1
+        and COMPOSITION_CUE.search(text) is None
+        and SECOND_REFERENCE.search(text) is None
+    )
 
 
 def eligible_rows(csv_path, objects_dir, pure_direction_only=False):

@@ -22,6 +22,12 @@ class FacingAnchorManifestTest(unittest.TestCase):
     def test_keeps_plain_left_right_query(self):
         self.assertTrue(is_pure_direction("When facing the door, the couch to the right."))
 
+    def test_rejects_second_spatial_reference(self):
+        self.assertFalse(is_pure_direction("Facing the doors, the backpack on the left side of the ottoman."))
+
+    def test_rejects_far_and_group_count(self):
+        self.assertFalse(is_pure_direction("Facing the bed, choose the far right pillow from the set of two."))
+
 
 if __name__ == "__main__":
     unittest.main()
