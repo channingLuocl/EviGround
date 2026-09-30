@@ -23,7 +23,7 @@ COMPOSITION_CUE = re.compile(
     r"first|second|third|fourth|fifth|largest|smallest|biggest|corner|headboard|foot|"
     r"under|underneath|above|below|between|directly|wall|set|two|three|four|five|"
     r"small|large|big|tiny|square|round|rectangular|front|back|rear|head|feet|"
-    r"complete|completely|facing in from)\b|\b\d+\b"
+    r"complete|completely|facing in from|with|at the)\b|\b\d+\b"
 )
 SECOND_REFERENCE = re.compile(r"\b(?:left|right)(?: hand)?(?: side)? of\b")
 

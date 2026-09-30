@@ -33,6 +33,8 @@ class FacingAnchorManifestTest(unittest.TestCase):
         self.assertFalse(is_pure_direction("Facing the door, choose the book on the right of the shelves."))
         self.assertFalse(is_pure_direction("Look at the table with 5 computers and pick the keyboard on the right."))
         self.assertFalse(is_pure_direction("Facing in from the door, choose the desk on the right."))
+        self.assertFalse(is_pure_direction("Facing the table, choose the chair at the table and on the right."))
+        self.assertFalse(is_pure_direction("Facing the door, choose the book on the desk with the monitor on the right."))
 
 
 if __name__ == "__main__":
