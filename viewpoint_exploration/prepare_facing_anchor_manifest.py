@@ -18,6 +18,11 @@ from explore_horizontal_viewpoints import normalized_label
 
 VIEW_CUE = re.compile(r"\b(?:facing|looking at|looking towards|look at)\b")
 RELATION = re.compile(r"\b(left|right)\b")
+COMPOSITION_CUE = re.compile(
+    r"\b(?:closest|nearest|farthest|furthest|near|next to|middle|upper|lower|top|bottom|"
+    r"first|second|third|fourth|fifth|largest|smallest|biggest|corner|headboard|foot|"
+    r"under|underneath|above|below|between|directly|wall)\b"
+)
 
 
 def read_objects(path):
@@ -46,7 +51,13 @@ def infer_anchor(utterance, objects):
     return matches[0][1] if len(matches) == 1 else None
 
 
-def eligible_rows(csv_path, objects_dir):
+def is_pure_direction(utterance):
+    """Keep only queries whose target resolution needs no relation beyond left/right."""
+    text = normalized_label(utterance)
+    return len(set(RELATION.findall(text))) == 1 and COMPOSITION_CUE.search(text) is None
+
+
+def eligible_rows(csv_path, objects_dir, pure_direction_only=False):
     rows = []
     with Path(csv_path).open(newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
@@ -54,6 +65,8 @@ def eligible_rows(csv_path, objects_dir):
                 continue
             relation_words = RELATION.findall(normalized_label(row["utterance"]))
             if len(set(relation_words)) != 1:
+                continue
+            if pure_direction_only and not is_pure_direction(row["utterance"]):
                 continue
             scene_id = row["scan_id"]
             object_path = objects_dir / f"{scene_id}.json"
@@ -96,6 +109,7 @@ def main():
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--seed", type=int, default=20260922)
     parser.add_argument("--exclude-manifest", type=Path, help="排除已查看样本的 JSONL 清单")
+    parser.add_argument("--pure-direction-only", action="store_true", help="排除需要距离、序数、尺寸等组合关系的查询")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
@@ -103,7 +117,7 @@ def main():
     if args.limit < 1:
         raise SystemExit("limit 必须大于 0")
     excluded = excluded_query_ids(args.exclude_manifest)
-    rows = [row for row in eligible_rows(args.nr3d_csv, args.objects_dir) if row["query_id"] not in excluded]
+    rows = [row for row in eligible_rows(args.nr3d_csv, args.objects_dir, args.pure_direction_only) if row["query_id"] not in excluded]
     random.Random(args.seed).shuffle(rows)
     selected = rows[:args.limit]
     args.output.parent.mkdir(parents=True, exist_ok=True)

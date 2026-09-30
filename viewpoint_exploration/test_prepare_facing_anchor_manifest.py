@@ -1,6 +1,6 @@
 import unittest
 
-from prepare_facing_anchor_manifest import infer_anchor
+from prepare_facing_anchor_manifest import infer_anchor, is_pure_direction
 
 
 class FacingAnchorManifestTest(unittest.TestCase):
@@ -15,6 +15,12 @@ class FacingAnchorManifestTest(unittest.TestCase):
     def test_rejects_multiple_matching_anchors(self):
         objects = [{"id": 7, "label": "door"}, {"id": 8, "label": "bed"}]
         self.assertIsNone(infer_anchor("Facing the door beside the bed, choose the lamp on the left.", objects))
+
+    def test_rejects_compositional_direction_query(self):
+        self.assertFalse(is_pure_direction("Facing the bed, choose the pillow closest to the headboard on the right."))
+
+    def test_keeps_plain_left_right_query(self):
+        self.assertTrue(is_pure_direction("When facing the door, the couch to the right."))
 
 
 if __name__ == "__main__":

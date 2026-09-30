@@ -169,3 +169,12 @@ python3 viewpoint_exploration/download_scannet_manifest_assets.py \
   --manifest results/manifests/nr3d_facing_anchor_auto50.jsonl \
   --output-root data/scannet_minimal
 ```
+
+当前规范视角模块只解析 facing-anchor 和单一 left/right，因此应先从既有样本中移除距离、序数、大小、
+上下与锚点部件等组合关系；这不改变随机抽样，只形成可解释的纯方向子集。
+
+```sh
+python3 viewpoint_exploration/filter_pure_facing_manifest.py \
+  --manifest results/manifests/nr3d_facing_anchor_auto50.jsonl \
+  --output results/manifests/nr3d_facing_anchor_auto50_pure.jsonl
+```
