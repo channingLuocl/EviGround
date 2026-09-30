@@ -160,3 +160,12 @@ python3 viewpoint_exploration/prepare_facing_anchor_manifest.py \
   --exclude-manifest viewpoint_exploration/review_artifacts/nr3d_facing_anchor_manifest_5.jsonl \
   --output results/manifests/nr3d_facing_anchor_auto50.jsonl
 ```
+
+下载该清单涉及的 ScanNet mesh 与 `.txt` 时，使用下列可重跑下载器。它以 `.part` 临时文件原子写入，
+中断后再次运行会跳过已完成文件、重试未完成文件。
+
+```sh
+python3 viewpoint_exploration/download_scannet_manifest_assets.py \
+  --manifest results/manifests/nr3d_facing_anchor_auto50.jsonl \
+  --output-root data/scannet_minimal
+```
