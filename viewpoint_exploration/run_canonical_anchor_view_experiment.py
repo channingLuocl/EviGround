@@ -17,6 +17,7 @@ from run_facing_anchor_pose_experiment import aligned_vertices, floor_cells, is_
 
 
 SIDES = (("+x", 1, 0), ("-x", -1, 0), ("+y", 0, 1), ("-y", 0, -1))
+WALL_ANCHOR_WORDS = {"door", "window", "whiteboard", "blackboard", "mirror"}
 
 
 def read_manifest(path):
@@ -34,6 +35,11 @@ def read_manifest(path):
     if not records:
         raise ValueError("清单为空")
     return records
+
+
+def anchor_kind(label):
+    words = set(normalized_label(label).split())
+    return "wall" if words & WALL_ANCHOR_WORDS else "furniture"
 
 
 def side_free_cells(anchor, cells, obstacles, cell_size, body_radius, strip_depth, strip_half_width):
@@ -57,10 +63,10 @@ def side_free_cells(anchor, cells, obstacles, cell_size, body_radius, strip_dept
     return scores
 
 
-def choose_sides(scores, tie_ratio):
+def choose_sides(scores, tie_ratio, min_free_cells):
     best = max(score["free_cell_count"] for score in scores)
-    if best == 0:
-        raise ValueError("锚点四侧均没有足够的 mesh 支持空闲地面")
+    if best < min_free_cells:
+        raise ValueError(f"锚点四侧均没有至少 {min_free_cells} 个 mesh 支持空闲地面格点")
     return [score for score in scores if score["free_cell_count"] >= best * tie_ratio]
 
 
@@ -87,10 +93,12 @@ def load_scene(record, objects_dir, mesh_dir, cell_size, floor_band):
     return anchor, candidates, cells, floor_z, load_obstacles(object_path)
 
 
-def run_record(record, objects_dir, mesh_dir, cell_size, floor_band, body_radius, strip_depth, strip_half_width, tie_ratio):
+def run_record(record, objects_dir, mesh_dir, cell_size, floor_band, body_radius, strip_depth, strip_half_width, wall_strip_depth, wall_strip_half_width, tie_ratio, min_free_cells):
     anchor, candidates, cells, floor_z, obstacles = load_scene(record, objects_dir, mesh_dir, cell_size, floor_band)
-    scores = side_free_cells(anchor, cells, obstacles, cell_size, body_radius, strip_depth, strip_half_width)
-    selected = choose_sides(scores, tie_ratio)
+    kind = anchor_kind(anchor["label"])
+    depth, half_width = (wall_strip_depth, wall_strip_half_width) if kind == "wall" else (strip_depth, strip_half_width)
+    scores = side_free_cells(anchor, cells, obstacles, cell_size, body_radius, depth, half_width)
+    selected = choose_sides(scores, tie_ratio, min_free_cells)
     directions = []
     for side in selected:
         normal_x, normal_y = side["normal_xy"]
@@ -101,7 +109,7 @@ def run_record(record, objects_dir, mesh_dir, cell_size, floor_band, body_radius
     result = {
         "query_id": record["query_id"], "scene_id": record["scene_id"], "utterance": record.get("utterance"),
         "status": "stable" if len(winners) == 1 else "conflict",
-        "assumptions": {"canonical_view": "one camera heading per retained anchor side", "side_inference": "mesh-supported, bbox-unblocked floor cells in a local anchor-side strip", "excluded": ["true speaker pose", "visibility", "object orientation", "wall-plane semantics", "room connectivity"]},
+        "assumptions": {"canonical_view": "one camera heading per retained anchor side", "anchor_kind": kind, "side_inference": "mesh-supported, bbox-unblocked floor cells in a local anchor-side strip; wall anchors use a wider room-side strip", "excluded": ["true speaker pose", "visibility", "object orientation", "explicit wall-plane segmentation", "room connectivity"]},
         "input": {"target_category": record["target_category"], "anchor_id": record["anchor_id"], "relation": record["relation"]},
         "floor_z": round(floor_z, 3), "side_scores": [{key: value for key, value in score.items() if key != "cells"} for score in scores], "retained_directions": directions,
     }
@@ -121,16 +129,19 @@ def main():
     parser.add_argument("--body-radius", type=float, default=0.30)
     parser.add_argument("--strip-depth", type=float, default=1.50)
     parser.add_argument("--strip-half-width", type=float, default=0.50)
+    parser.add_argument("--wall-strip-depth", type=float, default=3.0)
+    parser.add_argument("--wall-strip-half-width", type=float, default=2.5)
     parser.add_argument("--tie-ratio", type=float, default=0.80, help="保留得分至少为最高分该比例的方向")
+    parser.add_argument("--min-free-cells", type=int, default=3, help="最高分方向至少需要的空闲地面格点数")
     args = parser.parse_args()
     if args.output_dir.exists():
         raise SystemExit("输出目录已存在；请指定新路径")
-    if min(args.cell_size, args.floor_band, args.body_radius, args.strip_depth, args.strip_half_width) <= 0 or not 0 < args.tie_ratio <= 1:
+    if min(args.cell_size, args.floor_band, args.body_radius, args.strip_depth, args.strip_half_width, args.wall_strip_depth, args.wall_strip_half_width) <= 0 or not 0 < args.tie_ratio <= 1 or args.min_free_cells < 1:
         raise SystemExit("几何参数必须为正，tie-ratio 必须在 (0, 1] 内")
     results = []
     for record in read_manifest(args.manifest):
         try:
-            results.append(run_record(record, args.objects_dir, args.mesh_dir, args.cell_size, args.floor_band, args.body_radius, args.strip_depth, args.strip_half_width, args.tie_ratio))
+            results.append(run_record(record, args.objects_dir, args.mesh_dir, args.cell_size, args.floor_band, args.body_radius, args.strip_depth, args.strip_half_width, args.wall_strip_depth, args.wall_strip_half_width, args.tie_ratio, args.min_free_cells))
         except (OSError, ValueError, json.JSONDecodeError) as error:
             results.append({"query_id": record["query_id"], "scene_id": record["scene_id"], "utterance": record.get("utterance"), "status": "ineligible", "reason": str(error)})
     counts = Counter(row["status"] for row in results)
