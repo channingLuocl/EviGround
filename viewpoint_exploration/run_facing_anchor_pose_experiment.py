@@ -122,7 +122,7 @@ def is_blocked(x, y, obstacles, radius):
     return any(abs(x - cx) <= half_x + radius and abs(y - cy) <= half_y + radius for cx, cy, half_x, half_y in obstacles)
 
 
-def pose_result(record, objects_dir, mesh_dir, cell_size, floor_band, body_radius):
+def pose_result(record, objects_dir, mesh_dir, cell_size, floor_band, body_radius, interior_only, wall_height, wall_gap):
     object_path = objects_dir / record.get("objects_path", f"{record['scene_id']}.json")
     mesh_path = mesh_dir / "scans" / record["scene_id"] / f"{record['scene_id']}_vh_clean_2.ply"
     metadata_path = mesh_dir / "scans" / record["scene_id"] / f"{record['scene_id']}.txt"
@@ -133,7 +133,21 @@ def pose_result(record, objects_dir, mesh_dir, cell_size, floor_band, body_radiu
     candidates = [obj for obj in objects if obj["id"] != anchor["id"] and obj["label"] == normalized_label(record["target_category"])]
     if len(candidates) < 2:
         raise ValueError("少于两个同类非锚点候选")
-    cells, floor_z = floor_cells(aligned_vertices(mesh_vertices(mesh_path), metadata_path), cell_size, floor_band)
+    aligned = aligned_vertices(mesh_vertices(mesh_path), metadata_path)
+    cells, floor_z = floor_cells(aligned, cell_size, floor_band)
+    region_counts = None
+    if interior_only:
+        from diagnose_room_floor_cells import classify_cells, load_semantic_vertex_labels
+
+        scene_dir = mesh_path.parent
+        labels = load_semantic_vertex_labels(
+            scene_dir / f"{record['scene_id']}_vh_clean_2.0.010000.segs.json",
+            scene_dir / f"{record['scene_id']}.aggregation.json",
+            len(aligned),
+        )
+        regions = classify_cells(aligned, labels, cell_size, floor_band, wall_height, wall_gap)
+        cells &= regions["interior_cells"]
+        region_counts = {key: len(regions[key]) for key in ("floor_cells", "interior_cells", "outside_floor_cells")}
     obstacles = load_obstacles(object_path)
     poses = []
     for cell_x, cell_y in sorted(cells):
@@ -150,13 +164,17 @@ def pose_result(record, objects_dir, mesh_dir, cell_size, floor_band, body_radiu
         raise ValueError("没有 mesh 支持且不与物体框碰撞的候选观察位置")
     counts = Counter(pose["winner_id"] for pose in poses)
     support = [{"candidate_id": candidate["id"], "poses": counts[candidate["id"]], "fraction": round(counts[candidate["id"]] / len(poses), 6)} for candidate in candidates]
-    return {
+    result = {
         "query_id": record["query_id"], "scene_id": record["scene_id"], "utterance": record.get("utterance"),
         "status": "stable" if len(counts) == 1 else "conflict",
         "assumptions": {"viewpoint_constraint": "observer faces the anchor from every sampled position", "standing_locations": "low mesh vertices quantized to a grid, excluding expanded GT object boxes", "excluded": ["true speaker pose", "visibility", "occlusion", "room connectivity", "camera height"]},
         "input": {"target_category": record["target_category"], "anchor_id": record["anchor_id"], "relation": record["relation"]},
         "floor_z": round(floor_z, 3), "feasible_pose_count": len(poses), "candidate_support": support, "poses": poses,
     }
+    if region_counts is not None:
+        result["room_region_counts"] = region_counts
+        result["assumptions"]["standing_locations"] = "semantic floor cells enclosed by a 2-D wall raster, excluding expanded GT object boxes"
+    return result
 
 
 def main():
@@ -168,15 +186,18 @@ def main():
     parser.add_argument("--cell-size", type=float, default=0.25)
     parser.add_argument("--floor-band", type=float, default=0.08)
     parser.add_argument("--body-radius", type=float, default=0.30)
+    parser.add_argument("--interior-only", action="store_true", help="只使用语义墙体包围的 floor 网格；需要 ScanNet 语义文件")
+    parser.add_argument("--wall-height", type=float, default=2.4)
+    parser.add_argument("--wall-gap", type=float, default=0.45)
     args = parser.parse_args()
     if args.output_dir.exists():
         raise SystemExit("输出目录已存在；请指定新路径")
-    if min(args.cell_size, args.floor_band, args.body_radius) <= 0:
-        raise SystemExit("cell-size、floor-band 与 body-radius 必须大于 0")
+    if min(args.cell_size, args.floor_band, args.body_radius, args.wall_height, args.wall_gap) <= 0:
+        raise SystemExit("几何参数必须大于 0")
     results = []
     for record in read_manifest(args.manifest):
         try:
-            results.append(pose_result(record, args.objects_dir, args.mesh_dir, args.cell_size, args.floor_band, args.body_radius))
+            results.append(pose_result(record, args.objects_dir, args.mesh_dir, args.cell_size, args.floor_band, args.body_radius, args.interior_only, args.wall_height, args.wall_gap))
         except (OSError, ValueError, json.JSONDecodeError) as error:
             results.append({"query_id": record["query_id"], "scene_id": record["scene_id"], "status": "ineligible", "reason": str(error)})
     args.output_dir.mkdir(parents=True)

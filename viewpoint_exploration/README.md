@@ -128,6 +128,42 @@ python3 viewpoint_exploration/render_pose_case_svg.py \
   --output results/facing_anchor_mesh_reviewed5/query_33271_topdown.svg
 ```
 
+#### 用语义分割过滤屋外地面
+
+上面的位姿脚本只按最低处 mesh 顶点取地面，不判断房间边界。若要检查屋外地面是否混入候选，先下载
+ScanNet 的语义文件：
+
+```sh
+python3 viewpoint_exploration/download_scannet_manifest_assets.py \
+  --manifest results/manifests/query_6999.jsonl \
+  --output-root data/scannet_minimal \
+  --include-semantics
+```
+
+然后运行：
+
+```sh
+python3 viewpoint_exploration/diagnose_room_floor_cells.py \
+  --scene-dir data/scannet_minimal/scans/scene0643_00 \
+  --output results/scene0643_00_floor_regions.json
+```
+
+该诊断使用 `floor` 顶点生成地面网格，用 `wall`、`door`、`window` 顶点形成二维墙体栅格，适度闭合门洞，
+再从场景边界向外做 flood fill。输出中的 `interior_cells` 是被墙体包围的地面候选，
+`outside_floor_cells` 是与外部相连的地面候选。它是房间边界的几何代理，不是 ScanNet 官方的室内/室外标注；
+需要先在 `6999` 的俯视图上检查分类是否合理，再接入位姿统计。
+
+主脚本也支持显式过滤：
+
+```sh
+python3 viewpoint_exploration/run_facing_anchor_pose_experiment.py \
+  --manifest results/manifests/query_6999.jsonl \
+  --objects-dir data/seeground_object_lookup_table/nr3d/gt \
+  --mesh-dir data/scannet_minimal \
+  --interior-only \
+  --output-dir results/query_6999_facing_anchor_interior
+```
+
 ### 第三轮：规范锚点视角
 
 `facing_anchor` 的任意可站位置仍可能把同一句话解释成不同方向。第三轮将“面对锚点”近似为锚点每一个可能

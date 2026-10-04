@@ -37,10 +37,17 @@ def main():
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True, help="ScanNet 根目录；文件写到 scans/<scene_id>/")
     parser.add_argument("--timeout", type=int, default=90)
+    parser.add_argument(
+        "--include-semantics",
+        action="store_true",
+        help="同时下载 ScanNet 的 aggregation 与 vertex segmentation 文件",
+    )
     args = parser.parse_args()
     if args.timeout < 1:
         raise SystemExit("timeout 必须大于 0")
-    suffixes = ("_vh_clean_2.ply", ".txt")
+    suffixes = ["_vh_clean_2.ply", ".txt"]
+    if args.include_semantics:
+        suffixes.extend([".aggregation.json", "_vh_clean_2.0.010000.segs.json"])
     failures = []
     for scene_id in scene_ids(args.manifest):
         scene_dir = args.output_root / "scans" / scene_id
