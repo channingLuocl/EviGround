@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import numpy as np
 import run
+from qwen_api import QwenAPIError, parse_predicted_id
 
 class LocalChecks(unittest.TestCase):
     def test_depth_keeps_front_object(self):
@@ -22,18 +23,24 @@ class LocalChecks(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td);run.demo(p)
             args=SimpleNamespace(image=str(p/'scene.png'),objects=str(p/'objects.json'),query='red chair',dry_run=True)
-            with patch('run.requests.post') as request:
+            with patch('run.chat') as request:
                 run.ground(args);request.assert_not_called()
     def test_mock_api_maps_id_to_bbox(self):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td);run.demo(p)
             args=SimpleNamespace(image=str(p/'scene.png'),objects=str(p/'objects.json'),query='laptop',dry_run=False,output=str(p/'result.json'))
             response=SimpleNamespace(ok=True,json=lambda:{'choices':[{'message':{'content':'Predicted ID: 2\nExplanation: test fixture'}}]})
-            with patch.dict('os.environ',{'SEEGROUND_BASE_URL':'https://example.invalid/v1','SEEGROUND_MODEL':'mock-model','SEEGROUND_API_KEY':'test-only'}),patch('run.requests.post',return_value=response) as request:
+            api_data={'choices':[{'message':{'content':'Predicted ID: 2\nExplanation: test fixture'}}], 'usage': {'total_tokens': 3}}
+            with patch.dict('os.environ',{'SEEGROUND_BASE_URL':'https://example.invalid/v1','SEEGROUND_MODEL':'mock-model','SEEGROUND_API_KEY':'test-only'}),patch('run.chat',return_value={'_content':'Predicted ID: 2\nExplanation: test fixture','_baseline':{'model':'mock-model','latency_s':0.01},'usage':api_data['usage']}) as request:
                 run.ground(args)
-                self.assertTrue(request.call_args.kwargs['json']['messages'][0]['content'][0]['image_url']['url'].startswith('data:image/png;base64,'))
+                request.assert_called_once()
             data=json.loads((p/'result.json').read_text())
             self.assertEqual(data['predicted_id'],2)
             self.assertEqual(data['bbox_3d'],[-.3,0.,.7,.5,.35,.1])
+
+    def test_id_parser_accepts_common_qwen_formats(self):
+        self.assertEqual(parse_predicted_id('Object ID: 3', {1, 3}), 3)
+        with self.assertRaises(QwenAPIError):
+            parse_predicted_id('Predicted ID: 9', {1, 3})
 
 if __name__=='__main__':unittest.main()

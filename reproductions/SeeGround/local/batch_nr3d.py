@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from real_scene import run_query
 from run import ROOT, load_objects
+from metrics import bbox_iou_3d, threshold_accuracy
 
 SOURCE='https://drive.google.com/file/d/1qswKclq4BlnHSGMSgzLmUu8iqdUXD8ZC/view'
 
@@ -21,9 +22,14 @@ def select_rows(path, scene, count):
     return rows[:count],len(rows)
 
 def summarize(results):
+    ious=[r['iou_3d'] for r in results if isinstance(r.get('iou_3d'),(int,float))]
+    latencies=[r['latency_s'] for r in results if isinstance(r.get('latency_s'),(int,float))]
     return {'total':len(results),'completed':sum(r.get('predicted_id') is not None for r in results),
             'correct':sum(r.get('correct') is True for r in results),
-            'accuracy':sum(r.get('correct') is True for r in results)/len(results) if results else None}
+            'accuracy':sum(r.get('correct') is True for r in results)/len(results) if results else None,
+            'iou_evaluated':len(ious),'acc25':threshold_accuracy(ious,.25),'acc50':threshold_accuracy(ious,.5),
+            'mean_iou':sum(ious)/len(ious) if ious else None,
+            'mean_latency_s':sum(latencies)/len(latencies) if latencies else None}
 
 def report(out,results,manifest):
     stats=summarize(results)
@@ -54,7 +60,10 @@ def main():
             if not pred.exists():run_query(scene_dir,row['query'],out,'official Nr3D utterance; CSV row '+str(row['csv_row']))
             prediction=json.loads(pred.read_text())
             if prediction['query']!=row['query']:raise ValueError('缓存查询不一致')
-            result.update(predicted_id=prediction['predicted_id'],response=prediction['response'],model=prediction['model'])
+            result.update(predicted_id=prediction['predicted_id'],response=prediction['response'],model=prediction['model'],
+                          latency_s=prediction.get('latency_s'))
+            gt_obj=next(o for o in load_objects(scene_dir/'objects_gt.json') if o['bbox_id']==row['target_id'])
+            result['iou_3d']=bbox_iou_3d(prediction['bbox_3d'],gt_obj['bbox_3d'])
             result['correct']=result['predicted_id']==row['target_id']
         except (ValueError,OSError,KeyError,IndexError) as exc:
             result.update(error=str(exc),correct=False)

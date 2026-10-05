@@ -7,7 +7,7 @@
 - 已读取本地 ScanNet scene0000_00：81,369 个点，生成真实点云预览。
 - 已生成合成样例：4 个带编号的方盒，分别代指两把椅子与两台电脑。用于检查软件链路，不是逼真的场景，不是 ScanNet 数据，不产生论文准确率。
 - 离线请求构造检查通过。
-- 4 项测试通过：遮挡点过滤、重复 ID 拒绝、离线检查不联网、模拟 API 返回 ID 后正确查出三维包围框。
+- 9 项测试通过：渲染遮挡、候选校验、离线请求、Qwen 输出解析和三维框 IoU 指标。
 - 尚未调用真实 API；需要填入配置。真实点云目前缺少物体实例标注与查找表，所以仅作无编号预览。
 
 ## 新电脑安装
@@ -35,6 +35,8 @@ SEEGROUND_API_KEY=你的密钥
 Base URL 通常以 `/v1` 结尾，应直接按服务商提供的地址填写，不要填文档网页，也不要重复附加 `/chat/completions`。当前入口只支持 OpenAI Chat Completions 兼容接口，模型须支持 Base64 图片输入。若服务商要求额外参数，需要对应适配。
 
 `.env` 已加入 Git 忽略规则，权限为 600。不要把密钥发到聊天中。当前程序只向配置的服务发送指定图片、查询与物体表。
+
+目前 `local/qwen_api.py` 是唯一的 Qwen 请求入口，使用 OpenAI Chat Completions 兼容格式。服务器上只需配置一次 `.env`，后续添加关系图、视角搜索或候选复核模块时可以复用同一个客户端。
 
 ## 2. 运行离线样例
 
@@ -133,8 +135,22 @@ cd paper/reproductions/SeeGround
 
 默认读取 `local_outputs/downloads/nr3d_official.csv` 和已准备的 `local_outputs/scene0011_00`。官方描述下载入口：https://drive.google.com/file/d/1qswKclq4BlnHSGMSgzLmUu8iqdUXD8ZC/view 。数据需自行下载，不随代码上传。下载工具若无法连接，可使用本机已配置的系统代理。
 
-结果位于 `local_outputs/nr3d_trial_10/report.html`，包括原文、正确编号、预测编号、模型解释及每题图片；`manifest.json` 保存数据哈希和固定选题，`results.json` 保存统计。重复运行复用已完成预测，只重试失败题；更改模型或代码后，应使用 `--output local_outputs/nr3d_trial_new` 创建新实验，避免混用缓存。失败请求计入总数。
+结果位于 `local_outputs/nr3d_trial_10/report.html`，包括原文、正确编号、预测编号、模型解释及每题图片；`manifest.json` 保存数据哈希和固定选题，`results.json` 保存统计。统计中包含 `acc25`、`acc50`、`mean_iou`，逐题结果还保存模型、延迟和 token 使用量。重复运行复用已完成预测，只重试失败题；更改模型或代码后，应使用 `--output local_outputs/nr3d_trial_new` 创建新实验，避免混用缓存。失败请求计入总数。
 
 初步错误线索：第 3、6 题的正确目标 15 在作者预测类别表中为 water cooler，而 GT 类别为 trash can；第 4 题正确目标 24 未出现在当次图片的可见编号列表中。这些是可检查的影响因素，尚不能单独确定因果。GT 类别只用于事后分析，没有替换推理输入。
 
-离线校验：`.venv/bin/python -m unittest discover -s local -p 'test*.py'`，6 项通过。
+离线校验：`.venv/bin/python -m unittest discover -s local -p 'test*.py'`。
+
+## 6. 服务器运行顺序
+
+```bash
+git clone -b qwen-vl-baseline git@github.com:channingLuocl/paper.git
+cd paper/reproductions/SeeGround
+python3 -m venv .venv
+.venv/bin/python -m pip install -r local/requirements-lock.txt
+cp .env.example .env
+chmod 600 .env
+.venv/bin/python -m unittest discover -s local -p 'test*.py'
+```
+
+先使用 `--dry-run` 检查本地链路，再填写服务器上的 `.env` 并运行真实 API。不要把 `.env`、`local_outputs/` 或 API 响应提交到 Git。
