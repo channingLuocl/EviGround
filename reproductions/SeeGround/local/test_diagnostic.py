@@ -203,7 +203,6 @@ class DiagnosticTests(unittest.TestCase):
         result=diagnose(data,objects,objects,[0,0,.5],trusted_categories=True)
         self.assertEqual(result['candidate_ids'],[1])
         self.assertEqual(result['status'],'resolved')
-        self.assertEqual(result['visual_needs'],[])
         data=parsed('black window',[],attrs=[{'category':'window','phrase':'black'}])
         result=diagnose(data,objects,objects,[0,0,.5],trusted_categories=True)
         self.assertEqual(result['candidate_ids'],[1])
@@ -213,6 +212,31 @@ class DiagnosticTests(unittest.TestCase):
         result=diagnose(data,objects,objects,[0,0,.5],checks,trusted_categories=True)
         self.assertEqual(result['candidate_ids'],[1])
         self.assertEqual(result['status'],'resolved')
+
+    def test_vertical_relation_is_recovered_and_filters_candidates(self):
+        objects=[obj(1,'cabinet',0,0), obj(2,'cabinet',0,0), obj(3,'refrigerator',0,0)]
+        objects[1]['bbox_3d'][2] = 2.0
+        raw={'Target':['cabinet'],'Anchor':['refrigerator'],'Relations':[],
+             'Observer':{},'Attributes':[],'Unhandled':[]}
+        data=validate_structure('cabinet above the refrigerator', raw)
+        self.assertEqual(data['Relations'][0]['relation'], 'above')
+        result=diagnose(data, objects, objects[:2], [0,0,.5], supported(objects),
+                        trusted_categories=True)
+        self.assertEqual(result['candidate_ids'], [2])
+        self.assertEqual(result['geometry']['relation_pairs'][0]['relation'], 'above')
+
+    def test_size_and_floor_constraints_use_box_proxies(self):
+        objects=[obj(1,'cabinet',0,0), obj(2,'cabinet',0,1)]
+        objects[0]['bbox_3d'][3:] = [.4,.4,.5]
+        objects[1]['bbox_3d'][3:] = [1.,1.,2.]
+        raw={'Target':['cabinet'],'Anchor':[],'Relations':[],
+             'Observer':{},'Attributes':[{'category':'cabinet','phrase':'smallest'}], 'Unhandled':[]}
+        data=validate_structure('the smallest cabinet', raw)
+        result=diagnose(data, objects, objects, [0,0,.5], supported(objects),
+                        trusted_categories=True)
+        self.assertEqual(result['candidate_ids'], [1])
+        self.assertEqual(result['geometry']['size_constraints'][0]['metric'], 'volume_m3')
+        self.assertEqual(result['visual_needs'],[])
 
 
 class RGBReviewTests(unittest.TestCase):

@@ -65,7 +65,7 @@ def parse_query(query, mode='baseline', calls=None):
                 '"group":false,"phrase":""}},"Attributes":[],"Unhandled":[]}. '
                 'Return Target and Anchor as arrays, Relations as an array, and Viewpoint as a string. '
                 'Each relation has target_category, anchor_category, relation, scope and phrase. '
-                'relation is nearest|farthest|near|left|right|front|back|other. '
+                'relation is nearest|farthest|near|left|right|front|back|above|below|other. '
                 'scope is side|relative_anchor; use an empty scope for distance relations. '
                 'Use nearest/farthest only for explicit distance superlatives, never proximity or motion. '
                 'Preserve every condition and its exact quote. Use singular category names without '

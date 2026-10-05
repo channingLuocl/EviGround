@@ -6,6 +6,12 @@ import numpy as np
 from evidence import match_retrieval_categories, retrieval_category
 
 
+VERTICAL_WORDS = {
+    'above': 'above', 'over': 'above', 'below': 'below',
+    'under': 'below', 'beneath': 'below',
+}
+
+
 PARSER_INSTRUCTIONS = '''
 Field definitions within the SAME top-level object; do not omit Target or Anchor:
 "Observer":{"origin":{"kind":"room_center|category|unspecified",
@@ -59,8 +65,52 @@ def recover_distance_relations(query, parsed):
     return parsed
 
 
-def validate_structure(query, parsed):
+def recover_vertical_relations(query, parsed):
+    """Recover one explicit vertical clause when the parser omitted or mislabeled it."""
     parsed = dict(parsed)
+    relations = [dict(r) for r in (parsed.get('Relations') or []) if isinstance(r, dict)]
+    targets = parsed.get('Target') if isinstance(parsed.get('Target'), list) else []
+    anchors = parsed.get('Anchor') if isinstance(parsed.get('Anchor'), list) else []
+    if len(targets) != 1 or len(anchors) != 1:
+        return parsed
+
+    # Correct the common Qwen failure: "right above" returned as near/other.
+    for relation in relations:
+        phrase = relation.get('phrase', '')
+        match = re.search(r'\b(?:right\s+above|directly\s+above|above|over|below|directly\s+under|under|beneath)\b',
+                          phrase, re.I)
+        if match:
+            relation['relation'] = VERTICAL_WORDS[re.search(
+                r'\b(above|over|below|under|beneath)\b', match.group(), re.I).group().lower()]
+            relation['scope'] = 'relative_anchor'
+            relation['target_category'] = relation.get('target_category') or targets[0]
+            relation['anchor_category'] = relation.get('anchor_category') or anchors[0]
+
+    if any(r.get('relation') in ('above', 'below') for r in relations):
+        parsed['Relations'] = relations
+        return parsed
+
+    vertical = re.search(
+        r'\b(?:right\s+above|directly\s+above|above|over|below|directly\s+under|under|beneath)\b',
+        query, re.I)
+    if not vertical:
+        parsed['Relations'] = relations
+        return parsed
+    operator = re.search(r'\b(above|over|below|under|beneath)\b', vertical.group(), re.I).group().lower()
+    # Keep the quoted clause short and exact: operator plus the following noun phrase.
+    tail = query[vertical.end():]
+    tail_match = re.match(r'\s+(?:the|a|an)\s+[A-Za-z][A-Za-z -]*', tail)
+    end = vertical.end() + (tail_match.end() if tail_match else 0)
+    phrase = query[vertical.start():end].strip().rstrip('.,!?')
+    relations.append({'target_category': targets[0], 'anchor_category': anchors[0],
+                      'relation': 'above' if operator in ('above', 'over') else 'below',
+                      'scope': 'relative_anchor', 'phrase': phrase})
+    parsed['Relations'] = relations
+    return parsed
+
+
+def validate_structure(query, parsed):
+    parsed = recover_vertical_relations(query, dict(parsed))
     missing = []
     relations = parsed.get('Relations', [])
     valid = []
@@ -70,14 +120,16 @@ def validate_structure(query, parsed):
         valid_quote = quoted(query, phrase)
         target_name, anchor_name = relation.get('target_category'), relation.get('anchor_category', '')
         valid_quote = valid_quote and isinstance(target_name, str) and bool(target_name.strip())
-        if kind in ('nearest', 'farthest', 'near') or relation.get('scope') == 'relative_anchor':
+        if kind in ('nearest', 'farthest', 'near', 'above', 'below') or relation.get('scope') == 'relative_anchor':
             valid_quote = valid_quote and isinstance(anchor_name, str) and bool(anchor_name.strip())
         if kind in ('left', 'right', 'front', 'back'):
             words = {'left': r'\bleft\b', 'right': r'\bright\b',
                      'front': r'\b(front|ahead)\b', 'back': r'\b(back|behind)\b'}
             valid_quote = valid_quote and bool(re.search(words[kind], phrase, re.I))
             valid_quote = valid_quote and relation.get('scope') in ('relative_anchor', 'side')
-        if not valid_quote or kind not in ('nearest', 'farthest', 'near', 'left', 'right', 'front', 'back'):
+        if kind in ('above', 'below'):
+            valid_quote = valid_quote and bool(re.search(r'\b(above|over|below|under|beneath)\b', phrase, re.I))
+        if not valid_quote or kind not in ('nearest', 'farthest', 'near', 'left', 'right', 'front', 'back', 'above', 'below'):
             missing.append('unsupported relation: ' + phrase if quoted(query, phrase)
                            else 'parser produced an unquoted relation; not a query condition')
         else:
@@ -148,10 +200,11 @@ def validate_structure(query, parsed):
                                   (r'\b(next to|beside|near)\b', ('near',), 'proximity')):
         if re.search(pattern, query, re.I) and not any(r['relation'] in kinds for r in parsed['Relations']):
             missing.append(label + ' condition not represented')
-    if re.search(r'\b(corner|between|leftmost|rightmost|second|third|ground|floor)\b', query, re.I):
+    if re.search(r'\b(corner|between|leftmost|rightmost|second|third)\b', query, re.I):
         missing.append('corner/ordinal/support/extreme conditions require additional predicates')
-    if re.search(r'\b(smallest|largest|tallest|shortest|lowest|highest|lower|upper|tall|short|above|below|under|beneath)\b',query,re.I):
-        missing.append('size/vertical conditions have box-proxy evidence only; no certified predicate')
+    if re.search(r'\b(above|over|below|under|beneath)\b', query, re.I) and not any(
+            r['relation'] in ('above', 'below') for r in parsed['Relations']):
+        missing.append('vertical condition not represented')
     parsed['diagnostic_missing'] = missing
     return parsed
 
@@ -187,6 +240,66 @@ def attributes_for(parsed, category):
     return [a['phrase'] for a in parsed['Attributes'] if retrieval_category(a['category']) == retrieval_category(category)]
 
 
+def _box_metrics(obj):
+    x, y, z, width, length, height = map(float, obj['bbox_3d'])
+    return {'volume_m3': width * length * height, 'footprint_m2': width * length,
+            'height_m': height, 'center_z_m': z,
+            'bottom_z_m': z - height / 2., 'top_z_m': z + height / 2.}
+
+
+def _pair_geometry(target, anchor):
+    a = np.asarray(target['bbox_3d'], dtype=float)
+    b = np.asarray(anchor['bbox_3d'], dtype=float)
+    a_min, a_max = a[:3] - a[3:] / 2., a[:3] + a[3:] / 2.
+    b_min, b_max = b[:3] - b[3:] / 2., b[:3] + b[3:] / 2.
+    horizontal_gap_xy = np.maximum(np.abs(a[:2] - b[:2]) - (a[3:5] + b[3:5]) / 2., 0.)
+    horizontal_overlap = np.maximum(np.minimum(a_max[:2], b_max[:2]) - np.maximum(a_min[:2], b_min[:2]), 0.)
+    vertical_overlap = max(0., min(a_max[2], b_max[2]) - max(a_min[2], b_min[2]))
+    return {'target_id': target['bbox_id'], 'anchor_id': anchor['bbox_id'],
+            'center_z_delta_m': float(a[2] - b[2]),
+            'target_bottom_minus_anchor_top_m': float(a_min[2] - b_max[2]),
+            'anchor_bottom_minus_target_top_m': float(b_min[2] - a_max[2]),
+            'horizontal_gap_m': float(np.linalg.norm(horizontal_gap_xy)),
+            'horizontal_overlap_m2': float(horizontal_overlap[0] * horizontal_overlap[1]),
+            'vertical_overlap_m': float(vertical_overlap),
+            'center_distance_m': float(np.linalg.norm(a[:3] - b[:3]))}
+
+
+def _vertical_match(pair, relation):
+    # A small overlap/gap tolerance handles imperfect ScanNet AABBs without
+    # turning arbitrary objects at different heights into "above" evidence.
+    aligned = pair['horizontal_overlap_m2'] > 0.0 or pair['horizontal_gap_m'] <= 0.5
+    if relation == 'above':
+        return pair['center_z_delta_m'] > 0.05 and aligned
+    if relation == 'below':
+        return pair['center_z_delta_m'] < -0.05 and aligned
+    return True
+
+
+def _size_ids(objects, category, phrase):
+    text = phrase.casefold()
+    pool = [o for o in objects if match_retrieval_categories([category], [o])]
+    if not pool:
+        return set(), None
+    if 'smallest' in text:
+        metric, choose = 'volume_m3', min
+    elif 'largest' in text:
+        metric, choose = 'volume_m3', max
+    elif 'tallest' in text or 'highest' in text:
+        metric, choose = 'height_m', max
+    elif 'shortest' in text or 'lowest' in text:
+        metric, choose = 'height_m', min
+    else:
+        return set(), None
+    values = {o['bbox_id']: _box_metrics(o)[metric] for o in pool}
+    best = choose(values.values())
+    return {oid for oid, value in values.items() if abs(value - best) <= 1e-6}, {
+        'category': category, 'phrase': phrase, 'metric': metric,
+        'candidate_ids': sorted(values), 'selected_ids': sorted(oid for oid, value in values.items()
+                                                                 if abs(value - best) <= 1e-6),
+        'proxy': 'AABB volume' if metric == 'volume_m3' else 'AABB height'}
+
+
 def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_categories=False):
     """Unknown category evidence stays eligible; predicates are ANDed per interpretation."""
     target_names = parsed['Target'] if isinstance(parsed['Target'], list) else [parsed['Target']]
@@ -197,6 +310,7 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
     category = next(iter(names)) if len(names) == 1 else ''
     checks_by_key = {(c['id'], c['category']): c for c in checks}
     by_id = {o['bbox_id']:o for o in objects}
+    geometry = {'size_constraints': [], 'floor_constraint': None, 'relation_pairs': []}
     def verdict(oid, name):
         if trusted_categories:
             if not match_retrieval_categories([name], [by_id[oid]]):
@@ -205,6 +319,25 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                 return 'yes'
         return checks_by_key.get((oid, retrieval_category(name)), {}).get('verdict', 'uncertain')
     eligible = [o for o in candidates if verdict(o['bbox_id'], category) != 'no']
+    # Explicit superlatives and "on the floor" are deterministic box predicates.
+    size_allowed = None
+    for attribute in parsed.get('Attributes', []):
+        if retrieval_category(attribute.get('category', '')) != category:
+            continue
+        ids, record = _size_ids(objects, category, attribute.get('phrase', ''))
+        if record:
+            geometry['size_constraints'].append(record)
+            size_allowed = ids if size_allowed is None else size_allowed & ids
+        if re.search(r'\b(on the floor|on floor|on the ground|grounded)\b',
+                     attribute.get('phrase', ''), re.I):
+            floor_z = min((_box_metrics(o)['bottom_z_m'] for o in objects), default=0.)
+            floor_ids = {o['bbox_id'] for o in objects
+                         if _box_metrics(o)['bottom_z_m'] <= floor_z + 0.15}
+            geometry['floor_constraint'] = {'floor_z_m': floor_z, 'tolerance_m': 0.15,
+                                            'selected_ids': sorted(floor_ids)}
+            size_allowed = floor_ids if size_allowed is None else size_allowed & floor_ids
+    if size_allowed is not None:
+        eligible = [o for o in eligible if o['bbox_id'] in size_allowed]
     directions = any(r['relation'] in ('left', 'right', 'front', 'back') for r in parsed['Relations'])
     observer = parsed['Observer']
     frames, frame_missing = observer_frames(parsed, objects, room_center) if directions else ([None], [])
@@ -228,6 +361,20 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
     references = {}
     for name in sorted(reference_names):
         matches = [o for o in match_retrieval_categories([name], objects) if verdict(o['bbox_id'], name) != 'no']
+        # A descriptor on a different reference category can be bound independently.
+        # When target and reference share a category, the parser has not told us which
+        # occurrence owns the descriptor, so retain all instances and record the ambiguity.
+        if name != category:
+            allowed = None
+            for attribute in parsed.get('Attributes', []):
+                if retrieval_category(attribute.get('category', '')) != name:
+                    continue
+                ids, record = _size_ids(objects, name, attribute.get('phrase', ''))
+                if record:
+                    geometry['size_constraints'].append({**record, 'role': 'reference'})
+                    allowed = ids if allowed is None else allowed & ids
+            if allowed is not None:
+                matches = [o for o in matches if o['bbox_id'] in allowed]
         if not name or not matches:
             missing.append('missing reference category: ' + name)
         else:
@@ -275,6 +422,13 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                     distance = next(d for i, d in distances if i == oid)
                     passed = passed and abs(distance-best) <= 1e-6
                     measured.append({'target_id': oid, 'anchor_id': anchor['bbox_id'], 'relation': kind, 'distance_m': distance})
+                elif kind in ('above', 'below') and anchor:
+                    pair = _pair_geometry(target, anchor)
+                    pair['relation'] = kind
+                    pair['passes'] = _vertical_match(pair, kind)
+                    geometry['relation_pairs'].append(pair)
+                    measured.append(pair)
+                    passed = passed and pair['passes']
                 elif kind in ('left', 'right', 'front', 'back') and frame:
                     if relation.get('scope') == 'relative_anchor' and not anchor:
                         continue
@@ -323,6 +477,7 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
         status = 'resolved'
     return {'status': status, 'missing': missing, 'candidate_ids': possible, 'stable_candidate_ids': stable,
             'hypotheses': hypotheses, 'visual_needs': needs, 'checks': list(checks),
+            'geometry': geometry,
             'scope': 'bounded proposed instances, center-distance geometry, parser and VLM evidence; not linguistic uniqueness',
             'room_center_definition': 'center of point-cloud AABB, approximation only',
             'hypotheses_are_votes': False, 'category_source': 'annotated' if trusted_categories else 'predicted',

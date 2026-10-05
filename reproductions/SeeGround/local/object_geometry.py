@@ -14,6 +14,10 @@ METRICS=('volume_m3','footprint_m2','height_m','center_z_m','bottom_z_m','top_z_
 def category_matches(name, objects):
     # ScanNet often calls kitchen cabinets simply cabinet. Keep this local to evidence.
     normalized=canonical_category(name)
+    # Descriptors belong to the linguistic role, not to the ScanNet category.
+    normalized=' '.join(word for word in normalized.split()
+                        if word not in {'smallest','largest','tallest','shortest','lowest','highest',
+                                        'lower','upper','tall','short','small','large'})
     if normalized=='kitchen cabinet':normalized='cabinet'
     return match_retrieval_categories([normalized],objects)
 
