@@ -64,5 +64,25 @@ class RealSceneTests(unittest.TestCase):
             self.assertEqual(record['calls'][0]['response'],'bad json')
             self.assertFalse((out/'prediction.json').exists())
 
+    def test_category_verdict_is_soft_and_camera_equals_ranked_mode(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.scene(root)
+            parsed=reply('{"Target":["trash can"],"Anchor":["tv"],"Relations":[]}')
+            with patch('real_scene.chat',return_value=parsed), \
+                 patch('run.chat',return_value=reply('Predicted ID: 1')):
+                run_query(root,'trash can by tv',root/'ranked',mode='ranked_geometry')
+                with patch('category_review.chat',return_value=reply('{"id":1,"verdict":"no","reason":"unclear container"}')):
+                    result=run_query(root,'trash can by tv',root/'checked',mode='category_review',review_limit=1)
+            first=json.loads((root/'ranked/run.json').read_text())
+            second=json.loads((root/'checked/run.json').read_text())
+            self.assertEqual(first['target_ids'],second['target_ids'])
+            self.assertEqual(first['anchor_ids'],second['anchor_ids'])
+            self.assertEqual(first['camera_and_render'],second['camera_and_render'])
+            self.assertEqual(second['category_review']['checks'][0]['verdict'],'no')
+            self.assertEqual(len(result['images']),1)
+            self.assertEqual(result['predicted_id'],1)
+            self.assertEqual(result['api_calls'],3)
+            self.assertFalse((root/'objects_gt.json').exists())
+
 
 if __name__=='__main__':unittest.main()

@@ -6,7 +6,7 @@ import html
 import json
 import os
 from pathlib import Path
-from real_scene import run_query
+from real_scene import run_query, MODES
 from run import ROOT, load_objects
 from metrics import bbox_iou_3d, threshold_accuracy
 
@@ -36,12 +36,13 @@ def summarize(results):
             'mean_latency_s':sum(latencies)/len(latencies) if latencies else None,
             'mean_pipeline_latency_s':sum(pipeline)/len(pipeline) if pipeline else None}
 
-def experiment_settings(scene_dir, mode):
+def experiment_settings(scene_dir, mode, review_limit=6):
     code_dir=Path(__file__).resolve().parent
-    return {'mode':mode,'model':os.getenv('SEEGROUND_MODEL','').strip(),
+    return {'mode':mode,'review_limit':review_limit if mode=='category_review' else None,
+            'model':os.getenv('SEEGROUND_MODEL','').strip(),
             'base_url':os.getenv('SEEGROUND_BASE_URL','').strip().rstrip('/'),
             'code_sha256':{name:hashlib.sha256((code_dir/name).read_bytes()).hexdigest() for name in
-                           ['run.py','real_scene.py','qwen_api.py','evidence.py','visual_review.py','metrics.py','batch_nr3d.py']},
+                           ['run.py','real_scene.py','qwen_api.py','evidence.py','visual_review.py','category_review.py','metrics.py','batch_nr3d.py']},
             'scene_sha256':{name:hashlib.sha256((scene_dir/name).read_bytes()).hexdigest() for name in
                             ['scene.npz','objects_gt.json']}}
 
@@ -59,7 +60,9 @@ def report(out,results,manifest):
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--csv',type=Path,default=ROOT/'local_outputs/downloads/nr3d_official.csv');p.add_argument('--scene',default='scene0011_00');p.add_argument('--count',type=int,default=10);p.add_argument('--output',type=Path,default=ROOT/'local_outputs/nr3d_trial_10')
-    p.add_argument('--mode',choices=['baseline','geometry','visual_review'],default='baseline');a=p.parse_args()
+    p.add_argument('--mode',choices=MODES,default='baseline')
+    p.add_argument('--review-limit',type=int,default=6);a=p.parse_args()
+    if a.review_limit<1:raise ValueError('review-limit must be positive')
     rows,available=select_rows(a.csv,a.scene,a.count)
     scene_dir=ROOT/'local_outputs'/a.scene
     gt_objects={o['bbox_id']:o for o in load_objects(scene_dir/'objects_gt.json')}
@@ -67,7 +70,7 @@ def main():
     manifest={'source':SOURCE,'csv_sha256':hashlib.sha256(a.csv.read_bytes()).hexdigest(),'scene':a.scene,
               'selection':'first N rows in CSV with matching scan_id and correct_guess=True','available':available,'rows':rows,
               'objects_sha256':hashlib.sha256((scene_dir/'objects.json').read_bytes()).hexdigest(),
-              'settings':experiment_settings(scene_dir,a.mode)}
+              'settings':experiment_settings(scene_dir,a.mode,a.review_limit)}
     a.output.mkdir(parents=True,exist_ok=True);mp=a.output/'manifest.json'
     if mp.exists() and json.loads(mp.read_text())!=manifest:raise ValueError('输出目录已有不同实验，请更换目录')
     mp.write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
@@ -75,7 +78,7 @@ def main():
     for i,row in enumerate(rows):
         out=a.output/f'q{i+1:03d}';pred=out/'prediction.json';result=dict(row)
         try:
-            if not pred.exists():run_query(scene_dir,row['query'],out,'official Nr3D utterance; CSV row '+str(row['csv_row']),mode=a.mode)
+            if not pred.exists():run_query(scene_dir,row['query'],out,'official Nr3D utterance; CSV row '+str(row['csv_row']),mode=a.mode,review_limit=a.review_limit)
             prediction=json.loads(pred.read_text())
             if prediction['query']!=row['query']:raise ValueError('缓存查询不一致')
             result.update(predicted_id=prediction['predicted_id'],response=prediction['response'],model=prediction['model'],

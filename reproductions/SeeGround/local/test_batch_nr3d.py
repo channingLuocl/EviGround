@@ -29,6 +29,8 @@ class BatchTests(unittest.TestCase):
             self.assertNotEqual(first,second)
             self.assertEqual(first['model'],'model-A')
             self.assertNotIn('secret-fixture',str(first))
+            self.assertNotEqual(experiment_settings(scene,'category_review',2),
+                                experiment_settings(scene,'category_review',6))
 
     def test_selection_filters_before_limiting_and_preserves_utterance(self):
         with tempfile.TemporaryDirectory() as d:

@@ -201,3 +201,44 @@ cd reproductions/SeeGround
 批量实验 manifest 绑定模式、模型、接口地址、代码与输入数据哈希；配置变更会拒绝复用原目录（包括旧版本 manifest），不会记录 API key。
 准确率和 IoU 阈值准确率将失败样本计入分母；只有失败样本而没有任何有效 IoU 时输出 null，避免声称完成了评测。
 Nr3D 此处使用 GT 实例几何和预测类别，主要指标是编号准确率；此处 IoU 辅助统计不等于 ScanRefer 检测框基准成绩。
+
+## 8. 第二轮：距离排序与独立类别检查
+
+第一轮在 scene0011_00 的 10 条开发样本中，geometry 为 6/10，全实例 visual_review 为 3/10。
+这是用户服务器日志的单次结果，不是完整基准或统计显著性结论。全实例复核混淆目标/参照角色并影响相机，旧 `visual_review` 保留供审计，不建议继续用于新实验。
+
+新模式保持单张上下文图：
+
+| 模式 | 行为 | 每题调用次数 |
+| --- | --- | --- |
+| `ranked_geometry` | 几何模式基础上验证原句的距离极值词，并由程序按每个参照物分别排序 | 2 |
+| `category_review` | ranked_geometry 加逐实例、单类别 yes/no/uncertain 视觉检查 | 2 + 实际复核实例数 |
+
+距离排序只支持原句明确的 nearest/closest/farthest/furthest，解析中的 phrase 必须是原句子串并含对应极值词。
+没有支持文本的 nearest/farthest 会变为 other，同时保留原 API 回答和拒绝原因。否定或排除条件先不执行排序。
+by/beside/next to 不升级成 nearest。排名保持每个参照物独立，保留距离相等的多个最优编号，不合并参照物、不硬选答案。
+这些检查仅验证极值词证据，不保证解析的目标和参照物绑定正确。距离仍为中心距离，类别误标依然会影响排序。
+`large black screen` 等表达在检索时去掉常见属性词，原句的外观条件仍提供给最终模型。
+左右尚未转换成描述者坐标系，明确标记 unresolved；不能把新的固定相机当作说话者朝向。
+
+类别复核默认 `--review-limit 6`：优先检查预测类别匹配的实例，再按与已匹配参照物的最小中心距离补充其他实例。
+没有匹配参照物时按物体表顺序补充；这只是候选召回启发式，不保证找到远处的误标目标，亦非经过验证的冲突触发策略。
+实例提议不使用 GT 类别、GT 目标编号或固定编号。只复核单一目标类别；多目标类别或未解析类别时跳过。
+每次调用仅含一个实例的双视角图及类别问题，隐藏预测标签和原查询，不允许输出 TargetIDs/AnchorIDs。
+Qwen 的 yes/no/uncertain 只做软证据；它不改变目标、参照物集合、相机、可见性标记，不硬剔除任何实例。
+额外距离证据仅覆盖被复核实例；未检查的实例不视为否定。调用失败、错误编号、截断或非法格式都转为 uncertain 并记录原因。
+
+服务器拉取代码并跑测试后，先运行排名对照，再运行类别对照；不会自动发起收费调用：
+
+```bash
+.venv/bin/python local/batch_nr3d.py --scene scene0011_00 --count 10 \
+  --mode ranked_geometry --output local_outputs/nr3d_qwen_ranked_01
+
+.venv/bin/python local/batch_nr3d.py --scene scene0011_00 --count 10 \
+  --mode category_review --review-limit 6 \
+  --output local_outputs/nr3d_qwen_category_01
+```
+
+类别模式每题最多 8 次 API 调用，可能比旧 visual_review 更贵；这里检验独立类别问题的可靠性，不宣称已降低成本。
+`run.json` 记录候选提议策略、每个检查的 verdict/reason、原 API 回答、拒绝的关系和每个参照物下的排名。
+manifest 绑定 review-limit，防止预算不同的实验复用同一缓存。旧实验目录不要覆盖。

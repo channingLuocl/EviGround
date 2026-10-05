@@ -153,6 +153,17 @@ def ground(args):
                    'Check every condition in the original query, and state any missing evidence. '
                    'The rendering camera is for inspection, not necessarily the speaker viewpoint. '
                    'Return Predicted ID first, then an explanation of at most 100 words.')
+    if evidence is not None and 'distance_rankings' in evidence:
+        prompt += ('\nDistance rankings are computed per reference from explicit quoted superlatives. '
+                   'Rejected distance relations and ignored rankings are audit records, not query constraints. '
+                   'They do not prove a candidate has the correct category or identify the reference. '
+                   'Do not treat near as nearest. Do not infer left/right from inspection-image position. '
+                   'For direction conditions use the original observer clues; if those have not been '
+                   'converted to a coordinate frame, acknowledge uncertainty. '
+                   'Per-instance category checks are independent soft evidence: yes supports only category, '
+                   'no is a possible category conflict, uncertain or unreviewed establishes nothing. '
+                   'Never reinterpret a reference as a target solely because it is close. '
+                   'State unresolved category conflicts rather than inventing supporting evidence.')
     images=[image_path]+[Path(p) for p in getattr(args,'extra_images',[])]
     parts=[]
     for index,path in enumerate(images):
