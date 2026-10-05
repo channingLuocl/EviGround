@@ -415,3 +415,19 @@ cd reproductions/SeeGround
 每完成一个场景更新比较报告，planned_total 标明固定清单总题数；中途报告不能当作全部场景的成绩。
 逐题变化有 improved、regressed、both_correct、both_wrong 四种，不能只展示改善的例子。
 本地测试仅使用模拟 API；实际新场景准确率尚未测得。
+
+### 距离补全修正与第二轮结果
+
+同一 100 题第二轮 GT baseline 60/100，diagnostic 64/100，改善 16 题、退步 12 题；
+第一轮分别为 59/100、67/100。第二轮未证实距离补全有收益，两轮都重新调用 API，差异不能全部归因于代码。
+两轮诊断状态数量都为 resolved=8、missing=77、ambiguous=1、conflict=14；数量相同不保证对应题目相同。
+
+已撤回将 `of the two ... further from` 转成整个类别最远实例的规则。
+这类描述比较的是特定子集，当前没有该子集绑定能力，继续作为未支持条件。
+关系补全只接受整句为简单的“目标类别 + closest/nearest/farthest/furthest + 参照类别”结构，
+且解析已有唯一目标和参照类别；嵌套参照、额外方向、否定、比较级和不匹配类别都不猜补。
+恢复的关系记录在 `parsed_query.recovered_distance_relations`，原始 API 回答仍保存在 calls 中。
+补全随后接受正常的距离校验；参照实例不存在、方向观察坐标不完整时仍记录缺失。
+候选集合并不等同于 baseline：两种模式的类别匹配器和解析提示不同。
+诊断候选只是证据，最终模型仍读取完整物体表；8 个 accepted 正确不能替代全部 100 题准确率。
+此前排查脚本读取 run.json 顶层 parsed 导致空列表；正确字段为顶层 `parsed_query`。

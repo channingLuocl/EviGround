@@ -34,7 +34,7 @@ def quoted(query, phrase):
 
 
 def recover_distance_relations(query, parsed):
-    """Recover an omitted superlative only when both category bindings are explicit."""
+    """Recover only a complete, simple distance clause with explicit bindings."""
     parsed = dict(parsed)
     relations = list(parsed.get('Relations') or [])
     targets = parsed.get('Target') if isinstance(parsed.get('Target'), list) else []
@@ -43,20 +43,19 @@ def recover_distance_relations(query, parsed):
         return parsed
     if any(isinstance(r, dict) and r.get('relation') in ('nearest', 'farthest') for r in relations):
         return parsed
-    patterns = (
-        (r'\b(nearest|closest)\b[^.?!]*[.]?', 'nearest'),
-        (r'\b(farthest|furthest)\b[^.?!]*[.]?', 'farthest'),
-        (r'\bof\s+the\s+two\b[^.?!]*\b(further|farther)\b[^.?!]*[.]?', 'farthest'),
-    )
-    for pattern, kind in patterns:
-        match = re.search(pattern, query, re.I)
-        if not match:
-            continue
-        phrase = match.group(0).strip()
-        relations.append({'target_category': targets[0], 'anchor_category': anchors[0],
-                          'relation': kind, 'scope': '', 'phrase': phrase})
-        parsed['Relations'] = relations
+    target, anchor = (name.strip() for name in (targets[0], anchors[0]))
+    if not target or not anchor:
         return parsed
+    pattern = (r'(?:it is\s+)?(?:the\s+)?' + re.escape(target) + r's?\s+(?:is\s+)?'
+               r'(?P<operator>nearest|closest|farthest|furthest)\s+(?:away\s+)?'
+               r'(?:to\s+|from\s+)?(?:the\s+)?' + re.escape(anchor) + r's?[.!?]?')
+    match = re.fullmatch(pattern, query.strip(), re.I)
+    if match:
+        kind = 'nearest' if match['operator'].lower() in ('nearest', 'closest') else 'farthest'
+        recovered = {'target_category': target, 'anchor_category': anchor,
+                     'relation': kind, 'scope': '', 'phrase': query.strip()}
+        parsed['Relations'] = relations + [recovered]
+        parsed['recovered_distance_relations'] = [recovered]
     return parsed
 
 
@@ -78,10 +77,6 @@ def validate_structure(query, parsed):
                      'front': r'\b(front|ahead)\b', 'back': r'\b(back|behind)\b'}
             valid_quote = valid_quote and bool(re.search(words[kind], phrase, re.I))
             valid_quote = valid_quote and relation.get('scope') in ('relative_anchor', 'side')
-        if kind == 'farthest':
-            valid_quote = valid_quote and bool(re.search(
-                r'\b(farthest|furthest)\b|\bof\s+the\s+two\b[^.?!]*\b(further|farther)\b',
-                phrase, re.I))
         if not valid_quote or kind not in ('nearest', 'farthest', 'near', 'left', 'right', 'front', 'back'):
             missing.append('unsupported relation: ' + phrase if quoted(query, phrase)
                            else 'parser produced an unquoted relation; not a query condition')

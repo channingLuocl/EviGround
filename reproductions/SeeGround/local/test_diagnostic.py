@@ -144,16 +144,34 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(data['Relations'][0]['anchor_category'],'window')
         self.assertNotIn('distance extreme condition not represented',data['diagnostic_missing'])
 
-    def test_recover_comparative_only_for_explicit_pair(self):
+    def test_comparative_cannot_become_scene_wide_superlative(self):
         raw={'Target':['chair'],'Anchor':['window'],'Relations':[],
              'Observer':{},'Attributes':[],'Unhandled':[]}
         query='Of the two chairs, choose the one further from the window.'
         recovered=recover_distance_relations(query,raw)
-        self.assertEqual(recovered['Relations'][0]['relation'],'farthest')
-        data=validate_structure(query, validate_distance_relations(query,recovered))
-        self.assertEqual(data['Relations'][0]['relation'],'farthest')
-        raw['Anchor']=[]
-        self.assertEqual(recover_distance_relations(query,raw)['Relations'],[])
+        self.assertEqual(recovered['Relations'],[])
+        # Even a model-proposed farthest operator must not rank the whole scene.
+        raw['Relations']=[{'target_category':'chair','anchor_category':'window',
+                          'relation':'farthest','phrase':query}]
+        data=validate_structure(query, validate_distance_relations(query,raw))
+        self.assertEqual(data['Relations'],[])
+
+    def test_recovery_requires_exact_simple_binding_and_preserves_raw_input(self):
+        raw={'Target':['chair'],'Anchor':['window'],'Relations':[]}
+        for query in ('The table closest to the window.',
+                      'The chair beside the table closest to the window.',
+                      'The chair closest to the window on the right.',
+                      'The chair not closest to the window.'):
+            with self.subTest(query=query):
+                self.assertEqual(recover_distance_relations(query,raw)['Relations'],[])
+        for query,kind in (('The chair closest to the window.','nearest'),
+                           ('The chair nearest the window.','nearest'),
+                           ('The chair farthest from the window.','farthest'),
+                           ('The chair furthest away from the window.','farthest')):
+            result=recover_distance_relations(query,raw)
+            self.assertEqual(result['Relations'][0]['relation'],kind)
+            self.assertEqual(result['recovered_distance_relations'],result['Relations'])
+        self.assertEqual(raw['Relations'],[])
 
     def test_hallucinated_unhandled_conditions_are_not_sent_as_query_evidence(self):
         query='window'
