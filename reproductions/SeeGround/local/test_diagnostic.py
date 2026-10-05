@@ -237,6 +237,23 @@ class DiagnosticTests(unittest.TestCase):
         pair=next(p for p in result['geometry']['relation_pairs'] if p['target_id'] == 2)
         self.assertLess(pair['target_bottom_minus_anchor_top_m'], 0.)
 
+    def test_vertical_relation_allows_small_horizontal_gap(self):
+        objects=[obj(1,'cabinet',.7,0), obj(2,'sink',0,0)]
+        objects[0]['bbox_3d'][2] = 2.0
+        raw={'Target':['cabinet'],'Anchor':['sink'],'Relations':[
+            {'target_category':'cabinet','anchor_category':'sink','relation':'above',
+             'scope':'relative_anchor','phrase':'above the sink'}],
+             'Observer':{},'Attributes':[],'Unhandled':[]}
+        data=validate_structure('cabinet above the sink', raw)
+        result=diagnose(data, objects, objects[:1], [0,0,.5], supported(objects),
+                        trusted_categories=True)
+        self.assertEqual(result['candidate_ids'], [1])
+        pair=result['geometry']['relation_pairs'][0]
+        self.assertAlmostEqual(pair['horizontal_gap_m'], .3, places=6)
+        self.assertTrue(pair['horizontal_alignment_passes'])
+        self.assertTrue(pair['vertical_separation_passes'])
+        self.assertEqual(result['geometry']['vertical_policy']['horizontal_gap_max_m'], .5)
+
     def test_size_and_floor_constraints_use_box_proxies(self):
         objects=[obj(1,'cabinet',0,0), obj(2,'cabinet',0,1)]
         objects[0]['bbox_3d'][3:] = [.4,.4,.5]

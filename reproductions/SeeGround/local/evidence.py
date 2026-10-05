@@ -11,6 +11,7 @@ ALIASES = {
     'front doors': 'door', 'front door': 'door', 'double door': 'door', 'doors': 'door',
     'windows': 'window', 'chairs': 'chair', 'tables': 'table', 'cabinets': 'cabinet',
     'blackboards': 'blackboard',
+    'countertop': 'counter', 'countertops': 'counter',
 }
 
 

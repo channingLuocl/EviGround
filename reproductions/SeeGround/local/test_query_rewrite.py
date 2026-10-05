@@ -4,6 +4,20 @@ from query_rewrite import constraints_as_relations, rewrite_query
 
 
 class QueryRewriteTests(unittest.TestCase):
+    def test_category_alias_is_normalized_and_kept_for_audit(self):
+        query = 'the cabinet above the countertop'
+        result = rewrite_query(query, {
+            'Target': ['cabinet'], 'Anchor': ['countertop'],
+            'Relations': [{'target_category': 'cabinet', 'anchor_category': 'countertop',
+                           'relation': 'above', 'scope': 'relative_anchor',
+                           'phrase': 'above the countertop'}],
+            'Attributes': [], 'Unhandled': [], 'Observer': {},
+        })
+        self.assertEqual(result['references'][0]['category'], 'counter')
+        self.assertEqual(result['references'][0]['raw_category'], 'countertop')
+        self.assertEqual(result['constraints'][0]['reference'], 'counter')
+        self.assertEqual(result['constraints'][0]['raw_reference_category'], 'countertop')
+
     def test_normalizes_vertical_relation_without_turning_it_into_near(self):
         query = 'brown cabinet with two handles right above the refrigerator'
         parsed = {

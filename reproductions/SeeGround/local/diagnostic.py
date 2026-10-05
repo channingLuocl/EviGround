@@ -12,6 +12,12 @@ VERTICAL_WORDS = {
     'under': 'below', 'beneath': 'below',
 }
 
+# A vertical relation can be expressed by adjacent boxes whose XY projections
+# do not overlap exactly. Keep this tolerance small enough to reject objects
+# elsewhere in the room, while covering ordinary ScanNet box noise.
+HORIZONTAL_ALIGNMENT_GAP_M = 0.5
+VERTICAL_CLEARANCE_TOLERANCE_M = 0.05
+
 
 PARSER_INSTRUCTIONS = '''
 Field definitions within the SAME top-level object; do not omit Target or Anchor:
@@ -271,8 +277,9 @@ def _vertical_match(pair, relation):
     # Height difference alone would accept unrelated objects elsewhere in the room.
     # A small negative clearance tolerates annotation noise while rejecting
     # boxes whose vertical ranges substantially intersect.
-    aligned = pair['horizontal_overlap_m2'] > 0.0
-    tolerance = 0.05
+    aligned = (pair['horizontal_overlap_m2'] > 0.0 or
+               pair['horizontal_gap_m'] <= HORIZONTAL_ALIGNMENT_GAP_M)
+    tolerance = VERTICAL_CLEARANCE_TOLERANCE_M
     if relation == 'above':
         return (pair['center_z_delta_m'] > 0.05 and aligned and
                 pair['target_bottom_minus_anchor_top_m'] >= -tolerance)
@@ -342,7 +349,15 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
     category = next(iter(names)) if len(names) == 1 else ''
     checks_by_key = {(c['id'], c['category']): c for c in checks}
     by_id = {o['bbox_id']:o for o in objects}
-    geometry = {'size_constraints': [], 'floor_constraint': None, 'relation_pairs': []}
+    geometry = {
+        'size_constraints': [], 'floor_constraint': None, 'relation_pairs': [],
+        'vertical_policy': {
+            'horizontal_overlap_required': False,
+            'horizontal_gap_max_m': HORIZONTAL_ALIGNMENT_GAP_M,
+            'vertical_clearance_tolerance_m': VERTICAL_CLEARANCE_TOLERANCE_M,
+            'requires_vertical_separation': True,
+        },
+    }
     def verdict(oid, name):
         if trusted_categories:
             if not match_retrieval_categories([name], [by_id[oid]]):
@@ -457,6 +472,17 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                 elif kind in ('above', 'below') and anchor:
                     pair = _pair_geometry(target, anchor)
                     pair['relation'] = kind
+                    pair['horizontal_alignment_passes'] = (
+                        pair['horizontal_overlap_m2'] > 0.0 or
+                        pair['horizontal_gap_m'] <= HORIZONTAL_ALIGNMENT_GAP_M)
+                    if kind == 'above':
+                        pair['vertical_separation_passes'] = (
+                            pair['center_z_delta_m'] > 0.05 and
+                            pair['target_bottom_minus_anchor_top_m'] >= -VERTICAL_CLEARANCE_TOLERANCE_M)
+                    else:
+                        pair['vertical_separation_passes'] = (
+                            pair['center_z_delta_m'] < -0.05 and
+                            pair['anchor_bottom_minus_target_top_m'] >= -VERTICAL_CLEARANCE_TOLERANCE_M)
                     pair['passes'] = _vertical_match(pair, kind)
                     geometry['relation_pairs'].append(pair)
                     measured.append(pair)

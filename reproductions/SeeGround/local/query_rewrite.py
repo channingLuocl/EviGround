@@ -31,6 +31,10 @@ def _category(value):
     return normalized
 
 
+def _raw_category(value):
+    return value.strip() if isinstance(value, str) else ''
+
+
 def _quote(query, phrase):
     return isinstance(phrase, str) and bool(phrase.strip()) and phrase.casefold() in query.casefold()
 
@@ -66,7 +70,8 @@ def rewrite_query(query, parsed):
         raise ValueError('query and parsed query are required')
     raw_targets = parsed.get('Target', [])
     raw_targets = [raw_targets] if isinstance(raw_targets, str) else raw_targets
-    targets = [{'category': _category(value), 'role': 'target', 'phrase': value}
+    targets = [{'category': _category(value), 'raw_category': _raw_category(value),
+                'role': 'target', 'phrase': value}
                for value in raw_targets if _category(value)]
     target_category = targets[0]['category'] if len(targets) == 1 else ''
 
@@ -80,7 +85,8 @@ def rewrite_query(query, parsed):
             return
         key = (category, role)
         if not any((item['category'], item['role']) == key for item in references):
-            references.append({'category': category, 'role': role, 'phrase': phrase or value})
+            references.append({'category': category, 'raw_category': _raw_category(value),
+                               'role': role, 'phrase': phrase or value})
 
     for value in raw_references or []:
         add_reference(value)
@@ -105,7 +111,9 @@ def rewrite_query(query, parsed):
             continue
         add_reference(relation.get('anchor_category', ''), 'anchor', phrase)
         constraints.append({'type': RELATION_TYPES[relation_type], 'target': target,
-                            'reference': reference, 'scope': relation.get('scope', ''),
+                            'reference': reference, 'raw_target_category': _raw_category(relation.get('target_category', '')),
+                            'raw_reference_category': _raw_category(relation.get('anchor_category', '')),
+                            'scope': relation.get('scope', ''),
                             'phrase': phrase, 'confidence': 'lexical'})
 
     for attribute in parsed.get('Attributes', []) or []:
