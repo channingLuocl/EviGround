@@ -71,34 +71,30 @@ def report(out,results,manifest):
         diagnosis_html=(f'<p>诊断状态：{esc(r["decision_status"])}；证据支持：{esc(r.get("accepted"))}；'
                         f'稳定候选：{esc(r.get("stable_candidate_ids",[]))}</p>' if 'decision_status' in r else '')
         cards.append(f'<article><h2>{i+1}. {"正确" if r.get("correct") else "错误或未完成"}</h2><p>{esc(r["query"])}</p><p>正确编号：{r["target_id"]}；预测编号：{esc(r.get("predicted_id","未完成"))}</p>{diagnosis_html}<p>{esc(r.get("response",r.get("error","")))}</p>{image_html}</article>')
-    (out/'report.html').write_text('<!doctype html><meta charset="utf-8"><title>SeeGround · Nr3D 小样本试跑</title><style>body{max-width:960px;margin:40px auto;font:18px/1.7 system-ui;padding:20px;background:#f3f5f8}article{background:white;padding:24px;margin:24px 0;border-radius:12px}img{max-width:100%}</style><h1>Nr3D 真实描述试跑</h1><p>'+f'完成 {stats["completed"]}/{stats["total"]}，正确 {stats["correct"]}/{stats["total"]}。'+'</p><p>物体表来源：'+esc(table)+('（人工类别 / oracle OLT）' if table=='gt' else '（预测类别）')+'</p><p>单场景、按 CSV 顺序选取的有效描述；这不是完整基准成绩。使用 Qwen API、CPU 渲染和简化类别匹配，与论文原始实现有差异。失败请求计入总数。</p>'+''.join(cards))
+    (out/'report.html').write_text('<!doctype html><meta charset="utf-8"><title>SeeGround · Nr3D 小样本试跑</title><style>body{max-width:960px;margin:40px auto;font:18px/1.7 system-ui;padding:20px;background:#f3f5f8}article{background:white;padding:24px;margin:24px 0;border-radius:12px}img{max-width:100%}</style><h1>Nr3D 真实描述试跑</h1><p>'+f'完成 {stats["completed"]}/{stats["total"]}，正确 {stats["correct"]}/{stats["total"]}。'+'</p><p>物体表来源：'+esc(table)+('（人工类别 / oracle OLT）' if table=='gt' else '（预测类别）')+'</p><p>抽样规则：'+esc(manifest['selection'])+'。这不是完整基准成绩。使用 Qwen API、CPU 渲染和简化类别匹配，与论文原始实现有差异。失败请求计入总数。</p>'+''.join(cards))
     return stats
 
-def main():
-    p=argparse.ArgumentParser();p.add_argument('--csv',type=Path,default=ROOT/'local_outputs/downloads/nr3d_official.csv');p.add_argument('--scene',default='scene0011_00');p.add_argument('--count',type=int,default=10);p.add_argument('--output',type=Path,default=ROOT/'local_outputs/nr3d_trial_10')
-    p.add_argument('--mode',choices=MODES,default='baseline')
-    p.add_argument('--object-table',choices=OBJECT_TABLES,default='pred')
-    p.add_argument('--review-limit',type=int,default=6);a=p.parse_args()
-    if a.review_limit<1:raise ValueError('review-limit must be positive')
-    rows,available=select_rows(a.csv,a.scene,a.count)
-    scene_dir=ROOT/'local_outputs'/a.scene
+def run_batch(csv_path, scene, rows, available, output, mode='baseline', review_limit=6,
+              object_table='pred', selection='first N rows in CSV with matching scan_id and correct_guess=True'):
+    if review_limit<1:raise ValueError('review-limit must be positive')
+    scene_dir=ROOT/'local_outputs'/scene
     gt_objects={o['bbox_id']:o for o in load_objects(scene_dir/'objects_gt.json')}
     if any(r['target_id'] not in gt_objects for r in rows):raise ValueError('GT 物体表缺少所选目标，请检查数据对齐')
-    manifest={'source':SOURCE,'csv_sha256':hashlib.sha256(a.csv.read_bytes()).hexdigest(),'scene':a.scene,
-              'selection':'first N rows in CSV with matching scan_id and correct_guess=True','available':available,'rows':rows,
-              'objects_sha256':hashlib.sha256(object_table_path(scene_dir,a.object_table).read_bytes()).hexdigest(),
-              'settings':experiment_settings(scene_dir,a.mode,a.review_limit,a.object_table)}
-    a.output.mkdir(parents=True,exist_ok=True);mp=a.output/'manifest.json'
+    manifest={'source':SOURCE,'csv_sha256':hashlib.sha256(csv_path.read_bytes()).hexdigest(),'scene':scene,
+              'selection':selection,'available':available,'rows':rows,
+              'objects_sha256':hashlib.sha256(object_table_path(scene_dir,object_table).read_bytes()).hexdigest(),
+              'settings':experiment_settings(scene_dir,mode,review_limit,object_table)}
+    output.mkdir(parents=True,exist_ok=True);mp=output/'manifest.json'
     if mp.exists() and json.loads(mp.read_text())!=manifest:raise ValueError('输出目录已有不同实验，请更换目录')
     mp.write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
     results=[]
     for i,row in enumerate(rows):
-        out=a.output/f'q{i+1:03d}';pred=out/'prediction.json';result={**row,'object_table':a.object_table}
+        out=output/f'q{i+1:03d}';pred=out/'prediction.json';result={**row,'object_table':object_table}
         try:
-            if not pred.exists():run_query(scene_dir,row['query'],out,'official Nr3D utterance; CSV row '+str(row['csv_row']),mode=a.mode,review_limit=a.review_limit,object_table=a.object_table)
+            if not pred.exists():run_query(scene_dir,row['query'],out,'official Nr3D utterance; CSV row '+str(row['csv_row']),mode=mode,review_limit=review_limit,object_table=object_table)
             prediction=json.loads(pred.read_text())
             if prediction['query']!=row['query']:raise ValueError('缓存查询不一致')
-            if prediction.get('object_table')!=a.object_table:raise ValueError('缓存物体表来源不一致')
+            if prediction.get('object_table')!=object_table:raise ValueError('缓存物体表来源不一致')
             result.update(predicted_id=prediction['predicted_id'],response=prediction['response'],model=prediction['model'],
                           latency_s=prediction.get('latency_s'),pipeline_latency_s=prediction.get('pipeline_latency_s'),
                           api_calls=prediction.get('api_calls'),call_usage=prediction.get('call_usage'),
@@ -122,10 +118,19 @@ def main():
                                       api_calls=len(failure.get('calls',[])))
                 except (ValueError,OSError):
                     pass
-        results.append(result);stats=report(a.output,results,manifest)
+        results.append(result);stats=report(output,results,manifest)
         print(f'{i+1}/{len(rows)}: predicted={result.get("predicted_id")} expected={row["target_id"]} correct={result["correct"]}',flush=True)
         if 'error' in result:
             print(f'  ERROR [{result.get("error_stage") or "unknown"}/{result["error_type"]}]: {result["error"]}',flush=True)
     print(json.dumps(stats),flush=True)
+    return results
+
+def main():
+    p=argparse.ArgumentParser();p.add_argument('--csv',type=Path,default=ROOT/'local_outputs/downloads/nr3d_official.csv');p.add_argument('--scene',default='scene0011_00');p.add_argument('--count',type=int,default=10);p.add_argument('--output',type=Path,default=ROOT/'local_outputs/nr3d_trial_10')
+    p.add_argument('--mode',choices=MODES,default='baseline')
+    p.add_argument('--object-table',choices=OBJECT_TABLES,default='pred')
+    p.add_argument('--review-limit',type=int,default=6);a=p.parse_args()
+    rows,available=select_rows(a.csv,a.scene,a.count)
+    run_batch(a.csv,a.scene,rows,available,a.output,a.mode,a.review_limit,a.object_table)
 
 if __name__=='__main__':main()

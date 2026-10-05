@@ -355,3 +355,63 @@ cd reproductions/SeeGround
 ```
 
 本机仅运行模拟 API 测试；真实准确率须以上述服务器运行结果为准。GT 类别带来的提升不属于新增推理算法贡献。
+
+## 11. 固定多场景 baseline / diagnostic 对照
+
+已有 scene0011_00 的 10 条开发样本：GT baseline 6/10，GT diagnostic 8/10。
+这只是单次小样本结果，不能据此宣称稳定提升。接下来固定推理代码，用未调试场景检验效果。
+
+新增 `local/paired_nr3d.py`，复用原批处理的推理、评分和缓存逻辑。
+默认排除 scene0011_00，在官方 CSV 的 correct_guess=True、dataset=nr3d 行中抽样。
+只选择作者提供的 GT OLT ZIP 中存在、有效描述不少于请求题数的场景。
+固定 seed=2026，随机抽取 5 个场景、每场景 20 题，保存精确 CSV 行号、原描述和评测答案。
+这是未调试场景的探索验证，不是按官方 train/test split 组织的完整测试集成绩。
+清单中的 target_id/stimulus_id 仅用于对齐与评分，推理只收到原描述与所选场景表。
+
+先生成清单；此命令不下载数据、不调用 API：
+
+```bash
+cd ~/paper
+git pull --ff-only
+cd reproductions/SeeGround
+.venv/bin/python -m unittest discover -s local -p 'test*.py'
+
+.venv/bin/python local/paired_nr3d.py plan \
+  --scene-count 5 --per-scene 20 --seed 2026 \
+  --plan local_outputs/nr3d_heldout_plan_01.json
+```
+
+程序列出抽中的场景、有效描述数和缺少的准备文件。不会自动下载或准备场景。
+每个新场景仍需在 local_outputs/downloads 中备齐此前用过的四种原始文件：
+`<scene>_vh_clean_2.ply`、`<scene>.txt`、`<scene>.aggregation.json`、`<scene>_vh_clean_2.0.010000.segs.json`。
+继续复用已有 olt.zip；原始文件齐全后按清单提示执行 `local/prepare_scene.py --scene <scene>`。
+本阶段不需要 `.sens`、RGB 视频或 GPU 渲染依赖。
+可用 `--scenes sceneXXXX_00 sceneYYYY_00` 明确指定未调试场景；仍受排除列表、OLT 和题数检查约束。
+清单已存在且内容不同会拒绝覆盖；更换抽样参数时另取文件名。
+
+全部场景准备好之后，再执行收费 API 实验：
+
+```bash
+.venv/bin/python local/paired_nr3d.py run \
+  --plan local_outputs/nr3d_heldout_plan_01.json \
+  --object-table gt --review-limit 6 \
+  --output local_outputs/nr3d_paired_gt_01
+```
+
+运行前核对 CSV 哈希、逐行内容、全部场景文件、GT 目标对齐及物体表格式。
+缺少任一场景时整体停止，尚未调用 API；不自动跳过缺失场景来改变固定题目集合。
+两种模式使用完全相同的场景、题目、物体表和模型配置；各自重新解析/调用模型，
+所以这是整体流程对照，不是固定中间解析的几何模块消融。API 随机性仍影响结果。
+100 题 × 2 种模式通常共 400 次调用；如已有 RGB 清单，diagnostic 可能额外复核。
+原命令重跑时复用成功预测、重试失败项；不重复计入同一题。代码、模型、数据或预算变化时须新建输出目录。
+
+输出目录包含：
+
+- `comparison.json`：两组总体指标、每场景指标、改善/退步数量、诊断状态、已完成成对题数。
+- `comparison.csv`：逐题原描述、正确编号、双方预测、变化类型与请求错误。
+- `<scene>/baseline/`、`<scene>/diagnostic/`：原有逐题 run.json、图像、预测和 HTML 报告。
+
+两组失败请求均计入各自准确率分母；改善/退步中可能包含请求失败，应结合 error 列和 completed_pairs 阅读。
+每完成一个场景更新比较报告，planned_total 标明固定清单总题数；中途报告不能当作全部场景的成绩。
+逐题变化有 improved、regressed、both_correct、both_wrong 四种，不能只展示改善的例子。
+本地测试仅使用模拟 API；实际新场景准确率尚未测得。
