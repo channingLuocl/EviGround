@@ -302,6 +302,23 @@ def _size_ids(objects, category, phrase):
 
 def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_categories=False):
     """Unknown category evidence stays eligible; predicates are ANDed per interpretation."""
+    rewritten = parsed.get('query_rewrite') if isinstance(parsed, dict) else None
+    if isinstance(rewritten, dict):
+        from query_rewrite import constraints_as_relations
+        normalized_relations = constraints_as_relations(rewritten)
+        parsed = dict(parsed)
+        if normalized_relations:
+            parsed['Relations'] = normalized_relations
+        attrs = list(parsed.get('Attributes') or [])
+        target_names = parsed.get('Target') if isinstance(parsed.get('Target'), list) else []
+        target_category = retrieval_category(target_names[0]) if len(target_names) == 1 else ''
+        for constraint in rewritten.get('constraints', []):
+            if constraint.get('type') in ('size_min', 'size_max', 'height_min', 'height_max',
+                                          'bottom_z_near_floor'):
+                phrase = constraint.get('phrase', '')
+                if not any(a.get('phrase') == phrase for a in attrs if isinstance(a, dict)):
+                    attrs.append({'category': target_category, 'phrase': phrase})
+        parsed['Attributes'] = attrs
     target_names = parsed['Target'] if isinstance(parsed['Target'], list) else [parsed['Target']]
     names = {retrieval_category(n) for n in target_names if retrieval_category(n)}
     missing = list(parsed['diagnostic_missing'])

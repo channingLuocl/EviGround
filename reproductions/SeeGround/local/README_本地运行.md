@@ -314,6 +314,14 @@ RGB 为可选输入，目前没有自动下载 ScanNet `.sens`、恢复相机位
 
 ### 可计算的尺寸、上下位置与参照绑定证据
 
+### 查询规范化层
+
+`local/query_rewrite.py` 将已通过结构校验的 Qwen 解析结果编译为可审计的中间表示。它只做确定性的类别别名、关系和几何属性映射，不预测物体编号，也不调用第二个生成式模型。`run.json` 的 `parsed_query.query_rewrite` 和非 baseline 提示中的 `query_rewrite` 同时保留：目标、参照物、规范化约束、原文短语和未解析条件。
+
+当前固定映射包括：`under/beneath -> below`、`above/over -> above`、`next to/beside -> near`、`nearest/closest -> distance_min`、`farthest/furthest -> distance_max`、`smallest/largest -> volume_m3` 极值、`tallest/shortest -> height_m` 极值、`on the floor -> bottom_z_near_floor`。`near` 不会被改写为 `nearest`；`Unhandled` 只进入 `unresolved` 审计记录，不会成为候选约束。
+
+Diagnostic 使用规范化关系转换回现有的约束接口，并将尺寸/地面约束交给几何筛选；原始查询仍是最终判断依据。
+
 `local/object_geometry.py` 为非 baseline 模式增加独立的 `geometry_conditions`。它从完整物体表和原始查询构造可审计证据：
 
 - 每个类别池的 AABB 体积、底面积、框高、中心 Z、底部 Z、顶部 Z 及排序；`smallest/largest/tallest/shortest` 只作为这些代理量的候选证据。

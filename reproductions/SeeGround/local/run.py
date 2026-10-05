@@ -181,6 +181,10 @@ def ground(args):
                    'Do not replace next to/away from with nearest/farthest. '
                    'Positive center-Z difference does not prove the boxes are disjoint or directly above; '
                    'check vertical bounds and horizontal overlap. No geometric proxy certifies missing appearance.')
+    if evidence is not None and evidence.get('query_rewrite'):
+        prompt += ('\nDeterministic query rewrite (audit record): '+json.dumps(evidence['query_rewrite'])+
+                   '\nUse it only as a normalization of quoted language. Preserve the original query as authoritative; '
+                   'do not use unresolved entries as constraints and do not invent a relation or target ID.')
     diagnosis_policy=None
     if evidence is not None and 'diagnosis' in evidence:
         diagnosis_policy='supported_unique_candidate' if evidence['diagnosis']['status']=='resolved' else 'audit_only'

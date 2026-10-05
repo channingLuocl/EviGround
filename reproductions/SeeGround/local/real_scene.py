@@ -90,6 +90,8 @@ def parse_query(query, mode='baseline', calls=None):
         from diagnostic import recover_distance_relations, validate_structure
         obj=recover_distance_relations(query,obj)
         obj=validate_structure(query,obj)
+        from query_rewrite import rewrite_query
+        obj['query_rewrite'] = rewrite_query(query, obj)
         if data.get('_finish_reason')=='length':
             obj['diagnostic_missing'].append('query parser response truncated')
     return obj
@@ -188,6 +190,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                 extra.append(str(path));views.append({'image':str(path),**meta})
         evidence=None if mode=='baseline' else {
             'parsed_query':parsed,'geometry':distance_evidence(targets,anchors),
+            'query_rewrite': parsed.get('query_rewrite'),
             'candidate_target_ids':[o['bbox_id'] for o in targets],
             'candidate_anchor_ids':[o['bbox_id'] for o in anchors],
             'category_matched_target_ids':[o['bbox_id'] for o in matched_targets],
