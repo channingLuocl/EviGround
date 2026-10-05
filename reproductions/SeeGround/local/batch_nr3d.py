@@ -106,9 +106,21 @@ def main():
             result['iou_3d']=bbox_iou_3d(prediction['bbox_3d'],gt_obj['bbox_3d'])
             result['correct']=result['predicted_id']==row['target_id']
         except (ValueError,OSError,KeyError,IndexError) as exc:
-            result.update(error=str(exc),correct=False)
+            result.update(error=str(exc),error_type=type(exc).__name__,correct=False)
+            run_path=out/'run.json'
+            if run_path.exists():
+                try:
+                    failure=json.loads(run_path.read_text())
+                    if failure.get('query')==row['query']:
+                        result.update(error_stage=failure.get('error_stage'),
+                                      pipeline_latency_s=failure.get('pipeline_latency_s'),
+                                      api_calls=len(failure.get('calls',[])))
+                except (ValueError,OSError):
+                    pass
         results.append(result);stats=report(a.output,results,manifest)
         print(f'{i+1}/{len(rows)}: predicted={result.get("predicted_id")} expected={row["target_id"]} correct={result["correct"]}',flush=True)
+        if 'error' in result:
+            print(f'  ERROR [{result.get("error_stage") or "unknown"}/{result["error_type"]}]: {result["error"]}',flush=True)
     print(json.dumps(stats),flush=True)
 
 if __name__=='__main__':main()

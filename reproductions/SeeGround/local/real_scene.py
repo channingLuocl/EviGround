@@ -49,6 +49,13 @@ def parse_query(query, mode='baseline', calls=None):
         prompt=('Parse only the object description in the user JSON. Return one JSON object. '
                 'Do not copy conditions from these instructions. Extract actual category names; '
                 'resolve anaphoric targets from the description when possible, otherwise Target=[]. '
+                'Return exactly this JSON shape (arrays may be empty): '
+                '{"Target":["category"],"Anchor":["category"],'
+                '"Relations":[{"target_category":"category","anchor_category":"category",'
+                '"relation":"near","scope":"","phrase":"exact quote"}],'
+                '"Viewpoint":"","Observer":{"origin":{"kind":"unspecified",'
+                '"category":"","phrase":""},"facing":{"category":"",'
+                '"group":false,"phrase":""}},"Attributes":[],"Unhandled":[]}. '
                 'Return Target and Anchor as arrays, Relations as an array, and Viewpoint as a string. '
                 'Each relation has target_category, anchor_category, relation, scope and phrase. '
                 'relation is nearest|farthest|near|left|right|front|back|other. '
@@ -67,7 +74,8 @@ def parse_query(query, mode='baseline', calls=None):
                       'latency_s':data['_baseline']['latency_s'],'finish_reason':data.get('_finish_reason')})
     obj=parse_json_object(data['_content'])
     for k in ['Target','Anchor']:
-        if not isinstance(obj.get(k),(list,str)):raise ValueError('解析 JSON 格式不正确')
+        if not isinstance(obj.get(k),(list,str)):
+            raise ValueError('解析 JSON 格式不正确: '+k+' must be an array/string; top-level keys: '+', '.join(sorted(obj)))
         if isinstance(obj[k],list) and not all(isinstance(n,str) for n in obj[k]):raise ValueError('类别应为字符串')
     if mode in ('ranked_geometry','category_review','diagnostic'):
         obj=validate_distance_relations(query,obj)
@@ -101,10 +109,13 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
     calls=[]
     record={'query':query,'query_source':query_source,'mode':mode,'calls':calls,
             'ground_truth_supplied_to_model':False,'adaptations':['CPU pinhole rendering','predicted category labels']}
+    stage='load_scene'
     try:
         with np.load(scene_dir/'scene.npz',allow_pickle=False) as cloud:
             xyz,rgb,ids=cloud['xyz'],cloud['rgb'],cloud['ids']
+        stage='parse_query'
         parsed=parse_query(query,mode,calls)
+        stage='retrieve_objects'
         matcher=select_objects if mode=='baseline' else match_categories
         if mode in ('ranked_geometry','category_review','diagnostic'):
             matcher=match_retrieval_categories
@@ -115,6 +126,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         inspection_targets=targets
         diagnosis=None
         if mode=='diagnostic':
+            stage='diagnostic_review'
             from rgb_review import selective_review
             proposed=propose_category_checks(objects,matched_targets,anchors,review_limit)
             # Expand recall conservatively; unknown proposals remain uncertain, never certified targets.
@@ -130,6 +142,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                       anchor_category_unmatched=bool(parsed['Anchor']) and not bool(matched_anchors))
         review=None
         if mode=='visual_review':
+            stage='visual_review'
             from visual_review import review_instances
             review=review_instances(query,objects,xyz,rgb,ids,out,calls)
             # Unknown views stay eligible; no GT label or query answer enters this step.
@@ -137,6 +150,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             anchor_ids=set(review['AnchorIDs']+review['UnknownIDs']) if parsed['Anchor'] else set()
             targets=[o for o in objects if o['bbox_id'] in target_ids] or objects
             anchors=[o for o in objects if o['bbox_id'] in anchor_ids]
+        stage='render'
         camera_targets=inspection_targets if mode=='diagnostic' else targets
         at=np.mean([o['bbox_3d'][:3] for o in (anchors or camera_targets)],axis=0)
         center=xyz.mean(0);center[2]+=1.
@@ -176,6 +190,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             evidence['distance_rankings']=distance_rankings(query,parsed,targets,anchors)
             evidence['direction_status']='left/right unresolved: no speaker coordinate frame computed'
         if mode=='category_review':
+            stage='category_review'
             from category_review import check_categories
             candidates=propose_category_checks(objects,matched_targets,anchors,review_limit)
             category_checks=check_categories(parsed['Target'],candidates,xyz,rgb,ids,out,calls)
@@ -191,6 +206,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             evidence['diagnosis']=diagnosis
             evidence['supplementary_geometry']=distance_evidence(diagnostic_targets,anchors)
         print(json.dumps({'parsed':parsed,'marked_ids':info['marked_ids'],'mode':mode},ensure_ascii=False),flush=True)
+        stage='ground'
         prediction=ground(SimpleNamespace(image=str(out/'view.png'),objects=str(scene_dir/'objects.json'),
                           query=query,dry_run=False,output=str(out/'prediction.json'),
                           evidence=evidence,extra_images=extra))
@@ -214,6 +230,8 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         return prediction
     except (ValueError,OSError,KeyError,IndexError) as exc:
         record['error']=str(exc)
+        record['error_stage']=stage
+        record['error_type']=type(exc).__name__
         (out/'prediction.json').unlink(missing_ok=True)
         raise
     finally:

@@ -5,8 +5,39 @@ from pathlib import Path
 from batch_nr3d import select_rows, summarize
 from batch_nr3d import experiment_settings
 from unittest.mock import patch
+import io
+import json
+from contextlib import redirect_stdout
+from batch_nr3d import main
 
 class BatchTests(unittest.TestCase):
+    def test_batch_failure_prints_reason_and_keeps_stage_and_latency(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);scene=root/'local_outputs'/'scene';scene.mkdir(parents=True)
+            objects=[{'bbox_id':1,'target':'window','bbox_3d':[0,0,0,1,1,1]}]
+            for name in ('objects.json','objects_gt.json'):
+                (scene/name).write_text(json.dumps(objects))
+            (scene/'scene.npz').write_bytes(b'fixture')
+            data=root/'queries.csv'
+            data.write_text('scan_id,correct_guess,utterance,target_id,stimulus_id\nscene,True,window,1,fixture\n')
+            output=root/'experiment'
+            def failed_run(scene_dir,query,out,*args,**kwargs):
+                out.mkdir(parents=True)
+                (out/'run.json').write_text(json.dumps({'query':query,'error_stage':'parse_query',
+                                                       'pipeline_latency_s':.25,'calls':[]}))
+                raise ValueError('fixture parser failure')
+            console=io.StringIO()
+            with patch('sys.argv',['batch_nr3d.py','--csv',str(data),'--scene','scene',
+                                   '--count','1','--output',str(output)]), \
+                 patch('batch_nr3d.ROOT',root),patch('batch_nr3d.run_query',side_effect=failed_run), \
+                 redirect_stdout(console):
+                main()
+            self.assertIn('ERROR [parse_query/ValueError]: fixture parser failure',console.getvalue())
+            result=json.loads((output/'results.json').read_text())
+            self.assertEqual(result['results'][0]['error_stage'],'parse_query')
+            self.assertEqual(result['summary']['mean_pipeline_latency_s'],.25)
+            self.assertEqual(result['summary']['completed'],0)
+
     def test_errors_remain_in_denominator(self):
         stats=summarize([{'predicted_id':2,'correct':True},{'predicted_id':3,'correct':False},{'error':'timeout','correct':False}])
         self.assertEqual(stats,{'total':3,'completed':2,'correct':1,'accuracy':1/3,'iou_evaluated':0,'acc25':None,'acc50':None,'mean_iou':None,'mean_latency_s':None,'mean_pipeline_latency_s':None})

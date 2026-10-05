@@ -317,3 +317,9 @@ RGB 为可选输入，目前没有自动下载 ScanNet `.sens`、恢复相机位
 扩展候选现在仅用于诊断/RGB 复核，不再改变单张检查图的相机和标号。给定相同解析，新模式的检查图与 ranked_geometry 一致。
 group-facing 的复数类别引文检查也已修正。更新后的流程尚未跑收费 API，不能据离线测试声称恢复 6/10 或更高成绩。
 重跑请使用新目录 `--output local_outputs/nr3d_qwen_diagnostic_02`；旧结果保留供比较。
+
+第二轮服务器运行 10 条全部未完成；错误为解析 JSON 格式不正确。
+第一条原回答含 Observer/Attributes/Unhandled/Relations，却缺少 Target/Anchor，未进入渲染和最终定位。
+已补齐解析提示的完整顶层 JSON 模板，明确后续字段说明不能省略 Target/Anchor；未通过校验的输出仍拒绝进入定位，不猜补类别。
+批处理现在在终端打印 ERROR（失败阶段、异常类型、具体原因），run.json/results.json 保存失败阶段和流水线耗时。
+离线测试不验证模型遵守模板：服务器应先用 `--count 1 --output local_outputs/nr3d_qwen_diagnostic_smoke_03` 检查，再在新目录运行整批。

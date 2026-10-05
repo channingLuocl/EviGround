@@ -25,6 +25,7 @@ class RealSceneTests(unittest.TestCase):
         self.assertNotIn('fridge',messages[0]['content'])
         self.assertNotIn('the correct one facing the windows',messages[0]['content'])
         self.assertIn('scope',messages[0]['content'])
+        self.assertIn('"Target":["category"]',messages[0]['content'])
         self.assertEqual(json.loads(messages[1]['content']),{'description':query})
 
     def scene(self, root):
@@ -75,8 +76,32 @@ class RealSceneTests(unittest.TestCase):
                     run_query(root,'test',out,mode='geometry')
             record=json.loads((out/'run.json').read_text())
             self.assertIn('error',record)
+            self.assertEqual(record['error_stage'],'parse_query')
+            self.assertEqual(record['error_type'],'QwenAPIError')
             self.assertEqual(record['calls'][0]['response'],'bad json')
             self.assertFalse((out/'prediction.json').exists())
+
+    def test_partial_schema_failure_reports_field_and_keeps_raw_answer(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.scene(root);out=root/'experiment'
+            answer=reply('{"Observer":{},"Attributes":[],"Unhandled":[]}')
+            with patch('real_scene.chat',return_value=answer):
+                with self.assertRaisesRegex(ValueError,'Target must be an array/string'):
+                    run_query(root,'window',out,mode='diagnostic')
+            record=json.loads((out/'run.json').read_text())
+            self.assertEqual(record['error_stage'],'parse_query')
+            self.assertIn('top-level keys: Attributes, Observer, Unhandled',record['error'])
+            self.assertEqual(record['calls'][0]['response'],answer['_content'])
+
+    def test_server_reply_with_relation_but_missing_target_is_not_a_completed_prediction(self):
+        answer={'Observer':{'origin':{'kind':'unspecified','category':'','phrase':''},
+                            'facing':{'category':'','group':False,'phrase':''}},
+                'Attributes':[], 'Unhandled':['The window nearest the front doors.'],
+                'Relations':[{'target_category':'window','anchor_category':'front doors',
+                              'relation':'nearest','scope':'','phrase':'nearest the front doors'}]}
+        with patch('real_scene.chat',return_value=reply(json.dumps(answer))):
+            with self.assertRaisesRegex(ValueError,'Target must be an array/string'):
+                parse_query('The window nearest the front doors.',mode='diagnostic')
 
     def test_category_verdict_is_soft_and_camera_equals_ranked_mode(self):
         with tempfile.TemporaryDirectory() as td:

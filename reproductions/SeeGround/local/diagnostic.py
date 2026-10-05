@@ -7,7 +7,8 @@ from evidence import match_retrieval_categories, retrieval_category
 
 
 PARSER_INSTRUCTIONS = '''
-Return "Observer":{"origin":{"kind":"room_center|category|unspecified",
+Field definitions within the SAME top-level object; do not omit Target or Anchor:
+"Observer":{"origin":{"kind":"room_center|category|unspecified",
 "category":"category or empty","phrase":"exact quote or empty"},
 "facing":{"category":"category or empty","group":false,"phrase":"exact quote or empty"}},
 "Attributes":[{"category":"category","phrase":"exact appearance/size quote"}],
