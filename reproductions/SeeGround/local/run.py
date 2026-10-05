@@ -170,7 +170,9 @@ def ground(args):
                    'no is a possible category conflict, uncertain or unreviewed establishes nothing. '
                    'Never reinterpret a reference as a target solely because it is close. '
                    'State unresolved category conflicts rather than inventing supporting evidence.')
+    diagnosis_policy=None
     if evidence is not None and 'diagnosis' in evidence:
+        diagnosis_policy='supported_unique_candidate' if evidence['diagnosis']['status']=='resolved' else 'audit_only'
         category_status=('Annotated categories are known; appearance conditions still require evidence. '
                          if annotated else 'Unreviewed instances are uncertain; unknown does not mean false. ')
         prompt += ('\nDiagnosis uses shared observer/reference hypotheses with AND conditions, not votes. '
@@ -179,10 +181,22 @@ def ground(args):
                    +category_status+
                    'Signed directions are measured in the observer frame, never the inspection camera. '
                    'A side condition is not a leftmost/rightmost ranking. Near is not nearest. '
-                   'If diagnosis is missing/ambiguous/conflict, still give a best-effort Predicted ID '
-                   'for evaluation but explain the remaining uncertainty; do not claim a unique answer. '
                    'A resolved diagnosis is support within its stated scope, not proof of identity. '
                    'Check the original query for any omitted condition before choosing.')
+        prompt += '\nDiagnosis decision policy: '+diagnosis_policy+'. '
+        if diagnosis_policy=='audit_only':
+            prompt += ('The diagnosis has not established a reliable unique constraint. '
+                       'Its candidate_ids, stable_candidate_ids and per-hypothesis feasible sets are audit records only. '
+                       'Do not use these sets to exclude, prioritize or break ties between objects. '
+                       'Re-evaluate the original query using the full supplied object table and inspection images. '
+                       'Measured facts may help check explicit conditions, but an incomplete constraint set '
+                       'does not establish the answer. Give a best-effort Predicted ID from the full table '
+                       'and explain unresolved conditions; do not claim a unique answer.')
+        else:
+            prompt += ('Use the unique stable_candidate_ids entry as strong supporting evidence within '
+                       'the stated proposal scope only after checking every original query condition. '
+                       'If the original query or image contradicts it, explain the conflict rather than '
+                       'forcing agreement with the diagnosis.')
     images=[image_path]+[Path(p) for p in getattr(args,'extra_images',[])]
     parts=[]
     for index,path in enumerate(images):
@@ -208,6 +222,8 @@ def ground(args):
             'response':content,'usage':data.get('usage'),'latency_s':data['_baseline']['latency_s'],
             'finish_reason':data.get('_finish_reason'),'images':[str(p) for p in images],
             'note':'Local API exploration; not paper benchmark reproduction.'}
+    if diagnosis_policy is not None:
+        result['diagnosis_policy']=diagnosis_policy
     out.write_text(json.dumps(result,ensure_ascii=False,indent=2))
     print(f'预测编号：{oid}；三维框：{obj["bbox_3d"]}；结果：{out}')
     return result

@@ -36,6 +36,30 @@ class LocalChecks(unittest.TestCase):
             data=json.loads((p/'result.json').read_text())
             self.assertEqual(data['predicted_id'],2)
             self.assertEqual(data['bbox_3d'],[-.3,0.,.7,.5,.35,.1])
+            self.assertNotIn('diagnosis_policy',data)
+            self.assertNotIn('Diagnosis decision policy',request.call_args.args[0][0]['content'][-1]['text'])
+
+    def test_unresolved_diagnoses_allow_prediction_outside_audit_candidates(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td);run.demo(p)
+            for status in ('missing','ambiguous','conflict'):
+                with self.subTest(status=status):
+                    evidence={'diagnosis':{'status':status,'candidate_ids':[1],
+                                          'stable_candidate_ids':[1],
+                                          'hypotheses':[{'candidate_ids':[1]}]}}
+                    args=SimpleNamespace(image=str(p/'scene.png'),objects=str(p/'objects.json'),
+                                         query='laptop',dry_run=False,output=str(p/'result.json'),evidence=evidence)
+                    with patch('run.chat',return_value={'_content':'Predicted ID: 2',
+                               '_baseline':{'model':'mock','latency_s':.01}}) as request:
+                        result=run.ground(args)
+                    prompt=request.call_args.args[0][0]['content'][-1]['text']
+                    self.assertIn('Diagnosis decision policy: audit_only',prompt)
+                    self.assertIn('Do not use these sets to exclude, prioritize or break ties',prompt)
+                    self.assertIn('full supplied object table and inspection images',prompt)
+                    self.assertNotIn('Use the unique stable_candidate_ids entry as strong supporting evidence',prompt)
+                    self.assertEqual(result['predicted_id'],2)
+                    self.assertEqual(result['diagnosis_policy'],'audit_only')
+                    self.assertEqual(json.loads((p/'result.json').read_text())['diagnosis_policy'],'audit_only')
 
     def test_id_parser_accepts_common_qwen_formats(self):
         self.assertEqual(parse_predicted_id('Object ID: 3', {1, 3}), 3)

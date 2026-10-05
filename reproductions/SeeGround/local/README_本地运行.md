@@ -302,6 +302,11 @@ RGB 为可选输入，目前没有自动下载 ScanNet `.sens`、恢复相机位
 | `diagnosis.status` | resolved：范围内所有条件受支持且唯一；missing：缺少条件/证据；ambiguous：多个完整候选/解释；conflict：受支持约束无法同时满足或类别被否定 |
 | `diagnosis.actions/checks/missing` | 触发原因、RGB 原判断、仍缺失的证据 |
 | `decision_status/accepted` | 最终模型选择与诊断一致且未截断的 resolved 才 accepted；不一致为 conflict |
+| `diagnosis_policy` | 最终提示采用的策略，保存在 run.json/prediction.json：resolved 使用 supported_unique_candidate；其他状态使用 audit_only |
+
+`audit_only` 明确要求最终模型从完整物体表、原句和图像重新判断，不得用诊断候选集合排除对象、优先选择或打破平局。
+已测量事实仍可辅助核对明确条件，但部分条件满足不能证明答案。resolved 的唯一候选只作为范围内强支持，原句/图像冲突仍允许模型提出异议。
+这是提示策略调整，不会强行替换预测编号，也不保证消除模型波动或提升准确率；需使用新输出目录验证。
 
 所有状态仍输出最佳猜测 `predicted_id`，标准 accuracy/IoU 的分母不变。
 批量报告额外统计状态数量、accepted_count 和 accepted_accuracy；后者只能结合覆盖率阅读，不能拿筛选后的正确率替代总体准确率。

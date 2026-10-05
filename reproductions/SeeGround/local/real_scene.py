@@ -243,6 +243,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             prediction.update(decision_status=status,accepted=status=='resolved',
                               decision_reasons=reasons,diagnosis=diagnosis)
             record['decision_status']=status
+            record['diagnosis_policy']=prediction['diagnosis_policy']
         prediction.update(mode=mode,object_table=object_table,objects_file=objects_path.name,
                           gt_categories_supplied_to_model=object_table=='gt',query_target_id_supplied_to_model=False,
                           pipeline_latency_s=round(perf_counter()-started,4),

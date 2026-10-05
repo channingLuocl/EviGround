@@ -132,11 +132,16 @@ class RealSceneTests(unittest.TestCase):
                          'Observer':{},'Attributes':[],'Unhandled':[]}))
             with patch('real_scene.chat',return_value=parsed), \
                  patch('rgb_review.chat') as review, \
-                 patch('run.chat',return_value=reply('Predicted ID: 1')):
+                 patch('run.chat',return_value=reply('Predicted ID: 1')) as ground:
                 result=run_query(root,'water cooler by tv',root/'diagnostic',mode='diagnostic',review_limit=1)
             review.assert_not_called()
             self.assertEqual(result['predicted_id'],1)
             self.assertEqual(result['decision_status'],'missing')
+            self.assertEqual(result['diagnosis_policy'],'audit_only')
+            record=json.loads((root/'diagnostic/run.json').read_text())
+            self.assertEqual(record['diagnosis_policy'],'audit_only')
+            prompt=ground.call_args.args[0][0]['content'][-1]['text']
+            self.assertIn('Do not use these sets to exclude, prioritize or break ties',prompt)
             self.assertFalse(result['accepted'])
             self.assertEqual(result['api_calls'],2)
             self.assertFalse((root/'objects_gt.json').exists())
@@ -198,8 +203,11 @@ class RealSceneTests(unittest.TestCase):
             self.assertFalse(record['query_target_id_supplied_to_model'])
             self.assertEqual(result['objects_file'],'objects_gt.json')
             self.assertEqual(result['decision_status'],'resolved')
+            self.assertEqual(result['diagnosis_policy'],'supported_unique_candidate')
             self.assertEqual(pred['decision_status'],'missing')
             prompt=ground.call_args.args[0][0]['content'][-1]['text']
+            self.assertIn('Use the unique stable_candidate_ids entry as strong supporting evidence',prompt)
+            self.assertNotIn('Diagnosis decision policy: audit_only',prompt)
             self.assertIn('"target": "trash can"',prompt)
             self.assertNotIn('water cooler',prompt)
             self.assertNotIn('DO_NOT_SEND_QUERY_ANSWER',prompt)
