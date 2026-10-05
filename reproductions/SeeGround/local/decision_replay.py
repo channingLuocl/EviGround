@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from decision_api import decide, jev_model
+from decision_api import decide, jev_model, validate_answers
 from run import ROOT, load_objects
 
 def digest(path):
@@ -91,9 +91,27 @@ def rank(state, answers):
     if oid not in {obj['bbox_id'] for obj in state['objects']}:raise ValueError('Choice outside full object table')
     ranked=[{'id':int(key),'probability':value} for key,value in answer['probabilities'].items()]
     ranked.sort(key=lambda r:(-r['probability'],r['id']))
-    return {'predicted_id':oid,'ranking':ranked,
-            'top_tied':len(ranked)>1 and ranked[0]['probability']==ranked[1]['probability'],
+    complete=set(answer['probabilities'])=={str(obj['bbox_id']) for obj in state['objects']}
+    return {'predicted_id':oid,'ranking':ranked,'probability_options_complete':complete,
+            'top_tied':(len(ranked)>1 and ranked[0]['probability']==ranked[1]['probability']) if complete else None,
             'best_effort_only':True}
+
+
+def recover_record(record, case):
+    """Recover a Qwen choice from a saved protocol-error response without a network call."""
+    if record.get('backend')!='qwen' or not isinstance(record.get('error_response'),dict):
+        return None
+    response=record['error_response']
+    if not isinstance(response.get('answers'),dict):return None
+    data=response
+    warnings=validate_answers(data.get('answers'),case['questions'],allow_partial_probabilities=True)
+    if not isinstance(data.get('model'),str):raise ValueError('Saved response model missing')
+    result={**record,**data,'validation_warnings':warnings,'latency_s':record.get('latency_s'),
+            'recovered_offline':True,'original_error':record.get('error')}
+    result.pop('error',None)
+    result.update(rank(case['state'],data['answers']))
+    result['correct']=result['predicted_id']==case['evaluation']['target_id']
+    return result
 
 
 def summarize(records, cases, repeats):
@@ -110,14 +128,16 @@ def summarize(records, cases, repeats):
                 'pair_agreement':sum(n*(n-1)//2 for n in counts.values())/pairs if pairs else None,
                 'all_repeats_identical':len(ids)==repeats and len(counts)==1})
         completed=[r for r in rows if 'predicted_id' in r]
+        timed=[r for r in completed if isinstance(r.get('latency_s'),(int,float))]
         total=len(cases)*repeats
         summary[backend]={'planned_calls':total,'recorded_calls':len(rows),'completed':len(completed),
             'errors':sum('error' in r for r in rows),'correct':sum(r.get('correct') is True for r in rows),
             'accuracy':sum(r.get('correct') is True for r in rows)/total,
             'top_tied_count':sum(r.get('top_tied') is True for r in rows),
             'warning_calls':sum(bool(r.get('validation_warnings')) for r in rows),
+            'latency_evaluated':len(timed),
             'all_repeats_identical_rate':sum(g['all_repeats_identical'] for g in groups)/len(cases),
-            'mean_latency_s':sum(r['latency_s'] for r in completed)/len(completed) if completed else None,
+            'mean_latency_s':sum(r['latency_s'] for r in timed)/len(timed) if timed else None,
             'cases':groups}
     return summary
 
@@ -169,6 +189,36 @@ def run_replay(plan_path, output, repeats=3, dry_run=False):
     return stats
 
 
+def recover_replay(plan_path, source, output):
+    if output.exists():raise ValueError('恢复输出目录已存在，请更换目录')
+    plan=json.loads(plan_path.read_text());original=json.loads((source/'manifest.json').read_text())
+    if plan.get('version')!=2 or original['plan_sha256']!=digest(plan_path):
+        raise ValueError('清单版本或原实验输入哈希不一致；未调用 API')
+    repeats=original['repeats'];records=[];files=[]
+    for index,case in enumerate(plan['cases']):
+        for repeat in range(repeats):
+            for backend in ('qwen','jev'):
+                path=source/f'q{index+1:03d}'/f'{backend}_{repeat+1:03d}.json'
+                record=json.loads(path.read_text())
+                if (record.get('scene'),record.get('csv_row'),record.get('backend'),record.get('repeat'))!=(
+                        case['scene'],case['csv_row'],backend,repeat+1):
+                    raise ValueError('原重复记录与清单不一致')
+                try:recovered=recover_record(record,case)
+                except (ValueError,KeyError,TypeError) as exc:
+                    recovered=None;record={**record,'recovery_error':str(exc)}
+                records.append(recovered if recovered is not None else record)
+                files.append({'path':str(path.relative_to(source)),'sha256':digest(path)})
+    manifest={'operation':'offline protocol recovery; no API calls','original_manifest':original,
+              'original_manifest_sha256':digest(source/'manifest.json'),'source_records':files,
+              'recovery_code_sha256':{name:digest(Path(__file__).with_name(name))
+                                      for name in ('decision_api.py','decision_replay.py')}}
+    stats=summarize(records,plan['cases'],repeats)
+    write_json(output/'comparison.json',{'manifest':manifest,'summary':stats,'records':records})
+    print(json.dumps({'network_request':False,'recovered':sum(r.get('recovered_offline') is True for r in records),
+                      'summary':stats},ensure_ascii=False))
+    return stats
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='command',required=True)
     p=sub.add_parser('freeze');p.add_argument('--source',type=Path,required=True)
@@ -176,7 +226,11 @@ def main():
     p.add_argument('--output',type=Path,required=True)
     p=sub.add_parser('run');p.add_argument('--plan',type=Path,required=True)
     p.add_argument('--repeats',type=int,default=3);p.add_argument('--output',type=Path,required=True)
-    p.add_argument('--dry-run',action='store_true');args=parser.parse_args()
+    p.add_argument('--dry-run',action='store_true')
+    p=sub.add_parser('recover',help='离线恢复已保存回答，不调用 API，不修改原实验')
+    p.add_argument('--plan',type=Path,required=True);p.add_argument('--source',type=Path,required=True)
+    p.add_argument('--output',type=Path,required=True);args=parser.parse_args()
+    if args.command=='recover':recover_replay(args.plan,args.source,args.output);return
     if args.command=='freeze':freeze(args.source,args.output,args.csv_rows,args.count)
     else:run_replay(args.plan,args.output,args.repeats,args.dry_run)
 

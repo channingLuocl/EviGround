@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 import requests
 from decision_api import DecisionAPIError, decide, validate_answers
-from decision_replay import build_input, digest, freeze, rank, run_replay, summarize
+from decision_replay import build_input, digest, freeze, rank, recover_record, recover_replay, run_replay, summarize
 
 
 def answers(questions, choice='1'):
@@ -83,6 +83,70 @@ class DecisionTests(unittest.TestCase):
              patch('decision_api.requests.post',return_value=Mock(ok=True,json=lambda:payload)):
             with self.assertRaises(ValueError) as error:decide('jev',state,questions)
         self.assertEqual(error.exception.response_data,payload)
+
+    def test_qwen_partial_probability_response_is_usable_with_warning(self):
+        run,objects=fixture();state,questions=build_input(run,objects)
+        response={'answers':{'target':{
+            'type':'choice','choice':'2','probabilities':{'2':.125},'confidence':.125}},
+            'model':'qwen','response':'original raw response','usage':{}}
+        record={'backend':'qwen','scene':'s','csv_row':2,'repeat':1,'error_response':response}
+        recovered=recover_record(record,{'state':state,'questions':questions,'evaluation':{'target_id':2},
+                                         'scene':'s','csv_row':2})
+        self.assertEqual(recovered['predicted_id'],2)
+        self.assertEqual(recovered['validation_warnings'][0]['issue'],'incomplete_probability_options')
+        self.assertTrue(recovered['correct'])
+        self.assertIsNone(recovered['latency_s'])
+        self.assertIsNone(recovered['top_tied'])
+        self.assertEqual(recovered['answers']['target']['probabilities'],{'2':.125})
+        with self.assertRaises(ValueError):validate_answers(response['answers'],questions)
+
+    def test_server_sparse_probabilities_and_unknown_options(self):
+        run,objects=fixture();_,questions=build_input(run,objects)
+        value=answers(questions,choice='2');value['target']['probabilities']={'1':.1}
+        warnings=validate_answers(value,questions,allow_partial_probabilities=True)
+        self.assertIn('choice_probability_missing',{w['issue'] for w in warnings})
+        value['target']['probabilities']={'invalid':.1}
+        with self.assertRaises(ValueError):validate_answers(value,questions,allow_partial_probabilities=True)
+
+    def test_live_qwen_retains_sparse_choice_but_jev_rejects_sparse_distribution(self):
+        run,objects=fixture();state,questions=build_input(run,objects)
+        value=answers(questions,choice='2');value['target']['probabilities']={'2':.125}
+        payload={'answers':value,'model':'mock'}
+        raw={'_content':json.dumps(payload),'_baseline':{'model':'mock'},'_finish_reason':'stop'}
+        with patch('decision_api.chat',return_value=raw):
+            result=decide('qwen',state,questions)
+        self.assertEqual(result['answers']['target']['choice'],'2')
+        self.assertEqual(len(result['validation_warnings']),2)
+        with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}), \
+             patch('decision_api.requests.post',return_value=Mock(ok=True,json=lambda:payload)):
+            with self.assertRaises(ValueError):decide('jev',state,questions)
+
+    def test_offline_recovery_never_calls_api_or_changes_source(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);run,objects=fixture();state,questions=build_input(run,objects)
+            case={'scene':'s','csv_row':2,'state':state,'questions':questions,'evaluation':{'target_id':2}}
+            plan=root/'plan.json';plan.write_text(json.dumps({'version':2,'cases':[case]}))
+            source=root/'source';(source/'q001').mkdir(parents=True)
+            (source/'manifest.json').write_text(json.dumps({'plan_sha256':digest(plan),'repeats':2}))
+            sparse=answers(questions,choice='2');sparse['target']['probabilities']={'2':.125}
+            for repeat in (1,2):
+                qwen={'scene':'s','csv_row':2,'backend':'qwen','repeat':repeat,'error':'protocol',
+                      'error_response':{'answers':sparse,'model':'mock','response':'raw'}}
+                jev={'scene':'s','csv_row':2,'backend':'jev','repeat':repeat,'predicted_id':2,
+                     'correct':True,'latency_s':.1}
+                (source/f'q001/qwen_{repeat:03d}.json').write_text(json.dumps(qwen))
+                (source/f'q001/jev_{repeat:03d}.json').write_text(json.dumps(jev))
+            hashes={str(p):digest(p) for p in source.rglob('*.json')}
+            with patch('decision_replay.decide') as api,patch('decision_api.requests.post') as http, \
+                 redirect_stdout(io.StringIO()):
+                stats=recover_replay(plan,source,root/'recovered')
+                api.assert_not_called();http.assert_not_called()
+                with self.assertRaisesRegex(ValueError,'已存在'):recover_replay(plan,source,root/'recovered')
+            self.assertEqual(stats['qwen']['accuracy'],1.)
+            self.assertEqual(stats['qwen']['all_repeats_identical_rate'],1.)
+            self.assertIsNone(stats['qwen']['mean_latency_s'])
+            self.assertEqual(stats['qwen']['latency_evaluated'],0)
+            self.assertEqual(hashes,{str(p):digest(p) for p in source.rglob('*.json')})
 
     def test_jev_errors_do_not_echo_key_or_response_body(self):
         run,objects=fixture();state,questions=build_input(run,objects)

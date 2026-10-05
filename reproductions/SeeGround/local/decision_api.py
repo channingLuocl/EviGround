@@ -19,7 +19,7 @@ def jev_model():
     return os.getenv('SEEGROUND_JEV_MODEL','jev-latest').strip()
 
 
-def validate_answers(answers, questions):
+def validate_answers(answers, questions, allow_partial_probabilities=False):
     if not isinstance(answers,dict) or answers.keys()!=questions.keys():
         raise ValueError('Decision response must answer every supplied question')
     warnings=[]
@@ -28,16 +28,24 @@ def validate_answers(answers, questions):
         if not isinstance(answer,dict) or answer.get('type')!='choice' or answer.get('choice') not in options:
             raise ValueError('Invalid decision choice: '+key)
         probs=answer.get('probabilities')
-        if not isinstance(probs,dict) or probs.keys()!=questions[key]['criteria'].keys():
+        option_keys=questions[key]['criteria'].keys()
+        if (not isinstance(probs,dict) or not probs
+                or not set(probs).issubset(option_keys)
+                or (not allow_partial_probabilities and set(probs)!=set(option_keys))):
             raise ValueError('Invalid decision probability options: '+key)
         values=list(probs.values())+[answer.get('confidence')]
         if any(type(v) not in (int,float) or not math.isfinite(v) or not 0<=v<=1 for v in values):
             raise ValueError('Invalid decision probability/confidence: '+key)
         total=sum(probs.values())
         if total<=0:raise ValueError('Empty decision distribution: '+key)
+        if set(probs)!=set(option_keys):
+            warnings.append({'question':key,'issue':'incomplete_probability_options',
+                             'missing':sorted(set(option_keys)-set(probs))})
         if abs(total-1)>.001:
             warnings.append({'question':key,'issue':'probability_sum','value':total})
-        if probs[answer['choice']]<max(probs.values()):
+        if answer['choice'] not in probs:
+            warnings.append({'question':key,'issue':'choice_probability_missing'})
+        elif probs[answer['choice']]<max(probs.values()):
             warnings.append({'question':key,'issue':'choice_not_probability_max',
                              'gap':max(probs.values())-probs[answer['choice']]})
     return warnings
@@ -78,7 +86,8 @@ def decide(backend, state, questions):
     try:
         if not isinstance(data,dict) or not isinstance(data.get('model'),str):
             raise ValueError('Invalid decision response/model')
-        warnings=validate_answers(data.get('answers'),questions)
+        warnings=validate_answers(data.get('answers'),questions,
+                                  allow_partial_probabilities=backend=='qwen')
     except ValueError as exc:
         raise DecisionAPIError(str(exc),data) from exc
     return {**data,'validation_warnings':warnings,'latency_s':round(perf_counter()-started,4)}

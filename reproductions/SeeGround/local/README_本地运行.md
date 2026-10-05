@@ -515,3 +515,17 @@ Qwen 5 次成功预测都发生最高分并列，编号排序制造了表面一�
 因此撤销逐维度最小概率汇总，改为直接 Choice，并保存异常响应和分布警告。
 新清单版本为 2，不允许运行旧版本清单；旧文件与结果保留，按上述 _02 路径重新冻结和执行。
 此修正同时改变了决策问题和协议处理，不能作为单独的 JEV 模型提分证据。
+
+如果已经运行过 `decision_qwen_jev_02`，无需重新调用 API。新版还提供离线恢复：
+它只读取已保存的 `error_response`，恢复 Qwen 已返回的 `choice`，将缺失概率选项记录为
+`incomplete_probability_options`；不补概率、不修改原响应、不把不完整分布计入并列率。
+
+```bash
+.venv/bin/python local/decision_replay.py recover \
+  --plan local_outputs/decision_frozen_02.json \
+  --source local_outputs/decision_qwen_jev_02 \
+  --output local_outputs/decision_qwen_jev_02_recovered
+```
+
+该命令输出 `network_request: false`，恢复后的比较报告仍以 9 次计划调用为分母。
+只有恢复成功的 Qwen 编号计入 completed；概率不完整的记录会保留 warning，不能当作完整校准概率。
