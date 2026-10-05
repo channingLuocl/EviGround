@@ -8,9 +8,6 @@ from pathlib import Path
 from decision_api import decide, jev_model
 from run import ROOT, load_objects
 
-DIMENSIONS=('category','spatial','appearance')
-
-
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -33,23 +30,18 @@ def build_input(run, objects):
            'policy':'No image is supplied. Unknown is not false. Incomplete diagnostic candidate sets '
                     'must not exclude or prioritize objects. Inspection camera is not observer viewpoint. '
                     'Annotated categories are given; predicted labels and visual checks are soft evidence.'}
-    questions={}
-    for obj in objects:
-        for dimension in DIMENSIONS:
-            details={
-                'category':'Does the instance match the target category in the original query?',
-                'spatial':'Are ALL spatial conditions supported under the SAME observer/reference hypothesis? '
-                          'Near is not nearest; use measurements for explicit conditions, not camera position.',
-                'appearance':'Are ALL target appearance conditions in the original query supported by supplied '
-                             'per-instance visual evidence? A bounding box alone does not prove appearance.'}
-            questions[f'{obj["bbox_id"]}_{dimension}']={
-                'type':'choice','instructions':f'For instance {obj["bbox_id"]}: '+details[dimension]+
-                    ' Check the original query for conditions omitted by the parser. If this dimension has '
-                    'no condition, answer supported. If evidence is missing or conflicting, answer unknown. '
-                    'Do not treat a partial diagnosis as a complete answer.',
-                'criteria':{'supported':'Evidence supports every condition in this dimension, or none is required.',
-                            'contradicted':'Visible or measured evidence contradicts a required condition.',
-                            'unknown':'Required evidence is missing, unverified or ambiguous.'}}
+    if not 1<=len(objects)<=255:raise ValueError('Direct Choice requires 1-255 object options')
+    questions={'target':{'type':'choice','instructions':
+        'Which instance best matches the original query using ONLY supplied evidence? '
+        'Return a best-effort target ID, even if conditions remain unresolved. '
+        'Respect annotated target categories. Check omitted conditions in the original query. '
+        'Combine spatial conditions under the SAME observer/reference hypothesis. '
+        'Near is not nearest; camera position is not speaker viewpoint. '
+        'A bounding box alone does not prove appearance. Unknown visual evidence is not negative. '
+        'Do not use incomplete diagnosis candidate sets to exclude or prioritize objects. '
+        'If several objects remain plausible, reflect uncertainty in the probability distribution.',
+        'criteria':{str(obj['bbox_id']):{'instance_id':obj['bbox_id'],'category':obj['target']}
+                    for obj in objects}}}
     return state,questions
 
 
@@ -85,8 +77,8 @@ def freeze(source, output, csv_rows=None, count=3):
     else:cases=cases[:count]
     if not cases or len({(c['scene'],c['csv_row']) for c in cases})!=len(cases):
         raise ValueError('没有可冻结题目或题目重复')
-    plan={'version':1,'comparison':'text-only fixed evidence; not original image-grounding accuracy',
-          'ranking':'minimum supported probability across category/spatial/appearance; exact tie by ascending ID',
+    plan={'version':2,'comparison':'text-only fixed evidence; not original image-grounding accuracy',
+          'selection':'direct target-ID Choice; preserve provider choice, never resolve ties in code',
           'cases':cases}
     write_json(output,plan)
     print(f'冻结 {len(cases)} 题：{output}；未调用 API')
@@ -94,15 +86,13 @@ def freeze(source, output, csv_rows=None, count=3):
 
 
 def rank(state, answers):
-    ranked=[]
-    for obj in state['objects']:
-        entries=[answers[f'{obj["bbox_id"]}_{d}'] for d in DIMENSIONS]
-        ranked.append({'id':obj['bbox_id'],'support':min(a['probabilities']['supported'] for a in entries),
-                       'all_dimensions_supported':all(a['choice']=='supported' for a in entries)})
-    ranked.sort(key=lambda r:(-r['support'],r['id']))
-    return {'predicted_id':ranked[0]['id'],'ranking':ranked,
-            'all_dimensions_supported':ranked[0]['all_dimensions_supported'],
-            'top_tied':len(ranked)>1 and ranked[0]['support']==ranked[1]['support'],
+    answer=answers['target']
+    oid=int(answer['choice'])
+    if oid not in {obj['bbox_id'] for obj in state['objects']}:raise ValueError('Choice outside full object table')
+    ranked=[{'id':int(key),'probability':value} for key,value in answer['probabilities'].items()]
+    ranked.sort(key=lambda r:(-r['probability'],r['id']))
+    return {'predicted_id':oid,'ranking':ranked,
+            'top_tied':len(ranked)>1 and ranked[0]['probability']==ranked[1]['probability'],
             'best_effort_only':True}
 
 
@@ -125,7 +115,7 @@ def summarize(records, cases, repeats):
             'errors':sum('error' in r for r in rows),'correct':sum(r.get('correct') is True for r in rows),
             'accuracy':sum(r.get('correct') is True for r in rows)/total,
             'top_tied_count':sum(r.get('top_tied') is True for r in rows),
-            'fully_supported_count':sum(r.get('all_dimensions_supported') is True for r in rows),
+            'warning_calls':sum(bool(r.get('validation_warnings')) for r in rows),
             'all_repeats_identical_rate':sum(g['all_repeats_identical'] for g in groups)/len(cases),
             'mean_latency_s':sum(r['latency_s'] for r in completed)/len(completed) if completed else None,
             'cases':groups}
@@ -135,7 +125,8 @@ def summarize(records, cases, repeats):
 def run_replay(plan_path, output, repeats=3, dry_run=False):
     if repeats<2:raise ValueError('稳定性实验至少重复两次')
     plan=json.loads(plan_path.read_text())
-    if plan.get('version')!=1 or not plan.get('cases'):raise ValueError('非法冻结文件')
+    if plan.get('version')!=2 or not plan.get('cases'):
+        raise ValueError('需要 version=2 的直接 Choice 清单；请重新 freeze 到新文件，不覆盖旧实验')
     cases=plan['cases']
     if dry_run:
         print(json.dumps({'network_request':False,'cases':len(cases),'repeats':repeats,
@@ -167,6 +158,7 @@ def run_replay(plan_path, output, repeats=3, dry_run=False):
                         record['correct']=record['predicted_id']==case['evaluation']['target_id']
                     except (ValueError,OSError,KeyError,TypeError) as exc:
                         record.update(error=str(exc),correct=False)
+                        if hasattr(exc,'response_data'):record['error_response']=exc.response_data
                     write_json(path,record)
                 records.append(record)
                 stats=summarize(records,cases,repeats)

@@ -6,11 +6,11 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import Mock, patch
 import requests
-from decision_api import decide, validate_answers
+from decision_api import DecisionAPIError, decide, validate_answers
 from decision_replay import build_input, digest, freeze, rank, run_replay, summarize
 
 
-def answers(questions, choice='supported'):
+def answers(questions, choice='1'):
     return {key:{'type':'choice','choice':choice,'confidence':1.,
                  'probabilities':{option:float(option==choice) for option in q['criteria']}}
             for key,q in questions.items()}
@@ -63,10 +63,26 @@ class DecisionTests(unittest.TestCase):
         for bad in (float('nan'),1.1,-.1,True):
             value=answers(questions);value[key]['confidence']=bad
             with self.assertRaises(ValueError):validate_answers(value,questions)
-        value=answers(questions);value[key]['probabilities']['unknown']=.4
+        value=answers(questions);value[key]['probabilities']={'1':0.,'2':0.}
         with self.assertRaises(ValueError):validate_answers(value,questions)
-        value=answers(questions);value[key]['choice']='unknown'
+        value=answers(questions);value[key]['choice']='not_an_option'
         with self.assertRaises(ValueError):validate_answers(value,questions)
+
+    def test_distribution_mismatch_is_recorded_without_changing_choice(self):
+        run,objects=fixture();state,questions=build_input(run,objects)
+        value=answers(questions,choice='2')
+        value['target']['probabilities']={'1':.51,'2':.48}
+        warnings=validate_answers(value,questions)
+        self.assertEqual({w['issue'] for w in warnings},{'probability_sum','choice_not_probability_max'})
+        self.assertEqual(rank(state,value)['predicted_id'],2)
+
+    def test_rejected_response_retains_original_answers(self):
+        run,objects=fixture();state,questions=build_input(run,objects)
+        payload={'model':'jev-fixture','answers':{}}
+        with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}), \
+             patch('decision_api.requests.post',return_value=Mock(ok=True,json=lambda:payload)):
+            with self.assertRaises(ValueError) as error:decide('jev',state,questions)
+        self.assertEqual(error.exception.response_data,payload)
 
     def test_jev_errors_do_not_echo_key_or_response_body(self):
         run,objects=fixture();state,questions=build_input(run,objects)
@@ -81,16 +97,17 @@ class DecisionTests(unittest.TestCase):
         run,objects=fixture();state,questions=build_input(run,objects)
         self.assertNotIn('ANSWER_MUST_NOT_LEAK',json.dumps(state))
         self.assertNotIn('PRIVATE_PATH',json.dumps(state))
-        self.assertEqual(len(questions),6)
+        self.assertEqual(len(questions),1)
+        self.assertEqual(set(questions['target']['criteria']),{'1','2'})
         self.assertEqual(state['visual_checks'][0]['verdict'],'uncertain')
 
-    def test_and_ranking_and_exact_tie_are_deterministic(self):
+    def test_exact_tie_preserves_provider_choice_instead_of_smallest_id(self):
         run,objects=fixture();state,questions=build_input(run,list(reversed(objects)))
-        value=answers(questions)
-        self.assertEqual(rank(state,value)['predicted_id'],1)
+        value=answers(questions,choice='2')
+        value['target']['probabilities']={'1':.5,'2':.5}
+        self.assertEqual(rank(state,value)['predicted_id'],2)
         self.assertTrue(rank(state,value)['top_tied'])
-        value['1_appearance']={'type':'choice','choice':'unknown','confidence':1.,
-                              'probabilities':{'supported':0.,'contradicted':0.,'unknown':1.}}
+        value['target']['probabilities']={'1':.2,'2':.8}
         result=rank(state,value)
         self.assertEqual(result['predicted_id'],2)
         self.assertFalse(result['top_tied'])
@@ -127,7 +144,7 @@ class DecisionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);run,objects=fixture();state,questions=build_input(run,objects)
             case={'scene':'s','csv_row':2,'state':state,'questions':questions,'evaluation':{'target_id':1}}
-            plan=root/'plan.json';plan.write_text(json.dumps({'version':1,'cases':[case]}))
+            plan=root/'plan.json';plan.write_text(json.dumps({'version':2,'cases':[case]}))
             reply={'model':'mock','answers':answers(questions),'latency_s':.1}
             env={'TYPESAFE_API_KEY':'SECRET','SEEGROUND_API_KEY':'SECRET',
                  'SEEGROUND_MODEL':'mock','SEEGROUND_BASE_URL':'https://example.invalid/v1'}
@@ -143,8 +160,23 @@ class DecisionTests(unittest.TestCase):
                     self.assertNotIn('evaluation',str(call.args))
                 self.assertNotIn('SECRET',(root/'out/manifest.json').read_text())
                 api.reset_mock();run_replay(plan,root/'out',2);api.assert_not_called()
-                case['state']['query']='changed';plan.write_text(json.dumps({'version':1,'cases':[case]}))
+                api.side_effect=DecisionAPIError('missing answer',{'answers':{},'model':'mock'})
+                failed=run_replay(plan,root/'failed',2)
+                self.assertEqual(failed['jev']['errors'],2)
+                self.assertEqual(failed['jev']['accuracy'],0.)
+                error_record=json.loads((root/'failed/q001/jev_001.json').read_text())
+                self.assertEqual(error_record['error_response'],{'answers':{},'model':'mock'})
+                api.reset_mock()
+                case['state']['query']='changed';plan.write_text(json.dumps({'version':2,'cases':[case]}))
                 with self.assertRaisesRegex(ValueError,'不同实验'):run_replay(plan,root/'out',2)
+                api.assert_not_called()
+
+    def test_old_plan_fails_before_api(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);plan=root/'plan.json'
+            plan.write_text(json.dumps({'version':1,'cases':[{}]}))
+            with patch('decision_replay.decide') as api:
+                with self.assertRaisesRegex(ValueError,'version=2'):run_replay(plan,root/'out',2)
                 api.assert_not_called()
 
 

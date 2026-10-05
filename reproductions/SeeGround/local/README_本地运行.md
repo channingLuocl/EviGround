@@ -445,11 +445,12 @@ cd reproductions/SeeGround
 不再解析或看图，不使用原最终预测/解释，也不重新生成视觉证据。
 没有 RGB 复核记录时，外观条件仍缺证据；本实验不能与原图像定位准确率直接比较。
 
-每个物体拆成类别、空间、外观三项 Choice，返回 supported/contradicted/unknown 的概率与选择。
-空间条件必须在同一观察者/参照解释下同时满足，未知不当作否定。
-代码以三项 supported 概率的最小值排序，精确并列时按实例编号升序选最佳猜测。
-这是固定的探索性汇总规则，不是校准后的联合概率，也不会自动把最高分当成可靠答案。
+每题一个 target Choice，选项是完整物体表中的所有 ID；两组使用完全相同的候选与问题。
+空间条件必须在同一观察者/参照解释下同时满足，未知不当作否定；缺证据时仍返回最佳猜测。
+代码直接保留接口的 choice，不再取三项概率最小值，也不按编号解决并列。
 所有原始概率、confidence、模型版本、用量、耗时、排序和并列标记均保存。
+缺失选项、越界编号、非有限概率等仍拒绝；概率和偏离 1 或 choice 不是最大概率时，
+保留原编号并写入 validation_warnings，不修改或归一化概率。校验失败时保留 error_response 供排查。
 Qwen 的概率是生成的自述值；JEV 是其决策接口的概率，两者数值并非已在 Nr3D 上校准。
 
 不需要安装新依赖，复用 requests。服务器已有 Qwen 配置时，在当前 Bash 会话配置 JEV：
@@ -474,7 +475,7 @@ cd reproductions/SeeGround
 .venv/bin/python local/decision_replay.py freeze \
   --source local_outputs/nr3d_paired_gt_02 \
   --csv-rows 32705 39012 39543 \
-  --output local_outputs/decision_frozen_01.json
+  --output local_outputs/decision_frozen_02.json
 ```
 
 程序验证原实验物体表哈希与查询，保存自包含的证据快照和源记录哈希。
@@ -486,15 +487,15 @@ freeze 默认选最前面的 3 条已完成 diagnostic 记录；可用 --count �
 
 ```bash
 .venv/bin/python local/decision_replay.py run \
-  --plan local_outputs/decision_frozen_01.json --repeats 3 \
-  --output local_outputs/decision_qwen_jev_01 --dry-run
+  --plan local_outputs/decision_frozen_02.json --repeats 3 \
+  --output local_outputs/decision_qwen_jev_02 --dry-run
 
 .venv/bin/python local/decision_replay.py run \
-  --plan local_outputs/decision_frozen_01.json --repeats 3 \
-  --output local_outputs/decision_qwen_jev_01
+  --plan local_outputs/decision_frozen_02.json --repeats 3 \
+  --output local_outputs/decision_qwen_jev_02
 ```
 
-3 题 × 3 次 × 2 个模型 = 18 次 HTTP 请求；每次包含完整物体表及每物体 3 个判断，
+3 题 × 3 次 × 2 个模型 = 18 次 HTTP 请求；每次包含完整物体表及 1 个 target 判断，
 请求数不是 token 费用估计。双方同样问题，不加入随机 uid 或时间字段；执行顺序交替。
 dry-run 不需要密钥、不请求网络，打印题数、调用数与每题问题数。
 原命令可断点续跑；成功和失败记录都保留，不把重试混进同一重复实验。
@@ -503,7 +504,14 @@ dry-run 不需要密钥、不请求网络，打印题数、调用数与每题问
 结果在 `<output>/comparison.json`：accuracy 以全部计划重复次数为分母；
 all_repeats_identical_rate 只有每次成功且编号完全相同才计入。
 逐题 plurality_agreement/pair_agreement 仅描述成功请求，必须结合 completed/errors 阅读。
-top_tied_count 与 fully_supported_count 分别表示最高分并列次数、所选物体三项均判 supported 次数。
-高一致率可能只是所有证据未知时反复触发编号排序，不能单独视为模型改进。
-先检查这三题的错误、并列、未知和正确率，再决定是否扩大样本或接入主流程。
+top_tied_count 表示最高概率并列次数，warning_calls 表示有分布协议警告的调用数。
+高一致率或高 confidence 不能单独证明判断正确；有概率警告时不能把该分布当作有效校准概率。
+先检查这三题的错误、警告、并列和正确率，再决定是否扩大样本或接入主流程。
 这三题是已知退步的开发样本，不能作为泛化提分证据。
+
+首轮每题 63/69 个逐物体问题的实验，两组各完成 5/9；Qwen 正确 0/9，JEV 正确 2/9。
+Qwen 5 次成功预测都发生最高分并列，编号排序制造了表面一致；JEV 在两题成功重复之间也改变了编号。
+原记录缺少字段错误的原回答，不能确认是截断；JEV 分布错误也不能确认是舍入还是选择不一致。
+因此撤销逐维度最小概率汇总，改为直接 Choice，并保存异常响应和分布警告。
+新清单版本为 2，不允许运行旧版本清单；旧文件与结果保留，按上述 _02 路径重新冻结和执行。
+此修正同时改变了决策问题和协议处理，不能作为单独的 JEV 模型提分证据。
