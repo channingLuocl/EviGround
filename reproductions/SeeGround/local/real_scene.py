@@ -21,6 +21,15 @@ def object_table_path(scene_dir, object_table):
     return scene_dir/OBJECT_TABLES[object_table]
 
 
+def structural_objects(scene_dir, objects):
+    """Load non-OLT scene instances for structural reference evidence only."""
+    path=scene_dir/'scene_instances.json'
+    if not path.exists():
+        return []
+    known={obj['bbox_id'] for obj in objects}
+    return [obj for obj in load_objects(path) if obj['bbox_id'] not in known]
+
+
 def select_objects(names, objects):
     if isinstance(names,str):names=[names]
     words={w.lower().rstrip('s') for name in names for w in re.findall(r'[A-Za-z]+',name)}
@@ -120,6 +129,8 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
     started=perf_counter()
     objects_path=object_table_path(scene_dir,object_table)
     objects=load_objects(objects_path)
+    structural=structural_objects(scene_dir,objects) if mode=='diagnostic' else []
+    geometry_objects=objects+structural
     out.mkdir(parents=True,exist_ok=True)
     calls=[]
     record={'query':query,'query_source':query_source,'mode':mode,'calls':calls,
@@ -140,7 +151,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         if mode in ('ranked_geometry','category_review','diagnostic'):
             matcher=match_retrieval_categories
         matched_targets=matcher(parsed['Target'],objects)
-        matched_anchors=matcher(parsed['Anchor'],objects)
+        matched_anchors=matcher(parsed['Anchor'],geometry_objects)
         targets=matched_targets or objects
         anchors=(matched_anchors or targets) if mode=='baseline' else matched_anchors
         inspection_targets=targets
@@ -148,11 +159,12 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         if mode=='diagnostic':
             stage='diagnostic_review'
             from rgb_review import selective_review
+            # Structural instances can bind reference geometry, but never become target candidates.
             proposed=[] if object_table=='gt' else propose_category_checks(objects,matched_targets,anchors,review_limit)
             # Expand recall conservatively; unknown proposals remain uncertain, never certified targets.
             diagnostic_targets=list({o['bbox_id']:o for o in matched_targets+proposed}.values()) or objects
             room_center=(xyz.min(0)+xyz.max(0))/2
-            diagnosis=selective_review(parsed,objects,diagnostic_targets,room_center,scene_dir,calls,review_limit,
+            diagnosis=selective_review(parsed,geometry_objects,diagnostic_targets,room_center,scene_dir,calls,review_limit,
                                        trusted_categories=object_table=='gt')
             record.update(diagnosis=diagnosis,review_proposal={'ids':[o['bbox_id'] for o in diagnostic_targets],
                           'policy':'annotated-category candidates' if object_table=='gt' else
@@ -161,7 +173,9 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         record.update(parsed_query=parsed,category_target_ids=[o['bbox_id'] for o in matched_targets],
                       category_anchor_ids=[o['bbox_id'] for o in matched_anchors],
                       target_category_unmatched=not bool(matched_targets),
-                      anchor_category_unmatched=bool(parsed['Anchor']) and not bool(matched_anchors))
+                      anchor_category_unmatched=bool(parsed['Anchor']) and not bool(matched_anchors),
+                      structural_objects_file='scene_instances.json' if structural else None,
+                      structural_reference_ids=[o['bbox_id'] for o in structural])
         review=None
         if mode=='visual_review':
             stage='visual_review'
@@ -203,7 +217,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             'visual_review':review,'views':[{'image':str(out/'view.png'),**info}]+views}
         if evidence is not None:
             from object_geometry import build_geometry
-            evidence['geometry_conditions']=build_geometry(query,parsed,objects)
+            evidence['geometry_conditions']=build_geometry(query,parsed,geometry_objects)
         record.update(target_ids=[o['bbox_id'] for o in targets],anchor_ids=[o['bbox_id'] for o in anchors],
                       camera_and_render=info,extra_views=views,evidence=evidence)
         visible=set(info['marked_ids'])
@@ -231,6 +245,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         if diagnosis is not None:
             evidence['diagnosis']=diagnosis
             evidence['supplementary_geometry']=distance_evidence(diagnostic_targets,anchors)
+            evidence['structural_reference_ids']=[o['bbox_id'] for o in structural]
         if evidence is not None:
             evidence['object_table']=object_table
         print(json.dumps({'parsed':parsed,'marked_ids':info['marked_ids'],'mode':mode},ensure_ascii=False),flush=True)

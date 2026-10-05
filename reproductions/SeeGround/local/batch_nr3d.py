@@ -57,6 +57,9 @@ def experiment_settings(scene_dir, mode, review_limit=6, object_table='pred'):
     if mode=='diagnostic':
         from rgb_review import input_hashes
         settings['rgb_sha256']=input_hashes(scene_dir,load_objects(selected_path))
+        structural_path=scene_dir/'scene_instances.json'
+        if structural_path.exists():
+            settings['structural_instances_sha256']=hashlib.sha256(structural_path.read_bytes()).hexdigest()
     return settings
 
 def report(out,results,manifest):

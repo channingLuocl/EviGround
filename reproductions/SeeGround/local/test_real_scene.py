@@ -52,6 +52,51 @@ class RealSceneTests(unittest.TestCase):
             self.assertEqual(result['api_calls'],2)
             self.assertGreater(result['pipeline_latency_s'],0)
 
+    def test_diagnostic_uses_structural_instances_as_reference_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.scene(root);out=root/'experiment'
+            (root/'scene_instances.json').write_text(json.dumps([
+                {'bbox_id':3,'target':'stove','bbox_3d':[-2,0,.5,.4,.4,1.]},
+                {'bbox_id':4,'target':'wall','bbox_3d':[2,0,.5,.4,.4,1.]},
+            ]))
+            answer=reply(json.dumps({
+                'Target':['water cooler'], 'Anchor':['stove','wall'],
+                'Relations':[{'target_category':'water cooler',
+                              'anchor_categories':['stove','wall'],
+                              'relation':'between','scope':'relative_anchors',
+                              'phrase':'between the stove and the wall'}],
+                'Observer':{},'Attributes':[],'Unhandled':[]
+            }))
+            with patch('real_scene.chat',return_value=answer), \
+                 patch('run.chat',return_value=reply('Predicted ID: 1')):
+                run_query(root,'the water cooler between the stove and the wall',out,mode='diagnostic')
+            record=json.loads((out/'run.json').read_text())
+            diagnosis=record['diagnosis']
+            self.assertEqual(record['category_target_ids'],[1])
+            self.assertEqual(record['category_anchor_ids'],[3,4])
+            self.assertEqual(diagnosis['geometry']['between_triplets'][0]['anchor_ids'],[3,4])
+            self.assertEqual(record['target_ids'],[1])
+
+    def test_predicted_diagnostic_does_not_propose_structural_targets(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.scene(root);out=root/'experiment'
+            (root/'scene_instances.json').write_text(json.dumps([
+                {'bbox_id':3,'target':'wall','bbox_3d':[2,0,.5,.4,.4,1.]},
+            ]))
+            answer=reply(json.dumps({
+                'Target':['water cooler'], 'Anchor':['wall'],
+                'Relations':[{'target_category':'water cooler',
+                              'anchor_category':'wall', 'relation':'near',
+                              'scope':'relative_anchor', 'phrase':'near the wall'}],
+                'Observer':{},'Attributes':[],'Unhandled':[]
+            }))
+            with patch('real_scene.chat',return_value=answer), \
+                 patch('run.chat',return_value=reply('Predicted ID: 1')):
+                run_query(root,'the water cooler near the wall',out,mode='diagnostic',review_limit=3)
+            record=json.loads((out/'run.json').read_text())
+            self.assertEqual(record['category_anchor_ids'],[3])
+            self.assertNotIn(3,record['review_proposal']['ids'])
+
     def test_visual_review_recovers_mislabeled_instance_without_gt(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'experiment'

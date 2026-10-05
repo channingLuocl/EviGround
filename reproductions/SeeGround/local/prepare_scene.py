@@ -22,6 +22,16 @@ def prepare(downloads, scene, output):
         mask=np.isin(seg,g['segments'])
         if (ids[mask]>=0).any():raise ValueError('实例分割区域重叠')
         ids[mask]=int(g['objectId'])
+    scene_instances=[]
+    for g in groups:
+        object_id=int(g['objectId'])
+        pts=xyz[ids==object_id]
+        if not len(pts):
+            continue
+        scene_instances.append({'bbox_id':object_id,
+                                'target':str(g.get('label','unknown')),
+                                'bbox_3d':np.r_[(pts.min(0)+pts.max(0))/2,
+                                                pts.max(0)-pts.min(0)].tolist()})
     with ZipFile(downloads/'olt.zip') as z:
         gt=json.loads(z.read(f'seeground_object_lookup_table/nr3d/gt/{scene}.json'))
         pred=json.loads(z.read(f'seeground_object_lookup_table/nr3d/pred/{scene}.json'))
@@ -38,6 +48,7 @@ def prepare(downloads, scene, output):
     # GT labels/queries are evaluation-only, never added to the model prompt.
     (output/'objects.json').write_text(json.dumps(pred,ensure_ascii=False,indent=2))
     (output/'objects_gt.json').write_text(json.dumps(gt,ensure_ascii=False,indent=2))
+    (output/'scene_instances.json').write_text(json.dumps(scene_instances,ensure_ascii=False,indent=2))
     np.savez_compressed(output/'scene.npz',xyz=xyz,rgb=rgb,ids=ids)
     kept=xyz[:,2]<xyz[:,2].max()-.3
     overview=render(xyz[kept],rgb[kept],output/'overview.png',ids=ids[kept])
@@ -45,6 +56,7 @@ def prepare(downloads, scene, output):
                 'source_olt':'https://github.com/user-attachments/files/18056532/seeground_object_lookup_table.zip',
                 'source_scannet':f'http://kaldir.vc.in.tum.de/scannet/v2/scans/{scene}/',
                 'geometry':'GT instances with author-provided predicted category labels, as in supplied Nr3D OLT',
+                'structural_instances':'ScanNet aggregation labels and boxes; reference evidence only',
                 'renderer':'local CPU adaptation, not exact PyTorch3D implementation','overview':overview,
                 'input_sha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in downloads.glob(scene+'*')}}
     (output/'provenance.json').write_text(json.dumps(provenance,indent=2))

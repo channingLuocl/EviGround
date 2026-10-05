@@ -156,6 +156,8 @@ def ground(args):
         prompt += ('\nEvidence: '+json.dumps(evidence)+
                    '\nUse measured distances instead of inferring distance from image position or height. '
                    +category_advice+'Unknown or invisible objects are not proven negatives. '
+                   'Structural reference IDs in evidence may come from the full ScanNet instance table and '
+                   'are geometric references only; choose the final target from the supplied object table. '
                    'Check every condition in the original query, and state any missing evidence. '
                    'The rendering camera is for inspection, not necessarily the speaker viewpoint. '
                    'Return Predicted ID first, then an explanation of at most 100 words.')
