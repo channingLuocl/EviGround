@@ -84,5 +84,41 @@ class RealSceneTests(unittest.TestCase):
             self.assertEqual(result['api_calls'],3)
             self.assertFalse((root/'objects_gt.json').exists())
 
+    def test_diagnostic_without_rgb_keeps_guess_and_missing_state(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.scene(root)
+            parsed=reply(json.dumps({'Target':['water cooler'],'Anchor':['tv'],
+                         'Relations':[{'target_category':'water cooler','anchor_category':'tv',
+                                       'relation':'near','phrase':'by tv'}],
+                         'Observer':{},'Attributes':[],'Unhandled':[]}))
+            with patch('real_scene.chat',return_value=parsed), \
+                 patch('rgb_review.chat') as review, \
+                 patch('run.chat',return_value=reply('Predicted ID: 1')):
+                result=run_query(root,'water cooler by tv',root/'diagnostic',mode='diagnostic',review_limit=1)
+            review.assert_not_called()
+            self.assertEqual(result['predicted_id'],1)
+            self.assertEqual(result['decision_status'],'missing')
+            self.assertFalse(result['accepted'])
+            self.assertEqual(result['api_calls'],2)
+            self.assertFalse((root/'objects_gt.json').exists())
+
+    def test_diagnostic_model_disagreement_is_not_accepted(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.scene(root)
+            from PIL import Image
+            Image.new('RGB',(40,40),'white').save(root/'crop.png')
+            (root/'rgb_crops.json').write_text(json.dumps({'scene':root.name,'crops':[
+                {'id':1,'image':'crop.png','binding':'projected_instance','source_frame':'001.jpg'}]}))
+            parsed=reply(json.dumps({'Target':['water cooler'],'Anchor':[],'Relations':[],
+                                    'Observer':{},'Attributes':[],'Unhandled':[]}))
+            with patch('real_scene.chat',return_value=parsed), \
+                 patch('rgb_review.chat',return_value=reply('{"id":1,"verdict":"yes","reason":"visible"}')), \
+                 patch('run.chat',return_value=reply('Predicted ID: 2')):
+                result=run_query(root,'water cooler',root/'diagnostic',mode='diagnostic',review_limit=1)
+            self.assertEqual(result['diagnosis']['status'],'resolved')
+            self.assertEqual(result['decision_status'],'conflict')
+            self.assertFalse(result['accepted'])
+            self.assertEqual(result['api_calls'],3)
+
 
 if __name__=='__main__':unittest.main()

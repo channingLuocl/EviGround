@@ -18,6 +18,29 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(stats['mean_iou'],.5)
         self.assertEqual(stats['mean_pipeline_latency_s'],5.)
 
+    def test_diagnostic_acceptance_does_not_change_accuracy_denominator(self):
+        stats=summarize([{'decision_status':'resolved','accepted':True,'correct':True},
+                         {'decision_status':'missing','accepted':False,'correct':False},
+                         {'error':'timeout','correct':False}])
+        self.assertEqual(stats['accuracy'],1/3)
+        self.assertEqual(stats['accepted_count'],1)
+        self.assertEqual(stats['accepted_accuracy'],1.)
+        self.assertEqual(stats['decision_status_counts']['missing'],1)
+
+    def test_diagnostic_manifest_tracks_rgb_and_budget(self):
+        import json
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as td:
+            scene=Path(td)
+            (scene/'scene.npz').write_bytes(b'fixture');(scene/'objects_gt.json').write_text('[]')
+            (scene/'objects.json').write_text('[{"bbox_id":1,"target":"tv","bbox_3d":[0,0,0,1,1,1]}]')
+            first=experiment_settings(scene,'diagnostic',2)
+            self.assertNotEqual(first,experiment_settings(scene,'diagnostic',6))
+            Image.new('RGB',(40,40),'white').save(scene/'crop.png')
+            (scene/'rgb_crops.json').write_text(json.dumps({'scene':scene.name,'crops':[
+                {'id':1,'image':'crop.png','binding':'projected_instance','source_frame':'001.jpg'}]}))
+            self.assertNotEqual(first,experiment_settings(scene,'diagnostic',2))
+
     def test_manifest_tracks_mode_and_model_without_key(self):
         with tempfile.TemporaryDirectory() as d:
             scene=Path(d)

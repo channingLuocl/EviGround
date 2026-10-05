@@ -242,3 +242,67 @@ Qwen 的 yes/no/uncertain 只做软证据；它不改变目标、参照物集合
 类别模式每题最多 8 次 API 调用，可能比旧 visual_review 更贵；这里检验独立类别问题的可靠性，不宣称已降低成本。
 `run.json` 记录候选提议策略、每个检查的 verdict/reason、原 API 回答、拒绝的关系和每个参照物下的排名。
 manifest 绑定 review-limit，防止预算不同的实验复用同一缓存。旧实验目录不要覆盖。
+
+## 9. 诊断驱动模式 diagnostic
+
+新增流程：完整条件解析 → 共享观察者/参照物假设 → 程序化约束诊断 → 按缺失证据选择 RGB 复核 → 重算假设与稳定候选 → 最终预测。
+这是借鉴论文思路的实验实现，不是任一论文的完整复现，也不预先声称提高准确率。
+
+```bash
+cd ~/paper
+git switch qwen-vl-baseline
+git pull --ff-only
+cd reproductions/SeeGround
+.venv/bin/python -m unittest discover -s local -p 'test*.py'
+.venv/bin/python local/batch_nr3d.py --scene scene0011_00 --count 10 \
+  --mode diagnostic --review-limit 6 \
+  --output local_outputs/nr3d_qwen_diagnostic_01
+```
+
+观察者与检查相机分开。仅在描述明确提供 origin 和 facing 时计算左右/前后：水平 forward 从站位指向朝向参照物，right 为 forward × Z-up。
+明确“房间中间”时使用点云 AABB 中心近似；仅“面对柜子”没有默认站位。“左窗户”不自动解释成世界轴负方向，也不自动解释成最左窗户。
+多个站位/朝向实例保留为不同共享假设；同一假设的多个条件取 AND，不把不同假设当作投票。
+同类别参照绑定在同一假设内共享，不为每个目标单独挑有利朝向。256 个组合以上停止稳定性结论并记录预算不足。
+
+`nearest/farthest` 使用中心距离排序并保留并列；`near` 只记录距离，当前没有经验证的阈值，不升级为 nearest。
+corner、地面支撑、序数、左右极值、否定以及未支持的条件均记录为缺失，不在证据不足时声称已解决。
+解析器仍可能错误绑定或遗漏语义；引文校验和常见遗漏检查不能替代正确的语言理解。
+
+RGB 为可选输入，目前没有自动下载 ScanNet `.sens`、恢复相机位姿或投影实例。
+没有 `rgb_crops.json` 时仍可运行，通常每题 2 次 API（解析、最终选择）；新模式不会用点云裁剪替代真实 RGB 复核。
+有裁剪清单时每题最多额外 `review-limit` 次复核，每次最多使用该实例的前两张真实图片。
+裁剪应由相机位姿/深度与实例投影绑定，包含可辨认目标及少量上下文，不能使用 GT 类别或 Nr3D 目标答案挑图。
+在 `local_outputs/scene0011_00/rgb_crops.json` 放入以下格式，图片路径相对于场景目录：
+
+```json
+{
+  "scene": "scene0011_00",
+  "crops": [
+    {
+      "id": 15,
+      "image": "rgb/instance_15_frame_0100.jpg",
+      "source_frame": "scene0011_00/color/0100.jpg",
+      "binding": "projected_instance"
+    }
+  ]
+}
+```
+
+上例编号仅说明格式，不是指定应修正的对象。导入会检查场景、已知 ID、图片与路径；`projected_instance` 是上游提供的来源声明，程序不能独立证明投影正确。
+清单与图片哈希进入 manifest，裁剪更改必须另开实验目录。RGB 复核只判断实例类别及该类别的外观条件，yes/no/uncertain 都是模型证据；uncertain 不等于 no。
+复核针对待检验候选/参照物，不按未知裁剪重复调用。没有相应 RGB 或预算不足时保留 missing。
+候选提议是预测类别实例加按参照距离补充的有限实例，不能保证召回所有误标物体；resolved 只在这个候选范围内成立。
+
+输出字段：
+
+| 字段 | 含义 |
+| --- | --- |
+| `diagnosis.hypotheses` | 各共享观察者/参照物解释、约束测量及可行候选 |
+| `diagnosis.stable_candidate_ids` | 所有假设可行集合的交集，不是投票结果 |
+| `diagnosis.status` | resolved：范围内所有条件受支持且唯一；missing：缺少条件/证据；ambiguous：多个完整候选/解释；conflict：受支持约束无法同时满足或类别被否定 |
+| `diagnosis.actions/checks/missing` | 触发原因、RGB 原判断、仍缺失的证据 |
+| `decision_status/accepted` | 最终模型选择与诊断一致且未截断的 resolved 才 accepted；不一致为 conflict |
+
+所有状态仍输出最佳猜测 `predicted_id`，标准 accuracy/IoU 的分母不变。
+批量报告额外统计状态数量、accepted_count 和 accepted_accuracy；后者只能结合覆盖率阅读，不能拿筛选后的正确率替代总体准确率。
+当前 10 条开发样本只用于检验诊断是否有效；后续需要固定独立场景做泛化验证。

@@ -164,6 +164,17 @@ def ground(args):
                    'no is a possible category conflict, uncertain or unreviewed establishes nothing. '
                    'Never reinterpret a reference as a target solely because it is close. '
                    'State unresolved category conflicts rather than inventing supporting evidence.')
+    if evidence is not None and 'diagnosis' in evidence:
+        prompt += ('\nDiagnosis uses shared observer/reference hypotheses with AND conditions, not votes. '
+                   'candidate_ids and stable_candidate_ids are conditional on the bounded proposal set. '
+                   'Category/appearance checks use supplied real RGB crops when available. '
+                   'Unreviewed instances are uncertain; unknown does not mean false. '
+                   'Signed directions are measured in the observer frame, never the inspection camera. '
+                   'A side condition is not a leftmost/rightmost ranking. Near is not nearest. '
+                   'If diagnosis is missing/ambiguous/conflict, still give a best-effort Predicted ID '
+                   'for evaluation but explain the remaining uncertainty; do not claim a unique answer. '
+                   'A resolved diagnosis is support within its stated scope, not proof of identity. '
+                   'Check the original query for any omitted condition before choosing.')
     images=[image_path]+[Path(p) for p in getattr(args,'extra_images',[])]
     parts=[]
     for index,path in enumerate(images):
