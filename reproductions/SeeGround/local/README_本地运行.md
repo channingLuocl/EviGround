@@ -436,3 +436,74 @@ cd reproductions/SeeGround
 候选集合并不等同于 baseline：两种模式的类别匹配器和解析提示不同。
 诊断候选只是证据，最终模型仍读取完整物体表；8 个 accepted 正确不能替代全部 100 题准确率。
 此前排查脚本读取 run.json 顶层 parsed 导致空列表；正确字段为顶层 `parsed_query`。
+
+## 12. 冻结证据的 Qwen / JEV 决策对照
+
+新增 `local/decision_replay.py`，用于单独检验最终文字决策的稳定性和正确率。
+原 baseline/diagnostic 主流程保持不变。JEV 的 state 只支持文本/JSON，不能看图：
+两组都读取同一份冻结的原查询、完整物体表、解析、三维测量和已有 RGB 复核文字记录。
+不再解析或看图，不使用原最终预测/解释，也不重新生成视觉证据。
+没有 RGB 复核记录时，外观条件仍缺证据；本实验不能与原图像定位准确率直接比较。
+
+每个物体拆成类别、空间、外观三项 Choice，返回 supported/contradicted/unknown 的概率与选择。
+空间条件必须在同一观察者/参照解释下同时满足，未知不当作否定。
+代码以三项 supported 概率的最小值排序，精确并列时按实例编号升序选最佳猜测。
+这是固定的探索性汇总规则，不是校准后的联合概率，也不会自动把最高分当成可靠答案。
+所有原始概率、confidence、模型版本、用量、耗时、排序和并列标记均保存。
+Qwen 的概率是生成的自述值；JEV 是其决策接口的概率，两者数值并非已在 Nr3D 上校准。
+
+不需要安装新依赖，复用 requests。服务器已有 Qwen 配置时，在当前 Bash 会话配置 JEV：
+
+```bash
+read -r -s -p 'TypeSafe API key: ' TYPESAFE_API_KEY
+printf '\n'
+export TYPESAFE_API_KEY
+export SEEGROUND_JEV_MODEL=jev-latest
+```
+
+密钥不会写入实验文件；也可以自行在 .env 中配置对应字段。
+正式重复实验建议把 SEEGROUND_JEV_MODEL 固定为账号可用的具体版本，避免 latest 别名更新。
+接口协议来源：https://docs.typesafe.ai/api ，文字输入限制：https://docs.typesafe.ai/concepts/state 。
+
+先冻结之前三条退步样本；只读原记录，不下载、不调用 API：
+
+```bash
+cd ~/paper
+git pull --ff-only
+cd reproductions/SeeGround
+.venv/bin/python local/decision_replay.py freeze \
+  --source local_outputs/nr3d_paired_gt_02 \
+  --csv-rows 32705 39012 39543 \
+  --output local_outputs/decision_frozen_01.json
+```
+
+程序验证原实验物体表哈希与查询，保存自包含的证据快照和源记录哈希。
+正确编号位于独立 evaluation 字段，调用双方接口时只传 state/questions，不传 evaluation。
+freeze 默认选最前面的 3 条已完成 diagnostic 记录；可用 --count 调整，或用 --csv-rows 精确指定。
+冻结文件不能覆盖；再次冻结另一份证据必须换路径。
+
+核对预算，再执行收费对照：
+
+```bash
+.venv/bin/python local/decision_replay.py run \
+  --plan local_outputs/decision_frozen_01.json --repeats 3 \
+  --output local_outputs/decision_qwen_jev_01 --dry-run
+
+.venv/bin/python local/decision_replay.py run \
+  --plan local_outputs/decision_frozen_01.json --repeats 3 \
+  --output local_outputs/decision_qwen_jev_01
+```
+
+3 题 × 3 次 × 2 个模型 = 18 次 HTTP 请求；每次包含完整物体表及每物体 3 个判断，
+请求数不是 token 费用估计。双方同样问题，不加入随机 uid 或时间字段；执行顺序交替。
+dry-run 不需要密钥、不请求网络，打印题数、调用数与每题问题数。
+原命令可断点续跑；成功和失败记录都保留，不把重试混进同一重复实验。
+若修改证据、代码、模型、重复次数或服务地址，必须新建输出目录。
+
+结果在 `<output>/comparison.json`：accuracy 以全部计划重复次数为分母；
+all_repeats_identical_rate 只有每次成功且编号完全相同才计入。
+逐题 plurality_agreement/pair_agreement 仅描述成功请求，必须结合 completed/errors 阅读。
+top_tied_count 与 fully_supported_count 分别表示最高分并列次数、所选物体三项均判 supported 次数。
+高一致率可能只是所有证据未知时反复触发编号排序，不能单独视为模型改进。
+先检查这三题的错误、并列、未知和正确率，再决定是否扩大样本或接入主流程。
+这三题是已知退步的开发样本，不能作为泛化提分证据。
