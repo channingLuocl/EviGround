@@ -66,7 +66,8 @@ def match_retrieval_categories(names, objects):
 def superlative_rejection(query, relation):
     kind = relation.get('relation')
     phrase = relation.get('phrase', '')
-    pattern = r'\b(nearest|closest)\b' if kind == 'nearest' else r'\b(farthest|furthest)\b'
+    pattern = (r'\b(nearest|closest)\b' if kind == 'nearest'
+               else r'\b(farthest|furthest)\b|\bof\s+the\s+two\b[^.?!]*\b(further|farther)\b')
     if (not isinstance(phrase, str) or not phrase.strip() or
             phrase.casefold() not in query.casefold() or not re.search(pattern, phrase, re.I)):
         return 'no matching superlative quote in original query'

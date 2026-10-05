@@ -87,7 +87,8 @@ def parse_query(query, mode='baseline', calls=None):
     if mode in ('ranked_geometry','category_review','diagnostic'):
         obj=validate_distance_relations(query,obj)
     if mode=='diagnostic':
-        from diagnostic import validate_structure
+        from diagnostic import recover_distance_relations, validate_structure
+        obj=recover_distance_relations(query,obj)
         obj=validate_structure(query,obj)
         if data.get('_finish_reason')=='length':
             obj['diagnostic_missing'].append('query parser response truncated')

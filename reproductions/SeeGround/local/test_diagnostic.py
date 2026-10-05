@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 import numpy as np
 from PIL import Image
-from diagnostic import validate_structure, diagnose
+from diagnostic import recover_distance_relations, validate_structure, diagnose
 from evidence import validate_distance_relations
 from rgb_review import load_crops, input_hashes, selective_review
 
@@ -133,6 +133,27 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(diagnose(data,self.objects,self.objects[:1],[0,0,.5],supported(self.objects))['status'],'missing')
         data=parsed('window nearest door',[])
         self.assertIn('distance extreme condition not represented',data['diagnostic_missing'])
+
+    def test_recover_explicit_superlative_when_parser_omits_relation(self):
+        raw={'Target':['monitor'],'Anchor':['window'],'Relations':[],
+             'Observer':{},'Attributes':[],'Unhandled':[]}
+        query='The monitor furthest away from the window.'
+        recovered=recover_distance_relations(query,raw)
+        data=validate_structure(query, validate_distance_relations(query,recovered))
+        self.assertEqual(data['Relations'][0]['relation'],'farthest')
+        self.assertEqual(data['Relations'][0]['anchor_category'],'window')
+        self.assertNotIn('distance extreme condition not represented',data['diagnostic_missing'])
+
+    def test_recover_comparative_only_for_explicit_pair(self):
+        raw={'Target':['chair'],'Anchor':['window'],'Relations':[],
+             'Observer':{},'Attributes':[],'Unhandled':[]}
+        query='Of the two chairs, choose the one further from the window.'
+        recovered=recover_distance_relations(query,raw)
+        self.assertEqual(recovered['Relations'][0]['relation'],'farthest')
+        data=validate_structure(query, validate_distance_relations(query,recovered))
+        self.assertEqual(data['Relations'][0]['relation'],'farthest')
+        raw['Anchor']=[]
+        self.assertEqual(recover_distance_relations(query,raw)['Relations'],[])
 
     def test_hallucinated_unhandled_conditions_are_not_sent_as_query_evidence(self):
         query='window'

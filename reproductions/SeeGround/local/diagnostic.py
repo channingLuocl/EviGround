@@ -33,6 +33,33 @@ def quoted(query, phrase):
     return isinstance(phrase, str) and bool(phrase.strip()) and phrase.casefold() in query.casefold()
 
 
+def recover_distance_relations(query, parsed):
+    """Recover an omitted superlative only when both category bindings are explicit."""
+    parsed = dict(parsed)
+    relations = list(parsed.get('Relations') or [])
+    targets = parsed.get('Target') if isinstance(parsed.get('Target'), list) else []
+    anchors = parsed.get('Anchor') if isinstance(parsed.get('Anchor'), list) else []
+    if len(targets) != 1 or len(anchors) != 1:
+        return parsed
+    if any(isinstance(r, dict) and r.get('relation') in ('nearest', 'farthest') for r in relations):
+        return parsed
+    patterns = (
+        (r'\b(nearest|closest)\b[^.?!]*[.]?', 'nearest'),
+        (r'\b(farthest|furthest)\b[^.?!]*[.]?', 'farthest'),
+        (r'\bof\s+the\s+two\b[^.?!]*\b(further|farther)\b[^.?!]*[.]?', 'farthest'),
+    )
+    for pattern, kind in patterns:
+        match = re.search(pattern, query, re.I)
+        if not match:
+            continue
+        phrase = match.group(0).strip()
+        relations.append({'target_category': targets[0], 'anchor_category': anchors[0],
+                          'relation': kind, 'scope': '', 'phrase': phrase})
+        parsed['Relations'] = relations
+        return parsed
+    return parsed
+
+
 def validate_structure(query, parsed):
     parsed = dict(parsed)
     missing = []
@@ -51,6 +78,10 @@ def validate_structure(query, parsed):
                      'front': r'\b(front|ahead)\b', 'back': r'\b(back|behind)\b'}
             valid_quote = valid_quote and bool(re.search(words[kind], phrase, re.I))
             valid_quote = valid_quote and relation.get('scope') in ('relative_anchor', 'side')
+        if kind == 'farthest':
+            valid_quote = valid_quote and bool(re.search(
+                r'\b(farthest|furthest)\b|\bof\s+the\s+two\b[^.?!]*\b(further|farther)\b',
+                phrase, re.I))
         if not valid_quote or kind not in ('nearest', 'farthest', 'near', 'left', 'right', 'front', 'back'):
             missing.append('unsupported relation: ' + phrase if quoted(query, phrase)
                            else 'parser produced an unquoted relation; not a query condition')
