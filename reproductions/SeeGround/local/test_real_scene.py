@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 import numpy as np
 from real_scene import run_query, parse_query
+from qwen_api import QwenAPIError
 
 
 def reply(content, finish='stop'):
@@ -27,6 +28,7 @@ class RealSceneTests(unittest.TestCase):
         self.assertIn('scope',messages[0]['content'])
         self.assertIn('"Target":["category"]',messages[0]['content'])
         self.assertEqual(json.loads(messages[1]['content']),{'description':query})
+        self.assertTrue(api.call_args.kwargs['json_mode'])
 
     def scene(self, root):
         objects=[{'bbox_id':1,'target':'water cooler','bbox_3d':[0,0,.5,.5,.5,1.]},
@@ -116,7 +118,7 @@ class RealSceneTests(unittest.TestCase):
     def test_parse_failure_keeps_call_record(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'experiment'
-            with patch('real_scene.chat',return_value=reply('bad json')):
+            with patch('real_scene.chat',return_value=reply('bad json')) as api:
                 with self.assertRaises(ValueError):
                     run_query(root,'test',out,mode='geometry')
             record=json.loads((out/'run.json').read_text())
@@ -124,19 +126,55 @@ class RealSceneTests(unittest.TestCase):
             self.assertEqual(record['error_stage'],'parse_query')
             self.assertEqual(record['error_type'],'QwenAPIError')
             self.assertEqual(record['calls'][0]['response'],'bad json')
+            self.assertEqual(api.call_count,2)
+            self.assertEqual(record['calls'][1]['stage'],'parse_query_json_repair')
             self.assertFalse((out/'prediction.json').exists())
+
+    def test_invalid_json_is_repaired_once_and_calls_are_counted(self):
+        malformed='{"Target":["water cooler"],"Anchor":[],"Attributes":["{"category":"water cooler","phrase":"large"}]}'
+        fixed={'Target':['water cooler'],'Anchor':[],
+               'Attributes':[{'category':'water cooler','phrase':'large'}]}
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.scene(root);out=root/'experiment'
+            with patch('real_scene.chat',side_effect=[reply(malformed),reply(json.dumps(fixed))]) as api, \
+                 patch('run.chat',return_value=reply('Predicted ID: 1')):
+                result=run_query(root,'large water cooler',out,mode='diagnostic')
+            record=json.loads((out/'run.json').read_text())
+            self.assertEqual(result['api_calls'],3)
+            self.assertEqual(record['calls'][0]['response'],malformed)
+            self.assertIn('json_error',record['calls'][0])
+            self.assertEqual(record['calls'][1]['stage'],'parse_query_json_repair')
+            self.assertEqual(record['parsed_query']['Attributes'],fixed['Attributes'])
+            repair_input=json.loads(api.call_args_list[1].args[0][1]['content'])
+            self.assertEqual(repair_input,{'description':'large water cooler','model_response':malformed})
+            self.assertTrue(all(c.kwargs['json_mode'] for c in api.call_args_list))
+
+    def test_truncated_invalid_json_is_not_repaired(self):
+        with patch('real_scene.chat',return_value=reply('{"Target":', 'length')) as api:
+            with self.assertRaises(QwenAPIError):
+                parse_query('water cooler',mode='diagnostic')
+        self.assertEqual(api.call_count,1)
+
+    def test_truncated_repair_is_rejected(self):
+        calls=[]
+        with patch('real_scene.chat',side_effect=[reply('bad json'),reply('{"Target":[],"Anchor":[]}', 'length')]) as api:
+            with self.assertRaisesRegex(QwenAPIError,'JSON repair did not complete normally'):
+                parse_query('water cooler',mode='diagnostic',calls=calls)
+        self.assertEqual(api.call_count,2)
+        self.assertEqual(calls[1]['finish_reason'],'length')
 
     def test_partial_schema_failure_reports_field_and_keeps_raw_answer(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'experiment'
             answer=reply('{"Observer":{},"Attributes":[],"Unhandled":[]}')
-            with patch('real_scene.chat',return_value=answer):
+            with patch('real_scene.chat',return_value=answer) as api:
                 with self.assertRaisesRegex(ValueError,'Target must be an array/string'):
                     run_query(root,'window',out,mode='diagnostic')
             record=json.loads((out/'run.json').read_text())
             self.assertEqual(record['error_stage'],'parse_query')
             self.assertIn('top-level keys: Attributes, Observer, Unhandled',record['error'])
             self.assertEqual(record['calls'][0]['response'],answer['_content'])
+            self.assertEqual(api.call_count,1)
 
     def test_server_reply_with_relation_but_missing_target_is_not_a_completed_prediction(self):
         answer={'Observer':{'origin':{'kind':'unspecified','category':'','phrase':''},

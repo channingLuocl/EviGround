@@ -39,14 +39,17 @@ def image_part(path: str | Path) -> dict[str, Any]:
     return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded}"}}
 
 
-def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: float = 0.0, timeout: tuple[int, int] = (15, 120)) -> dict[str, Any]:
+def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: float = 0.0, timeout: tuple[int, int] = (15, 120), json_mode: bool = False) -> dict[str, Any]:
     base, model, key = _settings()
+    payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
+    if json_mode:
+        payload.update(response_format={"type": "json_object"}, enable_thinking=False)
     started = time.perf_counter()
     try:
         response = requests.post(
             base + "/chat/completions",
             headers={"Authorization": "Bearer " + key},
-            json={"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature},
+            json=payload,
             timeout=timeout,
         )
     except requests.RequestException as exc:

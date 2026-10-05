@@ -14,8 +14,21 @@ class QwenAPITests(unittest.TestCase):
             result=chat([{'role':'user','content':'test'}],max_tokens=768)
         self.assertEqual(post.call_args.args[0],'https://example.invalid/v1/chat/completions')
         self.assertEqual(post.call_args.kwargs['json']['max_tokens'],768)
+        self.assertNotIn('response_format',post.call_args.kwargs['json'])
+        self.assertNotIn('enable_thinking',post.call_args.kwargs['json'])
         self.assertEqual(result['_finish_reason'],'length')
         self.assertEqual(result['_content'],'Predicted ID: 1')
+
+    def test_json_mode_sets_response_format_and_disables_thinking(self):
+        response=SimpleNamespace(ok=True,json=lambda:{'choices':[{'finish_reason':'stop',
+                                  'message':{'content':'{"Target":[]}'}}]})
+        with patch.dict('os.environ',{'SEEGROUND_MODEL':'qwen3-vl-flash','SEEGROUND_BASE_URL':'https://example.invalid/v1',
+                                    'SEEGROUND_API_KEY':'test-only'}), \
+             patch('qwen_api.requests.post',return_value=response) as post:
+            chat([{'role':'user','content':'Return JSON'}],json_mode=True)
+        body=post.call_args.kwargs['json']
+        self.assertEqual(body['response_format'],{'type':'json_object'})
+        self.assertIs(body['enable_thinking'],False)
 
     def test_bad_response_is_value_error(self):
         with patch.dict('os.environ',{'SEEGROUND_MODEL':'mock','SEEGROUND_BASE_URL':'https://example.invalid/v1',

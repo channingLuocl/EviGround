@@ -560,3 +560,17 @@ Qwen 5 次成功预测都发生最高分并列，编号排序制造了表面一�
 
 该命令输出 `network_request: false`，恢复后的比较报告仍以 9 次计划调用为分母。
 只有恢复成功的 Qwen 编号计入 completed；概率不完整的记录会保留 warning，不能当作完整校准概率。
+
+## 查询解析的 JSON 格式约束
+
+`parse_query` 使用 `response_format={"type":"json_object"}` 与 `enable_thinking=false`。
+千问官方文档：https://help.aliyun.com/zh/model-studio/qwen-structured-output 。
+当前 Qwen3-VL-Flash 使用 JSON Object 模式，不声称具备严格 JSON Schema 约束；
+字段类型、必填字段和条件引用仍由本地代码校验。最终看图定位调用保持原输出格式。
+
+若完整回答（`finish_reason=stop`）仍无法解析为 JSON 对象，最多额外调用一次同模型，
+要求只修复 JSON 语法并保留内容；这属于模型生成的修复，不能保证语义完全不变。
+缺少必填字段不会触发修复，截断回答不会补写；修复失败则该题仍记为错误。
+`run.json` 的 `calls` 保留原始 `parse_query` 回答及 `json_error`，以及
+`parse_query_json_repair` 的回答、用量、耗时和结束原因。额外调用计入 `api_calls` 和总流程耗时。
+更新后请使用新的输出目录，避免将不同解析协议的结果混为同一次实验。
