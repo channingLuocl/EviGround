@@ -166,6 +166,9 @@ def rewrite_query(query, parsed):
         elif diagnostic.startswith('unhandled condition: '):
             phrase = diagnostic[len('unhandled condition: '):]
             reason = 'condition marked unsupported by parser'
+        elif diagnostic.startswith('appearance condition not represented: '):
+            phrase = diagnostic[len('appearance condition not represented: '):]
+            reason = 'appearance condition omitted from Attributes; role not inferred'
         else:
             continue
         if _quote(query, phrase) and not any(item['phrase'] == phrase for item in unresolved):

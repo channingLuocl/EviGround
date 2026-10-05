@@ -229,7 +229,7 @@ def validate_structure(query, parsed):
     if len(parsed['Attributes']) != len(attrs):
         missing.append('unquoted or unbound appearance attribute')
     covered = ' '.join(a['phrase'] for a in parsed['Attributes'])
-    for word in re.findall(r'\b(large|small|big|little|black|white|red|blue|green|gr[ae]y|brown|wooden|mounted)\b', query, re.I):
+    for word in re.findall(r'\b(large|small|big|little|skinny|narrow|wide|thin|thick|dark|light|black|white|red|blue|green|gr[ae]y|brown|wooden|mounted)\b', query, re.I):
         if not re.search(r'\b' + re.escape(word) + r'\b', covered, re.I):
             missing.append('appearance condition not represented: ' + word)
     unhandled = parsed.get('Unhandled')

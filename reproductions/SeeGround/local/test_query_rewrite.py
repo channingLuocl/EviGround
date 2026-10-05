@@ -4,6 +4,21 @@ from query_rewrite import constraints_as_relations, rewrite_query
 
 
 class QueryRewriteTests(unittest.TestCase):
+    def test_omitted_shape_remains_unresolved_without_invented_binding(self):
+        from diagnostic import validate_structure
+        query = 'Choose the skinny cabinet between the stove and the wall.'
+        parsed = validate_structure(query, {
+            'Target': ['cabinet'], 'Anchor': ['stove', 'wall'],
+            'Relations': [{'target_category': 'cabinet', 'anchor_categories': ['stove', 'wall'],
+                           'relation': 'between', 'scope': '',
+                           'phrase': 'the skinny cabinet between the stove and the wall'}],
+            'Attributes': [], 'Observer': {}, 'Unhandled': [],
+        })
+        result = rewrite_query(query, parsed)
+        self.assertEqual([c['type'] for c in result['constraints']], ['between'])
+        self.assertEqual(result['unresolved'][0]['phrase'], 'skinny')
+        self.assertIn('role not inferred', result['unresolved'][0]['reason'])
+
     def test_containment_attribute_stays_unresolved(self):
         query = 'The large L shaped kitchen counter that includes the sink and the dishwasher.'
         result = rewrite_query(query, {

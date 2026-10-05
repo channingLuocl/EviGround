@@ -31,6 +31,26 @@ def response(oid, verdict='yes', finish='stop'):
 
 
 class DiagnosticTests(unittest.TestCase):
+    def test_shape_word_in_relation_quote_does_not_cover_missing_attribute(self):
+        query = 'Choose the skinny cabinet between the stove and the wall.'
+        relation = {'target_category': 'cabinet', 'anchor_categories': ['stove', 'wall'],
+                    'relation': 'between', 'scope': '',
+                    'phrase': 'the skinny cabinet between the stove and the wall'}
+        data = {'Target': ['cabinet'], 'Anchor': ['stove', 'wall'], 'Relations': [relation],
+                'Observer': {}, 'Attributes': [], 'Unhandled': []}
+        checked = validate_structure(query, data)
+        self.assertIn('appearance condition not represented: skinny', checked['diagnostic_missing'])
+        objects = [obj(1, 'cabinet', 0, 0), obj(2, 'stove', -1, 0), obj(3, 'wall', 1, 0)]
+        result = diagnose(checked, objects, objects[:1], [0, 0, .5], trusted_categories=True)
+        self.assertEqual(result['candidate_ids'], [1])
+        self.assertEqual(result['status'], 'missing')
+        data['Attributes'] = [{'category': 'cabinet', 'phrase': 'skinny'}]
+        checked = validate_structure(query, data)
+        self.assertNotIn('appearance condition not represented: skinny', checked['diagnostic_missing'])
+        result = diagnose(checked, objects, objects[:1], [0, 0, .5], trusted_categories=True)
+        self.assertEqual(result['status'], 'missing')
+        self.assertTrue(result['visual_needs'])
+
     def test_containment_cannot_resolve_even_with_positive_appearance_check(self):
         for verb in ('includes', 'contains', 'including', 'containing'):
             with self.subTest(verb=verb):

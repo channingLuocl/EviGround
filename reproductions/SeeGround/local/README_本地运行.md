@@ -579,3 +579,8 @@ Qwen 5 次成功预测都发生最高分并列，编号排序制造了表面一�
 即便解析器将其放入 Attributes 或完全漏掉，原句中的该条件仍会进入
 `diagnostic_missing` 和查询重写的 `unresolved`；不会因外观复核通过而得到 resolved。
 该检查记录证据缺失，不排除目标候选，也不实现包含关系。
+
+属性遗漏检查覆盖 skinny/narrow/wide/thin/thick/dark/light 等常见形状、明暗词。
+仅在 Relations 的大段引用中出现这些词不算属性已覆盖；若 Attributes 没有对应引用，
+将记录 diagnostic_missing 和 query_rewrite.unresolved，不猜测该属性属于哪个实例。
+这是有限词表检查，不保证所有自然语言条件均已覆盖，也不把 skinny 转成最窄硬筛选。
