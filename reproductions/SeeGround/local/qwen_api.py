@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from PIL import Image
 
 
 class QwenAPIError(ValueError):
@@ -29,7 +30,9 @@ def _settings() -> tuple[str, str, str]:
 
 def image_part(path: str | Path) -> dict[str, Any]:
     path = Path(path)
-    mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}.get(path.suffix.lower())
+    with Image.open(path) as im:
+        mime = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}.get(im.format)
+        im.verify()
     if mime is None:
         raise QwenAPIError("图片必须是 PNG、JPEG 或 WEBP")
     encoded = base64.b64encode(path.read_bytes()).decode("ascii")
@@ -55,8 +58,11 @@ def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: 
         content = data["choices"][0]["message"].get("content") or ""
     except (ValueError, KeyError, IndexError, TypeError) as exc:
         raise QwenAPIError("Qwen API 返回格式不正确") from exc
+    if not isinstance(content, str):
+        raise QwenAPIError("Qwen API 的回答必须是文本")
     data["_baseline"] = {"latency_s": round(time.perf_counter() - started, 4), "model": model}
     data["_content"] = content
+    data['_finish_reason'] = data['choices'][0].get('finish_reason')
     return data
 
 

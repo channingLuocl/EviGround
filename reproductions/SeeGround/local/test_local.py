@@ -29,7 +29,6 @@ class LocalChecks(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td);run.demo(p)
             args=SimpleNamespace(image=str(p/'scene.png'),objects=str(p/'objects.json'),query='laptop',dry_run=False,output=str(p/'result.json'))
-            response=SimpleNamespace(ok=True,json=lambda:{'choices':[{'message':{'content':'Predicted ID: 2\nExplanation: test fixture'}}]})
             api_data={'choices':[{'message':{'content':'Predicted ID: 2\nExplanation: test fixture'}}], 'usage': {'total_tokens': 3}}
             with patch.dict('os.environ',{'SEEGROUND_BASE_URL':'https://example.invalid/v1','SEEGROUND_MODEL':'mock-model','SEEGROUND_API_KEY':'test-only'}),patch('run.chat',return_value={'_content':'Predicted ID: 2\nExplanation: test fixture','_baseline':{'model':'mock-model','latency_s':0.01},'usage':api_data['usage']}) as request:
                 run.ground(args)

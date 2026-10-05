@@ -3,13 +3,12 @@ import argparse
 import json
 import os
 from pathlib import Path
-import re
 import sys
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from dotenv import load_dotenv
-from qwen_api import QwenAPIError, chat, image_part, parse_predicted_id
+from qwen_api import chat, image_part, parse_predicted_id
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / '.env', override=False)
@@ -145,21 +144,43 @@ def ground(args):
             'Select an ID from the supplied table using appearance and spatial relations. '
             'Respond as: Predicted ID: <ID>\nExplanation: <reason>.\n'
             f'Objects: {json.dumps(objs)}\nQuery: {args.query}')
+    evidence=getattr(args,'evidence',None)
+    if evidence is not None:
+        prompt += ('\nEvidence: '+json.dumps(evidence)+
+                   '\nUse measured distances instead of inferring distance from image position or height. '
+                   'Predicted category labels can be wrong; use the supplied visual review as evidence, '
+                   'not certainty. Unknown or invisible objects are not proven negatives. '
+                   'Check every condition in the original query, and state any missing evidence. '
+                   'The rendering camera is for inspection, not necessarily the speaker viewpoint. '
+                   'Return Predicted ID first, then an explanation of at most 100 words.')
+    images=[image_path]+[Path(p) for p in getattr(args,'extra_images',[])]
+    parts=[]
+    for index,path in enumerate(images):
+        if evidence is not None:
+            parts.append({'type':'text','text':f'Inspection view {index}: {path.name}'})
+        parts.append(image_part(path))
     if args.dry_run:
         print(json.dumps({'network_request':False,'objects':len(objs),'image':str(image_path),
                           'model_configured':bool(os.getenv('SEEGROUND_MODEL','').strip()),'query':args.query},ensure_ascii=False,indent=2))
         return
-    data=chat([{'role':'user','content':[image_part(image_path),{'type':'text','text':prompt}]}])
+    data=chat([{'role':'user','content':parts+[{'type':'text','text':prompt}]}],
+              max_tokens=768 if evidence is not None else 512)
     content=data['_content']
+    out=Path(args.output)
+    out.parent.mkdir(parents=True,exist_ok=True)
+    (out.parent/'ground_response.json').write_text(json.dumps({
+        'response':content,'model':data['_baseline']['model'],'usage':data.get('usage'),
+        'latency_s':data['_baseline']['latency_s'],'finish_reason':data.get('_finish_reason')},
+        ensure_ascii=False,indent=2))
     oid=parse_predicted_id(content,{x['bbox_id'] for x in objs})
     obj=next(x for x in objs if x['bbox_id']==oid)
     result={'model':data['_baseline']['model'],'query':args.query,'predicted_id':oid,'bbox_3d':obj['bbox_3d'],
             'response':content,'usage':data.get('usage'),'latency_s':data['_baseline']['latency_s'],
+            'finish_reason':data.get('_finish_reason'),'images':[str(p) for p in images],
             'note':'Local API exploration; not paper benchmark reproduction.'}
-    out=Path(args.output)
-    out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(result,ensure_ascii=False,indent=2))
     print(f'预测编号：{oid}；三维框：{obj["bbox_3d"]}；结果：{out}')
+    return result
 
 
 def main():
@@ -177,7 +198,7 @@ def main():
             info=render(xyz,rgb,args.output)
             print(json.dumps(info,ensure_ascii=False));print(f'点云预览：{args.output}（没有物体标注）')
         else: ground(args)
-    except (ValueError,OSError,KeyError,IndexError,QwenAPIError) as exc:
+    except (ValueError,OSError,KeyError,IndexError) as exc:
         print(f'错误：{exc}',file=sys.stderr);return 1
     return 0
 

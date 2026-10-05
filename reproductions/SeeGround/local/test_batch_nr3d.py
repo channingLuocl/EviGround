@@ -3,11 +3,32 @@ import tempfile
 import unittest
 from pathlib import Path
 from batch_nr3d import select_rows, summarize
+from batch_nr3d import experiment_settings
+from unittest.mock import patch
 
 class BatchTests(unittest.TestCase):
     def test_errors_remain_in_denominator(self):
         stats=summarize([{'predicted_id':2,'correct':True},{'predicted_id':3,'correct':False},{'error':'timeout','correct':False}])
-        self.assertEqual(stats,{'total':3,'completed':2,'correct':1,'accuracy':1/3,'iou_evaluated':0,'acc25':None,'acc50':None,'mean_iou':None,'mean_latency_s':None})
+        self.assertEqual(stats,{'total':3,'completed':2,'correct':1,'accuracy':1/3,'iou_evaluated':0,'acc25':None,'acc50':None,'mean_iou':None,'mean_latency_s':None,'mean_pipeline_latency_s':None})
+
+    def test_failed_requests_count_in_iou_denominator(self):
+        stats=summarize([{'iou_3d':1.,'pipeline_latency_s':5.},{'error':'timeout'}])
+        self.assertEqual(stats['acc25'],.5)
+        self.assertEqual(stats['acc50'],.5)
+        self.assertEqual(stats['mean_iou'],.5)
+        self.assertEqual(stats['mean_pipeline_latency_s'],5.)
+
+    def test_manifest_tracks_mode_and_model_without_key(self):
+        with tempfile.TemporaryDirectory() as d:
+            scene=Path(d)
+            (scene/'scene.npz').write_bytes(b'fixture')
+            (scene/'objects_gt.json').write_text('[]')
+            with patch.dict('os.environ',{'SEEGROUND_MODEL':'model-A','SEEGROUND_API_KEY':'secret-fixture'}):
+                first=experiment_settings(scene,'geometry')
+                second=experiment_settings(scene,'visual_review')
+            self.assertNotEqual(first,second)
+            self.assertEqual(first['model'],'model-A')
+            self.assertNotIn('secret-fixture',str(first))
 
     def test_selection_filters_before_limiting_and_preserves_utterance(self):
         with tempfile.TemporaryDirectory() as d:

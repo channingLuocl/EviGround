@@ -7,7 +7,7 @@
 - 已读取本地 ScanNet scene0000_00：81,369 个点，生成真实点云预览。
 - 已生成合成样例：4 个带编号的方盒，分别代指两把椅子与两台电脑。用于检查软件链路，不是逼真的场景，不是 ScanNet 数据，不产生论文准确率。
 - 离线请求构造检查通过。
-- 9 项测试通过：渲染遮挡、候选校验、离线请求、Qwen 输出解析和三维框 IoU 指标。
+- 离线测试覆盖渲染遮挡、候选校验、Qwen 请求与输出解析、三维框 IoU、几何证据和视觉复核流程。
 - 尚未调用真实 API；需要填入配置。真实点云目前缺少物体实例标注与查找表，所以仅作无编号预览。
 
 ## 新电脑安装
@@ -36,7 +36,7 @@ Base URL 通常以 `/v1` 结尾，应直接按服务商提供的地址填写，�
 
 `.env` 已加入 Git 忽略规则，权限为 600。不要把密钥发到聊天中。当前程序只向配置的服务发送指定图片、查询与物体表。
 
-目前 `local/qwen_api.py` 是唯一的 Qwen 请求入口，使用 OpenAI Chat Completions 兼容格式。服务器上只需配置一次 `.env`，后续添加关系图、视角搜索或候选复核模块时可以复用同一个客户端。
+CPU 流程的 `run.py` 与 `real_scene.py` 共用 `local/qwen_api.py`，使用 OpenAI Chat Completions 兼容格式。服务器上只需配置一次 `.env`，后续模块可以复用同一个客户端。
 
 ## 2. 运行离线样例
 
@@ -154,3 +154,50 @@ chmod 600 .env
 ```
 
 先使用 `--dry-run` 检查本地链路，再填写服务器上的 `.env` 并运行真实 API。不要把 `.env`、`local_outputs/` 或 API 响应提交到 Git。
+
+## 7. 几何证据与类别视觉复核（2026-10-05）
+
+三个模式默认仍为 `baseline`，可用于开发集对照；不声称是 TDVR 复现或新增论文贡献。
+
+| 模式 | 改动 | 每题 API 调用次数 |
+| --- | --- | --- |
+| `baseline` | 原类别词匹配和单视角流程 | 2 |
+| `geometry` | 完整参照物解析、类别别名匹配、逐目标/参照物中心距离和 AABB 间隔 | 2 |
+| `visual_review` | geometry 基础上逐页复核所有实例的双视角局部图，再增加 3 张上下文图 | 2 + ceil(实例数 / 9) |
+
+类别别名包括 television/TV/screen、trashcan/trash can、fridge/refrigerator、front doors/door 等。
+`screen` 与 `monitor` 被暂时当作 TV 的检索别名，不是可靠的语义等价；类别与参照物实例仍需核验。
+找不到参照物时保留缺失状态，不再用目标物冒充参照物。程序提供每一对实例的距离，不自动把多个参照物合并成一个，也不推断唯一参照物。
+中心距离和 AABB 间隔是不同近似量，均不是真实表面距离；左右不等于固定世界坐标轴方向。
+
+视觉复核不读取 `objects_gt.json`，不使用固定编号修正类别。仅从预测实例点云生成按 ID 编排、隐藏预测类别标签的局部图，Qwen 返回可能的目标、参照物和无法辨认的编号。
+未辨认的实例保留为候选；复核结果是模型判断，不保证召回所有误标实例。所有物体仍出现在最终文字表中，没有硬限制最终答案必须位于复核候选内。
+此版本对每题全部实例复核，是固定预算对照方案，尚未实现自适应触发或动作选择。补充相机只用于看清证据，不是恢复描述者站位；遮挡、渲染稀疏和未分割的参照物仍可能导致失败。
+
+服务器更新后分别运行，使用新的输出目录：
+
+```bash
+cd ~/paper
+git switch qwen-vl-baseline
+git pull --ff-only
+cd reproductions/SeeGround
+.venv/bin/python -m unittest discover -s local -p 'test*.py'
+
+.venv/bin/python local/batch_nr3d.py --scene scene0011_00 --count 10 \
+  --mode geometry --output local_outputs/nr3d_qwen_geometry_01
+
+.venv/bin/python local/batch_nr3d.py --scene scene0011_00 --count 10 \
+  --mode visual_review --output local_outputs/nr3d_qwen_visual_review_01
+```
+
+27 个实例时视觉复核模式每题共 5 次 API 调用，成本高于单视角模式。此轮不自动发起收费实验。
+10 条单场景样本用于开发调试，不能作为最终泛化结果；后续固定其他场景/样本进行验证。
+
+`run.json` 保存每次调用的原回答、token 使用量、`finish_reason`、解析、几何证据、视图可见编号与未标出的目标编号。
+`ground_response.json` 在解析最终编号之前保存回答，便于诊断无效输出。
+`prediction.json` 保存 `pipeline_latency_s`（包括解析、复核、渲染及最终请求）和各次调用 token 用量；`latency_s` 只表示最终选择请求耗时。
+`finish_reason=length` 说明回答截断；若仍包含合法编号，保留预测并记录截断状态，不把它误当作完整解释。
+
+批量实验 manifest 绑定模式、模型、接口地址、代码与输入数据哈希；配置变更会拒绝复用原目录（包括旧版本 manifest），不会记录 API key。
+准确率和 IoU 阈值准确率将失败样本计入分母；只有失败样本而没有任何有效 IoU 时输出 null，避免声称完成了评测。
+Nr3D 此处使用 GT 实例几何和预测类别，主要指标是编号准确率；此处 IoU 辅助统计不等于 ScanRefer 检测框基准成绩。
