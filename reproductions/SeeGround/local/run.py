@@ -178,6 +178,9 @@ def ground(args):
                    'For smallest/largest compare both AABB volume and footprint within the stated category pool; '
                    'For ordinary small/large adjectives, use candidate size metrics as soft evidence only; '
                    'do not silently convert them into a smallest/largest filter. '
+                   'For skinny/narrow, consider horizontal long and short extents and height ratios as soft '
+                   'shape evidence; a short XY AABB edge may be thickness, not visible cabinet width. '
+                   'Do not turn skinny into a minimum-short-edge filter or claim appearance is certified. '
                    'these are proxies, not physical object volume or a bound linguistic subset. '
                    'A tall reference is not automatically the tallest. Check reference descriptors independently '
                    'from target descriptors, then use distances for that SAME reference ID. '
@@ -198,6 +201,10 @@ def ground(args):
                          if annotated else 'Unreviewed instances are uncertain; unknown does not mean false. ')
         prompt += ('\nDiagnosis uses shared observer/reference hypotheses with AND conditions, not votes. '
                    'candidate_ids and stable_candidate_ids are conditional on the bounded proposal set. '
+                   'between_pass_ids report only a passing between predicate under some reference pairs, '
+                   'not support for the complete query. between_unknown_ids do not report a pass. '
+                   'An instance can occur in both sets. Reference pairs are interpretations, not votes; '
+                   'do not rank targets by the number of passing or unknown pairs. '
                    'Category/appearance checks use supplied real RGB crops when available. '
                    +category_status+
                    'Signed directions are measured in the observer frame, never the inspection camera. '

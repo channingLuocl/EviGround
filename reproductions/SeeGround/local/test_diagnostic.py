@@ -341,6 +341,23 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(metrics[2]['volume_rank'], 2)
         self.assertEqual(result['candidate_ids'], [1,2])
 
+    def test_skinny_exposes_shape_proxies_without_choosing_shortest_edge(self):
+        objects=[obj(1,'cabinet',0,0),obj(2,'cabinet',1,0)]
+        objects[0]['bbox_3d'][3:] = [.157, .310, .818]
+        objects[1]['bbox_3d'][3:] = [.131, 1.025, .837]
+        data=validate_structure('skinny cabinet', {
+            'Target':['cabinet'],'Anchor':[],'Relations':[],'Observer':{},
+            'Attributes':[{'category':'cabinet','phrase':'skinny'}],'Unhandled':[]})
+        result=diagnose(data, objects, objects, [0,0,.5], trusted_categories=True)
+        metrics={item['id']:item for item in result['geometry']['candidate_metrics']}
+        self.assertLess(metrics[2]['horizontal_short_extent_m'],metrics[1]['horizontal_short_extent_m'])
+        self.assertLess(metrics[1]['horizontal_long_extent_m'],metrics[2]['horizontal_long_extent_m'])
+        self.assertAlmostEqual(metrics[1]['horizontal_aspect_ratio'], .310/.157)
+        self.assertAlmostEqual(metrics[1]['height_to_horizontal_long_ratio'], .818/.310)
+        self.assertEqual(result['candidate_ids'], [1,2])
+        self.assertEqual(result['geometry']['size_constraints'], [])
+        self.assertEqual(result['status'],'missing')
+
 
 class RGBReviewTests(unittest.TestCase):
     def fixture(self, root):

@@ -82,6 +82,9 @@ def main():
                       'status': diagnosis['status'], 'missing': diagnosis['missing'],
                       'candidate_ids': diagnosis['candidate_ids'],
                       'stable_candidate_ids': diagnosis['stable_candidate_ids'],
+                      'between_pass_ids': diagnosis['geometry']['between_pass_ids'],
+                      'between_unknown_ids': diagnosis['geometry']['between_unknown_ids'],
+                      'candidate_shape_metrics': diagnosis['geometry']['candidate_metrics'],
                       'wall_fits': {str(obj['bbox_id']): obj['wall_geometry'] for obj in geometry_objects
                                     if 'wall_geometry' in obj},
                       'reference_groups': groups}, ensure_ascii=False, indent=2))

@@ -607,3 +607,10 @@ between_triplets 保存 wall_fit、wall_reference_xy_m 和中心点旧公式的 
 
 输出 reference_groups 中的 wall_pass_ids 与 center_pass_ids 是新旧几何支持集合，
 unknown_ids 表示墙面证据不足；集合变小不等于定位准确率提升。
+
+离线输出也包括 between_pass_ids（至少一组参照的 between 几何通过）、
+between_unknown_ids（至少一组参照无法计算）与 candidate_shape_metrics。
+这两个集合允许重叠；它们不证明整个原句，也不按通过次数投票排序。
+candidate_ids 仍表示在部分解释下未排除的候选，不等于全部具备几何支持。
+尺寸软证据新增水平长短边、水平长短边比和高长比，均从世界坐标 AABB 计算；
+不是物体固有宽深，不能直接把 skinny 解释为短边最小，不增加硬筛选。

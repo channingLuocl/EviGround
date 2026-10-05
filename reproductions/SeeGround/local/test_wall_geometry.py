@@ -67,6 +67,25 @@ class WallGeometryTests(unittest.TestCase):
         self.assertEqual(result['candidate_ids'], [1])
         self.assertIsNone(result['geometry']['between_triplets'][0]['passes'])
 
+    def test_passing_and_unknown_pairs_are_reported_separately_without_filtering(self):
+        objects=[box(1,'cabinet',1,3), box(4,'cabinet',1,0), box(2,'stove',0,3),
+                 self.wall(), box(5,'wall',2,2)]
+        query='cabinet between the stove and the wall'
+        data=validate_structure(query, recover_between_relations(query, {
+            'Target':['cabinet'],'Anchor':['stove','wall'],'Relations':[],
+            'Observer':{},'Attributes':[],'Unhandled':[]}))
+        result=diagnose(data, objects, objects[:2], [0,0,.5], trusted_categories=True)
+        geometry=result['geometry']
+        self.assertEqual(geometry['between_pass_ids'],[1])
+        self.assertEqual(geometry['between_unknown_ids'],[1,4])
+        self.assertEqual(result['candidate_ids'],[1,4])
+        self.assertEqual(result['status'],'missing')
+        by_id={row['target_id']:row for row in geometry['between_candidate_evidence']}
+        self.assertEqual(by_id[1]['passing_reference_pairs'],[[2,3]])
+        self.assertEqual(by_id[4]['passing_reference_pairs'],[])
+        self.assertEqual(by_id[4]['unknown_reference_pairs'],[[2,5]])
+        self.assertEqual(by_id[4]['failing_reference_pairs'],[[2,3]])
+
     def test_fit_uses_only_points_bound_to_wall_id(self):
         objects = [box(1, 'stove', 0, 0), box(3, 'wall', 2, 0)]
         points = np.column_stack([np.full(100, 2.), np.linspace(-4, 4, 100), np.ones(100)])
@@ -102,6 +121,9 @@ class WallGeometryTests(unittest.TestCase):
             self.assertEqual(result['status'], 'missing')
             self.assertEqual(result['reference_groups']['2,3']['wall_pass_ids'], [1])
             self.assertEqual(result['reference_groups']['2,3']['center_pass_ids'], [])
+            self.assertEqual(result['between_pass_ids'],[1])
+            self.assertEqual(result['between_unknown_ids'],[])
+            self.assertEqual(result['candidate_shape_metrics'][0]['horizontal_long_extent_m'],.4)
 
 
 if __name__ == '__main__':

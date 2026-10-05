@@ -301,7 +301,11 @@ def _box_metrics(obj):
     x, y, z, width, length, height = map(float, obj['bbox_3d'])
     return {'volume_m3': width * length * height, 'footprint_m2': width * length,
             'height_m': height, 'center_z_m': z,
-            'bottom_z_m': z - height / 2., 'top_z_m': z + height / 2.}
+            'bottom_z_m': z - height / 2., 'top_z_m': z + height / 2.,
+            'horizontal_short_extent_m': min(width, length),
+            'horizontal_long_extent_m': max(width, length),
+            'horizontal_aspect_ratio': max(width, length) / min(width, length),
+            'height_to_horizontal_long_ratio': height / max(width, length)}
 
 
 def _pair_geometry(target, anchor):
@@ -485,6 +489,8 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
         'size_policy': {
             'metric': 'AABB volume, footprint and height',
             'adjective_policy': 'small/large are soft evidence; only explicit superlatives filter',
+            'shape_policy': 'XY extents and ratios are soft AABB proxies, not intrinsic object width/depth; '
+                            'skinny/narrow is not a minimum-short-edge rule',
         },
     }
     def verdict(oid, name):
@@ -659,6 +665,21 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
     sets = [set(h['candidate_ids']) for h in hypotheses]
     possible = sorted(set.union(*sets)) if sets else []
     stable = sorted(set.intersection(*sets)) if sets else []
+    between_by_id = {}
+    for triplet in geometry['between_triplets']:
+        entry = between_by_id.setdefault(triplet['target_id'], {
+            'target_id': triplet['target_id'], 'passing_reference_pairs': [],
+            'unknown_reference_pairs': [], 'failing_reference_pairs': []})
+        key = ('unknown_reference_pairs' if triplet['passes'] is None else
+               'passing_reference_pairs' if triplet['passes'] else 'failing_reference_pairs')
+        if triplet['anchor_ids'] not in entry[key]:
+            entry[key].append(triplet['anchor_ids'])
+    geometry['between_candidate_evidence'] = [between_by_id[oid] for oid in sorted(between_by_id)]
+    geometry['between_pass_ids'] = sorted(oid for oid, item in between_by_id.items() if item['passing_reference_pairs'])
+    geometry['between_unknown_ids'] = sorted(oid for oid, item in between_by_id.items() if item['unknown_reference_pairs'])
+    geometry['between_evidence_policy'] = ('Per-predicate geometry only, not votes or full-query validation. '
+        'Unknown pairs preserve recall but do not provide passing evidence. '
+        'An ID may have both passing and unknown reference pairs.')
     # VLM support covers category AND its supplied appearance attributes, not identity proof.
     needs = []
     def need(oid, name, role):
