@@ -225,6 +225,18 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(result['candidate_ids'], [2])
         self.assertEqual(result['geometry']['relation_pairs'][0]['relation'], 'above')
 
+    def test_vertical_overlap_does_not_count_as_above(self):
+        objects=[obj(1,'cabinet',0,0), obj(2,'cabinet',0,0), obj(3,'refrigerator',0,0)]
+        objects[1]['bbox_3d'][2] = 0.8
+        raw={'Target':['cabinet'],'Anchor':['refrigerator'],'Relations':[],
+             'Observer':{},'Attributes':[],'Unhandled':[]}
+        data=validate_structure('cabinet above the refrigerator', raw)
+        result=diagnose(data, objects, objects[:2], [0,0,.5], supported(objects),
+                        trusted_categories=True)
+        self.assertEqual(result['candidate_ids'], [])
+        pair=next(p for p in result['geometry']['relation_pairs'] if p['target_id'] == 2)
+        self.assertLess(pair['target_bottom_minus_anchor_top_m'], 0.)
+
     def test_size_and_floor_constraints_use_box_proxies(self):
         objects=[obj(1,'cabinet',0,0), obj(2,'cabinet',0,1)]
         objects[0]['bbox_3d'][3:] = [.4,.4,.5]

@@ -22,7 +22,13 @@ VERTICAL_WORDS = {'over': 'above', 'above': 'above', 'below': 'below',
 def _category(value):
     if not isinstance(value, str) or not value.strip():
         return ''
-    return retrieval_category(canonical_category(value)).strip()
+    canonical = canonical_category(value).strip()
+    normalized = retrieval_category(canonical).strip()
+    # ``wall`` is a landmark/reference category in NR3D, not only an
+    # appearance modifier (as in "wall-mounted"). Preserve it for audit.
+    if not normalized and canonical in {'wall', 'floor', 'ground', 'ceiling'}:
+        return canonical
+    return normalized
 
 
 def _quote(query, phrase):
@@ -112,6 +118,22 @@ def rewrite_query(query, parsed):
     for phrase in parsed.get('Unhandled', []) or []:
         if _quote(query, phrase):
             unresolved.append({'phrase': phrase, 'reason': 'parser marked condition unsupported'})
+
+    # Validation can reject a relation before it reaches ``Relations``. Keep
+    # that quoted phrase in the rewrite audit instead of silently losing it.
+    for diagnostic in parsed.get('diagnostic_missing', []) or []:
+        if not isinstance(diagnostic, str):
+            continue
+        if diagnostic.startswith('unsupported relation: '):
+            phrase = diagnostic[len('unsupported relation: '):]
+            reason = 'relation rejected by structure validation'
+        elif diagnostic.startswith('unhandled condition: '):
+            phrase = diagnostic[len('unhandled condition: '):]
+            reason = 'condition marked unsupported by parser'
+        else:
+            continue
+        if _quote(query, phrase) and not any(item['phrase'] == phrase for item in unresolved):
+            unresolved.append({'phrase': phrase, 'reason': reason})
 
     # Keep lexical conditions that are commonly omitted from Attributes visible to the audit.
     if re.search(r'\b(on the floor|on floor|on the ground|grounded)\b', query, re.I) \

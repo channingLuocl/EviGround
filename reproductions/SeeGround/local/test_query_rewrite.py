@@ -46,6 +46,16 @@ class QueryRewriteTests(unittest.TestCase):
         result = rewrite_query(query, parsed)
         self.assertEqual(result['constraints'][0]['type'], 'near')
         self.assertEqual(result['unresolved'][0]['phrase'], 'between the stove and wall')
+        self.assertIn('wall', [item['category'] for item in result['references']])
+
+    def test_rejected_relation_is_retained_as_unresolved(self):
+        query = 'cabinet between the stove and the wall'
+        result = rewrite_query(query, {
+            'Target': ['cabinet'], 'Anchor': ['stove', 'wall'], 'Relations': [],
+            'Attributes': [], 'Unhandled': [], 'Observer': {},
+            'diagnostic_missing': ['unsupported relation: between the stove and the wall'],
+        })
+        self.assertEqual(result['unresolved'][0]['phrase'], 'between the stove and the wall')
 
 
 if __name__ == '__main__':

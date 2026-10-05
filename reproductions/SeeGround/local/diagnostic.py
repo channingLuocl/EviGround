@@ -2,6 +2,7 @@
 from itertools import product
 from math import prod
 import re
+from math import ceil
 import numpy as np
 from evidence import match_retrieval_categories, retrieval_category
 
@@ -193,7 +194,8 @@ def validate_structure(query, parsed):
     if re.search(r"\b(no|not|never|without|except)\b|n['’]t\b", query, re.I):
         missing.append('negation/exclusion is unsupported')
         parsed['Relations'] = []
-    if re.search(r'\b(left|right|ahead|behind)\b', query, re.I) and not any(
+    direction_query = re.sub(r'\bright\s+(?:above|over|below|under|beneath)\b', '', query, flags=re.I)
+    if re.search(r'\b(left|right|ahead|behind)\b', direction_query, re.I) and not any(
             r['relation'] in ('left', 'right', 'front', 'back') for r in parsed['Relations']):
         missing.append('direction condition not represented')
     for pattern, kinds, label in ((r'\b(nearest|closest|farthest|furthest)\b', ('nearest','farthest'), 'distance extreme'),
@@ -266,14 +268,27 @@ def _pair_geometry(target, anchor):
 
 
 def _vertical_match(pair, relation):
-    # A small overlap/gap tolerance handles imperfect ScanNet AABBs without
-    # turning arbitrary objects at different heights into "above" evidence.
-    aligned = pair['horizontal_overlap_m2'] > 0.0 or pair['horizontal_gap_m'] <= 0.5
+    # Height difference alone would accept unrelated objects elsewhere in the room.
+    # A small negative clearance tolerates annotation noise while rejecting
+    # boxes whose vertical ranges substantially intersect.
+    aligned = pair['horizontal_overlap_m2'] > 0.0
+    tolerance = 0.05
     if relation == 'above':
-        return pair['center_z_delta_m'] > 0.05 and aligned
+        return (pair['center_z_delta_m'] > 0.05 and aligned and
+                pair['target_bottom_minus_anchor_top_m'] >= -tolerance)
     if relation == 'below':
-        return pair['center_z_delta_m'] < -0.05 and aligned
+        return (pair['center_z_delta_m'] < -0.05 and aligned and
+                pair['anchor_bottom_minus_target_top_m'] >= -tolerance)
     return True
+
+
+def _floor_reference(objects):
+    bottoms = sorted(_box_metrics(obj)['bottom_z_m'] for obj in objects)
+    if not bottoms:
+        return 0.0
+    # Use the median of the lowest fifth rather than one potentially corrupt box.
+    count = max(1, ceil(len(bottoms) * 0.2))
+    return float(np.median(bottoms[:count]))
 
 
 def _size_ids(objects, category, phrase):
@@ -347,7 +362,7 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
             size_allowed = ids if size_allowed is None else size_allowed & ids
         if re.search(r'\b(on the floor|on floor|on the ground|grounded)\b',
                      attribute.get('phrase', ''), re.I):
-            floor_z = min((_box_metrics(o)['bottom_z_m'] for o in objects), default=0.)
+            floor_z = _floor_reference(objects)
             floor_ids = {o['bbox_id'] for o in objects
                          if _box_metrics(o)['bottom_z_m'] <= floor_z + 0.15}
             geometry['floor_constraint'] = {'floor_z_m': floor_z, 'tolerance_m': 0.15,
