@@ -289,11 +289,11 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(result['geometry']['vertical_policy']['horizontal_gap_max_m'], .5)
 
     def test_between_relation_uses_two_reference_centers(self):
-        objects=[obj(1,'cabinet',0,0), obj(2,'stove',-2,0), obj(3,'wall',2,0)]
-        raw={'Target':['cabinet'],'Anchor':['stove','wall'],'Relations':[],
+        objects=[obj(1,'cabinet',0,0), obj(2,'stove',-2,0), obj(3,'fridge',2,0)]
+        raw={'Target':['cabinet'],'Anchor':['stove','fridge'],'Relations':[],
              'Observer':{},'Attributes':[],'Unhandled':[]}
-        data=validate_structure('cabinet between the stove and the wall',
-                                recover_between_relations('cabinet between the stove and the wall', raw))
+        data=validate_structure('cabinet between the stove and the fridge',
+                                recover_between_relations('cabinet between the stove and the fridge', raw))
         result=diagnose(data, objects, objects[:1], [0,0,.5], supported(objects),
                         trusted_categories=True)
         self.assertEqual(result['candidate_ids'], [1])
@@ -302,12 +302,12 @@ class DiagnosticTests(unittest.TestCase):
         self.assertTrue(evidence['passes'])
 
     def test_between_rejects_lateral_and_endpoint_candidates(self):
-        anchors=[obj(2,'stove',-2,0), obj(3,'wall',2,0)]
+        anchors=[obj(2,'stove',-2,0), obj(3,'fridge',2,0)]
         for target in (obj(1,'cabinet',0,1), obj(1,'cabinet',3,0)):
             objects=[target, *anchors]
-            raw={'Target':['cabinet'],'Anchor':['stove','wall'],'Relations':[],
+            raw={'Target':['cabinet'],'Anchor':['stove','fridge'],'Relations':[],
                  'Observer':{},'Attributes':[],'Unhandled':[]}
-            query='cabinet between the stove and the wall'
+            query='cabinet between the stove and the fridge'
             data=validate_structure(query, recover_between_relations(query, raw))
             result=diagnose(data, objects, objects[:1], [0,0,.5], supported(objects),
                             trusted_categories=True)

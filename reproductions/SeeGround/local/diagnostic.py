@@ -328,13 +328,37 @@ def _between_geometry(target, anchor_a, anchor_b):
     a_box = np.asarray(anchor_a['bbox_3d'], dtype=float)
     b_box = np.asarray(anchor_b['bbox_3d'], dtype=float)
     start, end, point = a_box[:2], b_box[:2], target_box[:2]
+    walls = [anchor for anchor in (anchor_a, anchor_b) if retrieval_category(anchor['target']) == 'wall']
+    wall_record = {}
+    if walls:
+        center_comparison = _between_geometry(target,
+                           {**anchor_a, 'target': 'reference point'},
+                           {**anchor_b, 'target': 'reference point'})
+        if len(walls) != 1 or not walls[0].get('wall_geometry', {}).get('valid'):
+            return {'target_id': target['bbox_id'], 'anchor_ids': [anchor_a['bbox_id'], anchor_b['bbox_id']],
+                    'relation': 'between', 'passes': None, 'reference_policy': 'finite wall projection',
+                    'reason': 'between needs exactly one wall with a valid fitted vertical plane',
+                    'wall_fits': {str(w['bbox_id']): w.get('wall_geometry') for w in walls},
+                    'center_point_comparison': center_comparison}
+        from wall_geometry import wall_reference_point
+        wall = walls[0]
+        other = anchor_b if wall is anchor_a else anchor_a
+        endpoint, clamped = wall_reference_point(wall['wall_geometry'], other)
+        wall_record = {'reference_policy': 'other anchor projected onto finite wall segment',
+                       'wall_id': wall['bbox_id'], 'wall_reference_xy_m': endpoint.tolist(),
+                       'wall_projection_clamped': clamped, 'wall_fit': wall['wall_geometry'],
+                       'center_point_comparison': center_comparison}
+        if wall is anchor_a:
+            start = endpoint
+        else:
+            end = endpoint
     direction = end - start
     length = float(np.linalg.norm(direction))
     if length <= 1e-6:
         return {'target_id': target['bbox_id'], 'anchor_ids': [anchor_a['bbox_id'], anchor_b['bbox_id']],
                 'relation': 'between', 'projection_t': None, 'perpendicular_distance_m': None,
                 'lateral_tolerance_m': None, 'within_segment': False, 'passes': False,
-                'reason': 'reference centers are coincident'}
+                'reason': 'reference endpoints are coincident', **wall_record}
     unit = direction / length
     normal = np.asarray([-unit[1], unit[0]])
     projection_t = float(np.dot(point - start, direction) / (length * length))
@@ -352,7 +376,8 @@ def _between_geometry(target, anchor_a, anchor_b):
             'lateral_tolerance_m': lateral_tolerance,
             'within_segment': within_segment,
             'passes': bool(within_segment and perpendicular_distance <= lateral_tolerance),
-            'reference_center_distance_m': length}
+            'reference_center_distance_m': float(np.linalg.norm(a_box[:2] - b_box[:2])),
+            'reference_endpoint_distance_m': length, **wall_record}
 
 
 def _vertical_match(pair, relation):
@@ -589,7 +614,10 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                     between = _between_geometry(target, relation_anchors[0], relation_anchors[1])
                     geometry['between_triplets'].append(between)
                     measured.append(between)
-                    passed = passed and between['passes']
+                    if between['passes'] is None:
+                        missing.append(between['reason'])
+                    else:
+                        passed = passed and between['passes']
                 elif kind in ('nearest', 'farthest') and anchor:
                     distances = [(o['bbox_id'], float(np.linalg.norm(np.asarray(o['bbox_3d'][:3])-anchor['bbox_3d'][:3])))
                                  for o in eligible if o['bbox_id'] != anchor['bbox_id']]

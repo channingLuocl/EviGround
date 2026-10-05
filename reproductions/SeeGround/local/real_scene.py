@@ -167,6 +167,9 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
     try:
         with np.load(scene_dir/'scene.npz',allow_pickle=False) as cloud:
             xyz,rgb,ids=cloud['xyz'],cloud['rgb'],cloud['ids']
+        if mode=='diagnostic':
+            from wall_geometry import attach_wall_geometry
+            geometry_objects=attach_wall_geometry(geometry_objects,xyz,ids)
         stage='parse_query'
         parsed=parse_query(query,mode,calls)
         stage='retrieve_objects'

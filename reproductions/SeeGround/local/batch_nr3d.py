@@ -51,7 +51,7 @@ def experiment_settings(scene_dir, mode, review_limit=6, object_table='pred'):
             'model':os.getenv('SEEGROUND_MODEL','').strip(),
             'base_url':os.getenv('SEEGROUND_BASE_URL','').strip().rstrip('/'),
             'code_sha256':{name:hashlib.sha256((code_dir/name).read_bytes()).hexdigest() for name in
-                           ['run.py','real_scene.py','qwen_api.py','evidence.py','object_geometry.py','visual_review.py','category_review.py','diagnostic.py','rgb_review.py','metrics.py','batch_nr3d.py']},
+                           ['run.py','real_scene.py','qwen_api.py','evidence.py','object_geometry.py','visual_review.py','category_review.py','diagnostic.py','wall_geometry.py','rgb_review.py','metrics.py','batch_nr3d.py']},
             'scene_sha256':{name:hashlib.sha256((scene_dir/name).read_bytes()).hexdigest() for name in
                             ['scene.npz','objects_gt.json']}}
     if mode=='diagnostic':

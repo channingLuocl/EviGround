@@ -584,3 +584,26 @@ Qwen 5 次成功预测都发生最高分并列，编号排序制造了表面一�
 仅在 Relations 的大段引用中出现这些词不算属性已覆盖；若 Attributes 没有对应引用，
 将记录 diagnostic_missing 和 query_rewrite.unresolved，不猜测该属性属于哪个实例。
 这是有限词表检查，不保证所有自然语言条件均已覆盖，也不把 skinny 转成最窄硬筛选。
+
+## 墙面参照的 between
+
+Diagnostic 从 scene.npz 中按 wall 实例编号取点，以 XY PCA 拟合有限竖直墙面代理。
+至少 20 点，法向 RMS 不超过 0.10 m，横向方差比不超过 0.05 才使用；
+这些是第一版代理质量阈值，不是经过数据集标定的语义阈值。
+将另一参照物中心投影到有限墙段，作为 between 端点，使用既有线段投影与侧向容差。
+不选定最近墙体，仍枚举所有墙体解释；普通两物体之间的公式不变。
+墙面拟合无效时 passes=null，保留候选并标为 missing，不把无法计算当作排除证据。
+多墙面合并实例、斜墙、遮挡或墙段缺口尚未单独建模；这不是完整墙面重建。
+between_triplets 保存 wall_fit、wall_reference_xy_m 和中心点旧公式的 center_point_comparison。
+无需重新下载或 prepare_scene，拟合使用已有的 scene.npz 和 scene_instances.json。
+
+先冻结旧解析，离线查看几何变化（不调用 API、不覆盖旧结果）：
+
+```bash
+.venv/bin/python local/wall_geometry.py \
+  --scene-dir local_outputs/scene0149_00 \
+  --run local_outputs/nr3d_json_gt_03/q004/run.json
+```
+
+输出 reference_groups 中的 wall_pass_ids 与 center_pass_ids 是新旧几何支持集合，
+unknown_ids 表示墙面证据不足；集合变小不等于定位准确率提升。
