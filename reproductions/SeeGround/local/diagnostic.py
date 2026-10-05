@@ -5,6 +5,7 @@ import re
 from math import ceil
 import numpy as np
 from evidence import match_retrieval_categories, retrieval_category
+from query_rewrite import CONTAINMENT_PATTERN
 
 
 VERTICAL_WORDS = {
@@ -36,6 +37,8 @@ relative_anchor means target is on a named reference's side in the observer fram
 side means a signed side of the observer, NOT leftmost/rightmost among peers.
 Use between with anchor_categories for a target located between two named references.
 Use other+Unhandled for extremes, object-intrinsic axes, ordinal or unsupported relations.
+Includes/contains a named object is a containment/composition relation, not appearance;
+use other+Unhandled because this relation has no implemented predicate.
 Separate facing references from target relations; include their categories in Anchor.
 Resolve pronouns to an actual category in the description, never use a pronoun as a category.
 Every relation and observer phrase must be a nonempty EXACT quote.
@@ -257,6 +260,8 @@ def validate_structure(query, parsed):
     if re.search(r'\b(above|over|below|under|beneath)\b', query, re.I) and not any(
             r['relation'] in ('above', 'below') for r in parsed['Relations']):
         missing.append('vertical condition not represented')
+    for match in re.finditer(CONTAINMENT_PATTERN, query, re.I):
+        missing.append('unsupported containment condition: ' + match.group().rstrip())
     parsed['diagnostic_missing'] = missing
     return parsed
 

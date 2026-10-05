@@ -31,6 +31,20 @@ def response(oid, verdict='yes', finish='stop'):
 
 
 class DiagnosticTests(unittest.TestCase):
+    def test_containment_cannot_resolve_even_with_positive_appearance_check(self):
+        for verb in ('includes', 'contains', 'including', 'containing'):
+            with self.subTest(verb=verb):
+                query = 'counter ' + verb + ' the sink'
+                data = validate_structure(query, {
+                    'Target': ['counter'], 'Anchor': [], 'Relations': [], 'Observer': {},
+                    'Attributes': [{'category': 'counter', 'phrase': verb + ' the sink'}], 'Unhandled': [],
+                })
+                objects = [obj(1, 'counter', 0, 0)]
+                result = diagnose(data, objects, objects, [0, 0, .5], supported(objects), trusted_categories=True)
+                self.assertEqual(result['status'], 'missing')
+                self.assertIn('unsupported containment condition: ' + verb + ' the sink', result['missing'])
+                self.assertEqual(result['candidate_ids'], [1])
+
     def setUp(self):
         self.objects=[obj(1,'window',-1,1),obj(2,'window',1,1),obj(3,'tv',0,3)]
         self.query='Standing in the middle of the room facing the tv, the window on the right.'

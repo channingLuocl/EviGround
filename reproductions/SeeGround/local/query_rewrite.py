@@ -18,6 +18,7 @@ RELATION_TYPES = {
 }
 VERTICAL_WORDS = {'over': 'above', 'above': 'above', 'below': 'below',
                   'under': 'below', 'beneath': 'below'}
+CONTAINMENT_PATTERN = r'\b(?:includes?|including|contains?|containing)\b[^.!?;]*'
 
 
 def _category(value):
@@ -44,6 +45,8 @@ def _attribute_constraint(attribute, query, target_category):
     phrase = attribute.get('phrase', '') if isinstance(attribute, dict) else ''
     category = _category(attribute.get('category', '')) if isinstance(attribute, dict) else ''
     if not _quote(query, phrase) or not category:
+        return None
+    if re.search(CONTAINMENT_PATTERN, phrase, re.I):
         return None
     text = phrase.casefold()
     if category != target_category:
@@ -134,8 +137,19 @@ def rewrite_query(query, parsed):
         compiled = _attribute_constraint(attribute, query, target_category)
         if compiled:
             constraints.append(compiled)
+        elif (isinstance(attribute, dict) and _quote(query, attribute.get('phrase'))
+              and re.search(CONTAINMENT_PATTERN, attribute['phrase'], re.I)):
+            unresolved.append({'phrase': attribute['phrase'],
+                               'reason': 'containment/composition requires an unsupported relation predicate'})
         elif isinstance(attribute, dict) and attribute.get('phrase'):
             unresolved.append({'phrase': attribute['phrase'], 'reason': 'attribute category is not uniquely bound'})
+
+    # Appearance checks cannot certify a relation to other named objects.
+    for match in re.finditer(CONTAINMENT_PATTERN, query, re.I):
+        phrase = match.group().rstrip()
+        if not any(phrase.casefold() in item['phrase'].casefold() for item in unresolved):
+            unresolved.append({'phrase': phrase,
+                               'reason': 'containment/composition requires an unsupported relation predicate'})
 
     for phrase in parsed.get('Unhandled', []) or []:
         if _quote(query, phrase):

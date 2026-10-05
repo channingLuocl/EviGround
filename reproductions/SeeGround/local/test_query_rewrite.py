@@ -4,6 +4,22 @@ from query_rewrite import constraints_as_relations, rewrite_query
 
 
 class QueryRewriteTests(unittest.TestCase):
+    def test_containment_attribute_stays_unresolved(self):
+        query = 'The large L shaped kitchen counter that includes the sink and the dishwasher.'
+        result = rewrite_query(query, {
+            'Target': ['kitchen counter'], 'Anchor': [], 'Relations': [],
+            'Attributes': [{'category': 'kitchen counter', 'phrase': 'large L shaped'},
+                           {'category': 'kitchen counter', 'phrase': 'that includes the sink and the dishwasher'}],
+        })
+        self.assertEqual([c['value'] for c in result['constraints']], ['large L shaped'])
+        self.assertEqual(result['unresolved'][0]['phrase'], 'that includes the sink and the dishwasher')
+        self.assertIn('unsupported relation predicate', result['unresolved'][0]['reason'])
+
+    def test_omitted_containment_is_still_audited(self):
+        query = 'counter containing the sink'
+        result = rewrite_query(query, {'Target': ['counter'], 'Anchor': [], 'Relations': [], 'Attributes': []})
+        self.assertEqual(result['unresolved'][0]['phrase'], 'containing the sink')
+
     def test_between_keeps_two_reference_bindings(self):
         query = 'the cabinet between the stove and the wall'
         result = rewrite_query(query, {

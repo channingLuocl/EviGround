@@ -574,3 +574,8 @@ Qwen 5 次成功预测都发生最高分并列，编号排序制造了表面一�
 `run.json` 的 `calls` 保留原始 `parse_query` 回答及 `json_error`，以及
 `parse_query_json_repair` 的回答、用量、耗时和结束原因。额外调用计入 `api_calls` 和总流程耗时。
 更新后请使用新的输出目录，避免将不同解析协议的结果混为同一次实验。
+
+`includes/contains/including/containing` 等包含或组成条件没有可执行谓词。
+即便解析器将其放入 Attributes 或完全漏掉，原句中的该条件仍会进入
+`diagnostic_missing` 和查询重写的 `unresolved`；不会因外观复核通过而得到 resolved。
+该检查记录证据缺失，不排除目标候选，也不实现包含关系。
