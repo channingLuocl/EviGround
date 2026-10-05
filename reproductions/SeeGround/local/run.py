@@ -170,6 +170,17 @@ def ground(args):
                    'no is a possible category conflict, uncertain or unreviewed establishes nothing. '
                    'Never reinterpret a reference as a target solely because it is close. '
                    'State unresolved category conflicts rather than inventing supporting evidence.')
+    if evidence is not None and 'geometry_conditions' in evidence:
+        prompt += ('\nGeometry conditions separate target and reference noun phrases, even for the same category. '
+                   'Use measured height and world-Z position to distinguish tall from upper/lower. '
+                   'For smallest/largest compare both AABB volume and footprint within the stated category pool; '
+                   'these are proxies, not physical object volume or a bound linguistic subset. '
+                   'A tall reference is not automatically the tallest. Check reference descriptors independently '
+                   'from target descriptors, then use distances for that SAME reference ID. '
+                   'Never bind an object to itself or average over different reference instances. '
+                   'Do not replace next to/away from with nearest/farthest. '
+                   'Positive center-Z difference does not prove the boxes are disjoint or directly above; '
+                   'check vertical bounds and horizontal overlap. No geometric proxy certifies missing appearance.')
     diagnosis_policy=None
     if evidence is not None and 'diagnosis' in evidence:
         diagnosis_policy='supported_unique_candidate' if evidence['diagnosis']['status']=='resolved' else 'audit_only'

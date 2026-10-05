@@ -150,6 +150,8 @@ def validate_structure(query, parsed):
             missing.append(label + ' condition not represented')
     if re.search(r'\b(corner|between|leftmost|rightmost|second|third|ground|floor)\b', query, re.I):
         missing.append('corner/ordinal/support/extreme conditions require additional predicates')
+    if re.search(r'\b(smallest|largest|tallest|shortest|lowest|highest|lower|upper|tall|short|above|below|under|beneath)\b',query,re.I):
+        missing.append('size/vertical conditions have box-proxy evidence only; no certified predicate')
     parsed['diagnostic_missing'] = missing
     return parsed
 

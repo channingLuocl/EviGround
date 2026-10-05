@@ -312,6 +312,29 @@ RGB 为可选输入，目前没有自动下载 ScanNet `.sens`、恢复相机位
 批量报告额外统计状态数量、accepted_count 和 accepted_accuracy；后者只能结合覆盖率阅读，不能拿筛选后的正确率替代总体准确率。
 当前 10 条开发样本只用于检验诊断是否有效；后续需要固定独立场景做泛化验证。
 
+### 可计算的尺寸、上下位置与参照绑定证据
+
+`local/object_geometry.py` 为非 baseline 模式增加独立的 `geometry_conditions`。它从完整物体表和原始查询构造可审计证据：
+
+- 每个类别池的 AABB 体积、底面积、框高、中心 Z、底部 Z、顶部 Z 及排序；`smallest/largest/tallest/shortest` 只作为这些代理量的候选证据。
+- `lower/upper/above/below` 的中心 Z 差、上下边界和垂直/水平框重叠；正的高度差不自动证明直接位于上方。
+- 简单显式短语中的目标/参照角色分开绑定，即使二者类别相同；每个目标-参照实例对独立计算距离、AABB 间隙和 Z 关系，不把不同参照物平均。
+
+这些量不会自动认证唯一目标：AABB 不是物体真实形状，`tall`、`near`、`away from` 没有数据集阈值，比较级子集、外观和语言中的“中间”仍是缺失条件。最终提示要求模型同时检查目标和参照描述，拒绝自绑定和把 next to/away from 改写成 nearest/farthest。
+
+本地只读检查示例：
+
+```bash
+.venv/bin/python local/object_geometry.py \
+  --scene-dir local_outputs/scene0149_00 \
+  --object-table gt \
+  --query 'lower kitchen cabinet next to the tall kitchen cabinet' \
+  --target 'lower kitchen cabinet' \
+  --anchor 'tall kitchen cabinet'
+```
+
+新证据会写入 diagnostic/category_review 等非 baseline 的 `run.json` 和最终提示；旧输出不修改，重跑请使用新的输出目录。
+
 ### 首轮服务器反馈与修复
 
 首轮 diagnostic 为 5/10，10 条均 missing、accepted_count=0，平均流水线耗时约 6.13 秒。

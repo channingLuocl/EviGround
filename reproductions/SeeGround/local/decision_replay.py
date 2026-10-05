@@ -24,6 +24,7 @@ def build_input(run, objects):
            'parsed_query':run['parsed_query'],
            'geometry':evidence['geometry'],
            'supplementary_geometry':evidence.get('supplementary_geometry'),
+           'geometry_conditions':evidence.get('geometry_conditions'),
            'diagnosis':{k:diagnosis[k] for k in ('status','missing','hypotheses','scope','category_source')},
            'visual_checks':[{k:c[k] for k in ('id','category','attributes','verdict','reason') if k in c}
                             for c in diagnosis.get('checks',[])],

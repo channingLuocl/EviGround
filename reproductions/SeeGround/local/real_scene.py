@@ -195,6 +195,9 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             'target_fallback_to_all':not bool(set(review['TargetIDs']+review['UnknownIDs'])) if review else not bool(matched_targets),
             'anchor_missing':bool(parsed['Anchor']) and not bool(anchors),
             'visual_review':review,'views':[{'image':str(out/'view.png'),**info}]+views}
+        if evidence is not None:
+            from object_geometry import build_geometry
+            evidence['geometry_conditions']=build_geometry(query,parsed,objects)
         record.update(target_ids=[o['bbox_id'] for o in targets],anchor_ids=[o['bbox_id'] for o in anchors],
                       camera_and_render=info,extra_views=views,evidence=evidence)
         visible=set(info['marked_ids'])
