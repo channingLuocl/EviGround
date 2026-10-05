@@ -45,8 +45,23 @@ def parse_query(query, mode='baseline', calls=None):
                    'Strip size/color modifiers from category names, including large screen -> screen.')
     if mode=='diagnostic':
         from diagnostic import PARSER_INSTRUCTIONS
-        prompt += PARSER_INSTRUCTIONS
-    data=chat([{'role':'user','content':prompt}],max_tokens=200 if mode=='baseline' else (1600 if mode=='diagnostic' else 700))
+        # A dedicated schema keeps legacy examples and the query out of the instructions.
+        prompt=('Parse only the object description in the user JSON. Return one JSON object. '
+                'Do not copy conditions from these instructions. Extract actual category names; '
+                'resolve anaphoric targets from the description when possible, otherwise Target=[]. '
+                'Return Target and Anchor as arrays, Relations as an array, and Viewpoint as a string. '
+                'Each relation has target_category, anchor_category, relation, scope and phrase. '
+                'relation is nearest|farthest|near|left|right|front|back|other. '
+                'scope is side|relative_anchor; use an empty scope for distance relations. '
+                'Use nearest/farthest only for explicit distance superlatives, never proximity or motion. '
+                'Preserve every condition and its exact quote. Use singular category names without '
+                'appearance modifiers. No observer/category/reference may be invented. '
+                +PARSER_INSTRUCTIONS)
+        messages=[{'role':'system','content':prompt},
+                  {'role':'user','content':json.dumps({'description':query},ensure_ascii=False)}]
+    else:
+        messages=[{'role':'user','content':prompt}]
+    data=chat(messages,max_tokens=200 if mode=='baseline' else (1600 if mode=='diagnostic' else 700))
     if calls is not None:
         calls.append({'stage':'parse_query','response':data['_content'],'usage':data.get('usage'),
                       'latency_s':data['_baseline']['latency_s'],'finish_reason':data.get('_finish_reason')})
@@ -97,15 +112,16 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         matched_anchors=matcher(parsed['Anchor'],objects)
         targets=matched_targets or objects
         anchors=(matched_anchors or targets) if mode=='baseline' else matched_anchors
+        inspection_targets=targets
         diagnosis=None
         if mode=='diagnostic':
             from rgb_review import selective_review
             proposed=propose_category_checks(objects,matched_targets,anchors,review_limit)
             # Expand recall conservatively; unknown proposals remain uncertain, never certified targets.
-            targets=list({o['bbox_id']:o for o in matched_targets+proposed}.values()) or objects
+            diagnostic_targets=list({o['bbox_id']:o for o in matched_targets+proposed}.values()) or objects
             room_center=(xyz.min(0)+xyz.max(0))/2
-            diagnosis=selective_review(parsed,objects,targets,room_center,scene_dir,calls,review_limit)
-            record.update(diagnosis=diagnosis,review_proposal={'ids':[o['bbox_id'] for o in targets],
+            diagnosis=selective_review(parsed,objects,diagnostic_targets,room_center,scene_dir,calls,review_limit)
+            record.update(diagnosis=diagnosis,review_proposal={'ids':[o['bbox_id'] for o in diagnostic_targets],
                           'policy':'predicted targets plus bounded spatial neighbors; incomplete recall'},
                           review_limit=review_limit)
         record.update(parsed_query=parsed,category_target_ids=[o['bbox_id'] for o in matched_targets],
@@ -121,7 +137,8 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             anchor_ids=set(review['AnchorIDs']+review['UnknownIDs']) if parsed['Anchor'] else set()
             targets=[o for o in objects if o['bbox_id'] in target_ids] or objects
             anchors=[o for o in objects if o['bbox_id'] in anchor_ids]
-        at=np.mean([o['bbox_3d'][:3] for o in (anchors or targets)],axis=0)
+        camera_targets=inspection_targets if mode=='diagnostic' else targets
+        at=np.mean([o['bbox_3d'][:3] for o in (anchors or camera_targets)],axis=0)
         center=xyz.mean(0);center[2]+=1.
         eye=center+(center-at)
         chosen={o['bbox_id'] for o in targets+anchors}
@@ -172,7 +189,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                          'object-table order if no anchor; bounded recall, not a verified target set'}
         if diagnosis is not None:
             evidence['diagnosis']=diagnosis
-            evidence['supplementary_geometry']=distance_evidence(targets,anchors)
+            evidence['supplementary_geometry']=distance_evidence(diagnostic_targets,anchors)
         print(json.dumps({'parsed':parsed,'marked_ids':info['marked_ids'],'mode':mode},ensure_ascii=False),flush=True)
         prediction=ground(SimpleNamespace(image=str(out/'view.png'),objects=str(scene_dir/'objects.json'),
                           query=query,dry_run=False,output=str(out/'prediction.json'),

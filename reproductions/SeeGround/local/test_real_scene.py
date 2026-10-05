@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 import numpy as np
-from real_scene import run_query
+from real_scene import run_query, parse_query
 
 
 def reply(content, finish='stop'):
@@ -13,6 +13,20 @@ def reply(content, finish='stop'):
 
 
 class RealSceneTests(unittest.TestCase):
+    def test_diagnostic_query_is_separate_from_instructions_and_schema_has_scope(self):
+        query='This trash can is next to a large black television.'
+        answer={'Target':['trash can'],'Anchor':['tv'],'Relations':[],
+                'Observer':{},'Attributes':[],'Unhandled':[]}
+        with patch('real_scene.chat',return_value=reply(json.dumps(answer))) as api:
+            parse_query(query,mode='diagnostic')
+        messages=api.call_args.args[0]
+        self.assertEqual(messages[0]['role'],'system')
+        self.assertNotIn(query,messages[0]['content'])
+        self.assertNotIn('fridge',messages[0]['content'])
+        self.assertNotIn('the correct one facing the windows',messages[0]['content'])
+        self.assertIn('scope',messages[0]['content'])
+        self.assertEqual(json.loads(messages[1]['content']),{'description':query})
+
     def scene(self, root):
         objects=[{'bbox_id':1,'target':'water cooler','bbox_3d':[0,0,.5,.5,.5,1.]},
                  {'bbox_id':2,'target':'tv','bbox_3d':[2,0,1.,1.,.3,1.]}]
@@ -119,6 +133,23 @@ class RealSceneTests(unittest.TestCase):
             self.assertEqual(result['decision_status'],'conflict')
             self.assertFalse(result['accepted'])
             self.assertEqual(result['api_calls'],3)
+
+    def test_diagnostic_proposals_do_not_change_inspection_camera_or_labels(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.scene(root)
+            # No anchor: the old diagnostic proposal mean used to shift this camera.
+            parsed=reply(json.dumps({'Target':['water cooler'],'Anchor':[],'Relations':[],
+                                    'Observer':{},'Attributes':[],'Unhandled':[]}))
+            with patch('real_scene.chat',return_value=parsed), \
+                 patch('run.chat',return_value=reply('Predicted ID: 1')):
+                run_query(root,'water cooler',root/'ranked',mode='ranked_geometry')
+                run_query(root,'water cooler',root/'diagnostic',mode='diagnostic',review_limit=2)
+            first=json.loads((root/'ranked/run.json').read_text())
+            second=json.loads((root/'diagnostic/run.json').read_text())
+            self.assertEqual(second['review_proposal']['ids'],[1,2])
+            self.assertEqual(first['target_ids'],second['target_ids'])
+            self.assertEqual(first['camera_and_render'],second['camera_and_render'])
+            self.assertEqual((root/'ranked/view.png').read_bytes(),(root/'diagnostic/view.png').read_bytes())
 
 
 if __name__=='__main__':unittest.main()

@@ -7,7 +7,7 @@ from evidence import match_retrieval_categories, retrieval_category
 
 
 PARSER_INSTRUCTIONS = '''
-Also return "Observer":{"origin":{"kind":"room_center|category|unspecified",
+Return "Observer":{"origin":{"kind":"room_center|category|unspecified",
 "category":"category or empty","phrase":"exact quote or empty"},
 "facing":{"category":"category or empty","group":false,"phrase":"exact quote or empty"}},
 "Attributes":[{"category":"category","phrase":"exact appearance/size quote"}],
@@ -22,7 +22,7 @@ relative_anchor means target is on a named reference's side in the observer fram
 side means a signed side of the observer, NOT leftmost/rightmost among peers.
 Use other+Unhandled for extremes, object-intrinsic axes, between, ordinal or unsupported relations.
 Separate facing references from target relations; include their categories in Anchor.
-The target of 'facing the windows, the correct one' is window, not 'correct one'.
+Resolve pronouns to an actual category in the description, never use a pronoun as a category.
 Every relation and observer phrase must be a nonempty EXACT quote.
 For Observer use the full standing/facing clause; do not invent the speaker's position.
 '''
@@ -51,7 +51,8 @@ def validate_structure(query, parsed):
             valid_quote = valid_quote and bool(re.search(words[kind], phrase, re.I))
             valid_quote = valid_quote and relation.get('scope') in ('relative_anchor', 'side')
         if not valid_quote or kind not in ('nearest', 'farthest', 'near', 'left', 'right', 'front', 'back'):
-            missing.append('unsupported or unquoted relation: ' + str(phrase))
+            missing.append('unsupported relation: ' + phrase if quoted(query, phrase)
+                           else 'parser produced an unquoted relation; not a query condition')
         else:
             valid.append(relation)
     parsed['Relations'] = valid
@@ -81,7 +82,7 @@ def validate_structure(query, parsed):
                 or not isinstance(facing.get('category'), str) or type(facing.get('group', False)) is not bool):
             missing.append('facing direction has no supporting quote/category')
             facing = {}
-        elif facing.get('group') and not re.search(r'\b' + re.escape(facing['category']) + r's\b', phrase, re.I):
+        elif facing.get('group') and not re.search(r'\b' + re.escape(retrieval_category(facing['category'])) + r's\b', phrase, re.I):
             # Irregular plurals require an explicit group quote instead of guessing a centroid.
             if not re.search(r'\b(group|all|both)\b', phrase, re.I):
                 missing.append('group-facing has no explicit plural/group quote')
@@ -101,8 +102,15 @@ def validate_structure(query, parsed):
     unhandled = parsed.get('Unhandled')
     if not isinstance(unhandled, list) or any(not isinstance(x, str) for x in unhandled):
         missing.append('condition coverage not supplied by parser')
-    elif unhandled:
-        missing.extend('unhandled condition: ' + p for p in unhandled)
+        parsed['Unhandled'] = []
+    else:
+        parsed['Unhandled'] = [p for p in unhandled if quoted(query, p)]
+        if len(parsed['Unhandled']) != len(unhandled):
+            missing.append('parser produced unquoted Unhandled entries; these are not query conditions')
+        missing.extend('unhandled condition: ' + p for p in parsed['Unhandled'])
+    targets = parsed['Target'] if isinstance(parsed['Target'], list) else [parsed['Target']]
+    if any(retrieval_category(name) in ('one','correct one','it','object','thing') for name in targets):
+        missing.append('target category is an unresolved pronoun or generic noun')
     if re.search(r"\b(no|not|never|without|except)\b|n['’]t\b", query, re.I):
         missing.append('negation/exclusion is unsupported')
         parsed['Relations'] = []

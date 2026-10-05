@@ -306,3 +306,14 @@ RGB 为可选输入，目前没有自动下载 ScanNet `.sens`、恢复相机位
 所有状态仍输出最佳猜测 `predicted_id`，标准 accuracy/IoU 的分母不变。
 批量报告额外统计状态数量、accepted_count 和 accepted_accuracy；后者只能结合覆盖率阅读，不能拿筛选后的正确率替代总体准确率。
 当前 10 条开发样本只用于检验诊断是否有效；后续需要固定独立场景做泛化验证。
+
+### 首轮服务器反馈与修复
+
+首轮 diagnostic 为 5/10，10 条均 missing、accepted_count=0，平均流水线耗时约 6.13 秒。
+这没有证明提高准确率。服务器没有提供真实 RGB，missing 包含类别证据不足；部分方向条件还因解析缺少 scope 未能执行。
+原查询之后追加的提示例句被解析器混入 Unhandled，例如电视旁垃圾桶描述被加入朝向冰箱/角落条件。
+已将 diagnostic 解析改为独立 system schema 和 user JSON 查询，移除具象例句，明确每条关系的 scope，并校验 Unhandled 必须来自原句。
+这些校验仍不保证实际模型正确解析；未解析的条件保留缺失。
+扩展候选现在仅用于诊断/RGB 复核，不再改变单张检查图的相机和标号。给定相同解析，新模式的检查图与 ranked_geometry 一致。
+group-facing 的复数类别引文检查也已修正。更新后的流程尚未跑收费 API，不能据离线测试声称恢复 6/10 或更高成绩。
+重跑请使用新目录 `--output local_outputs/nr3d_qwen_diagnostic_02`；旧结果保留供比较。

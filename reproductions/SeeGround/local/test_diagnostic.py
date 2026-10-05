@@ -134,6 +134,30 @@ class DiagnosticTests(unittest.TestCase):
         data=parsed('window nearest door',[])
         self.assertIn('distance extreme condition not represented',data['diagnostic_missing'])
 
+    def test_hallucinated_unhandled_conditions_are_not_sent_as_query_evidence(self):
+        query='window'
+        raw={'Target':['window'],'Anchor':[],'Relations':[], 'Observer':{},'Attributes':[],
+             'Unhandled':['face the fridge and move to a corner']}
+        result=validate_structure(query,raw)
+        self.assertEqual(result['Unhandled'],[])
+        self.assertNotIn('fridge',str(result))
+        self.assertTrue(result['diagnostic_missing'])
+
+    def test_quoted_unhandled_condition_is_preserved(self):
+        raw={'Target':['window'],'Anchor':[],'Relations':[], 'Observer':{},'Attributes':[],
+             'Unhandled':['on the wall']}
+        self.assertEqual(validate_structure('window on the wall',raw)['Unhandled'],['on the wall'])
+
+    def test_plural_category_quote_is_valid_for_group_facing(self):
+        data=parsed('middle of the room facing the windows on the right',[self.direction],
+                    self.origin,{'category':'windows','group':True,'phrase':'facing the windows'})
+        self.assertEqual(data['Observer']['facing']['category'],'windows')
+
+    def test_anaphoric_target_is_explicitly_unresolved(self):
+        raw={'Target':['one'],'Anchor':['cabinet'],'Relations':[], 'Observer':{},'Attributes':[], 'Unhandled':[]}
+        data=validate_structure('facing the cabinets the one on the right',raw)
+        self.assertIn('target category is an unresolved pronoun or generic noun',data['diagnostic_missing'])
+
 
 class RGBReviewTests(unittest.TestCase):
     def fixture(self, root):
