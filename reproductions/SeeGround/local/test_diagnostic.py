@@ -158,6 +158,23 @@ class DiagnosticTests(unittest.TestCase):
         data=validate_structure('facing the cabinets the one on the right',raw)
         self.assertIn('target category is an unresolved pronoun or generic noun',data['diagnostic_missing'])
 
+    def test_annotated_categories_are_known_but_attributes_are_not(self):
+        objects=[obj(1,'window',1,0),obj(2,'refrigerator',2,0)]
+        data=parsed('window',[])
+        result=diagnose(data,objects,objects,[0,0,.5],trusted_categories=True)
+        self.assertEqual(result['candidate_ids'],[1])
+        self.assertEqual(result['status'],'resolved')
+        self.assertEqual(result['visual_needs'],[])
+        data=parsed('black window',[],attrs=[{'category':'window','phrase':'black'}])
+        result=diagnose(data,objects,objects,[0,0,.5],trusted_categories=True)
+        self.assertEqual(result['candidate_ids'],[1])
+        self.assertEqual(result['status'],'missing')
+        self.assertEqual(result['visual_needs'][0]['attributes'],['black'])
+        checks=[{'id':1,'category':'window','verdict':'yes'},{'id':2,'category':'window','verdict':'yes'}]
+        result=diagnose(data,objects,objects,[0,0,.5],checks,trusted_categories=True)
+        self.assertEqual(result['candidate_ids'],[1])
+        self.assertEqual(result['status'],'resolved')
+
 
 class RGBReviewTests(unittest.TestCase):
     def fixture(self, root):

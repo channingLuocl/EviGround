@@ -323,3 +323,35 @@ group-facing 的复数类别引文检查也已修正。更新后的流程尚未�
 已补齐解析提示的完整顶层 JSON 模板，明确后续字段说明不能省略 Target/Anchor；未通过校验的输出仍拒绝进入定位，不猜补类别。
 批处理现在在终端打印 ERROR（失败阶段、异常类型、具体原因），run.json/results.json 保存失败阶段和流水线耗时。
 离线测试不验证模型遵守模板：服务器应先用 `--count 1 --output local_outputs/nr3d_qwen_diagnostic_smoke_03` 检查，再在新目录运行整批。
+
+## 10. 人工类别与预测类别对照
+
+单条/批量入口均新增 `--object-table pred|gt`，默认 pred。
+pred 读取 `objects.json`，gt 读取 `objects_gt.json` 的完整场景表（编号、类别、框）；两者都不把本条查询的 target_id 或 stimulus_id 传给模型。
+GT 场景语义类别可作为 oracle 条件输入，不能与使用预测类别的论文结果直接比较。
+此前文档中“GT 类别仅用于评测”的说明描述旧版/default pred，现在 gt 明确允许场景类别作为输入。
+推理与最终模型提示都读取所选表，run.json/prediction.json/manifest/HTML 报告明确记录来源；两种表不允许复用同一缓存。
+
+diagnostic 的 gt 条件把标注类别当作已知，只检索该类别，不再为纠正类别误标补充邻近实例；pred 保持候选扩展及类别复核。
+人工类别不包含外观判断和参照实例答案：颜色/尺寸等属性、near、缺少站位和未支持条件仍可能导致 missing。
+两组按同样场景、同样 CSV 描述、同样模型与代码运行；解析和最终 API 每次重新调用，模型随机性仍可能影响差异。
+这组检验 oracle 场景语义输入的作用，包含检索、相机和诊断的下游变化，不是固定所有中间证据的单因素消融。
+
+在服务器拉取并测试后，先跑人工类别，再跑本版预测类别作对照（各题默认 2 次调用，若已有 RGB 可能额外复核）：
+
+```bash
+cd ~/paper
+git pull --ff-only
+cd reproductions/SeeGround
+.venv/bin/python -m unittest discover -s local -p 'test*.py'
+
+.venv/bin/python local/batch_nr3d.py --scene scene0011_00 --count 10 \
+  --mode diagnostic --object-table gt --review-limit 6 \
+  --output local_outputs/nr3d_qwen_diagnostic_gt_01
+
+.venv/bin/python local/batch_nr3d.py --scene scene0011_00 --count 10 \
+  --mode diagnostic --object-table pred --review-limit 6 \
+  --output local_outputs/nr3d_qwen_diagnostic_pred_04
+```
+
+本机仅运行模拟 API 测试；真实准确率须以上述服务器运行结果为准。GT 类别带来的提升不属于新增推理算法贡献。

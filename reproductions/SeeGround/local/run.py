@@ -144,12 +144,18 @@ def ground(args):
             'Select an ID from the supplied table using appearance and spatial relations. '
             'Respond as: Predicted ID: <ID>\nExplanation: <reason>.\n'
             f'Objects: {json.dumps(objs)}\nQuery: {args.query}')
+    if getattr(args,'object_table','pred')=='gt':
+        prompt += ('\nObject categories and boxes are supplied scene annotations (oracle object table). '
+                   'Treat these category labels as given. Appearance attributes, reference identity and '
+                   'spatial relations still need checking. No query target ID is supplied.')
     evidence=getattr(args,'evidence',None)
+    annotated=getattr(args,'object_table','pred')=='gt'
     if evidence is not None:
+        category_advice=('Scene categories are annotated; use visual review for appearance conditions. '
+                         if annotated else 'Predicted category labels can be wrong; use the supplied visual review as evidence, not certainty. ')
         prompt += ('\nEvidence: '+json.dumps(evidence)+
                    '\nUse measured distances instead of inferring distance from image position or height. '
-                   'Predicted category labels can be wrong; use the supplied visual review as evidence, '
-                   'not certainty. Unknown or invisible objects are not proven negatives. '
+                   +category_advice+'Unknown or invisible objects are not proven negatives. '
                    'Check every condition in the original query, and state any missing evidence. '
                    'The rendering camera is for inspection, not necessarily the speaker viewpoint. '
                    'Return Predicted ID first, then an explanation of at most 100 words.')
@@ -165,10 +171,12 @@ def ground(args):
                    'Never reinterpret a reference as a target solely because it is close. '
                    'State unresolved category conflicts rather than inventing supporting evidence.')
     if evidence is not None and 'diagnosis' in evidence:
+        category_status=('Annotated categories are known; appearance conditions still require evidence. '
+                         if annotated else 'Unreviewed instances are uncertain; unknown does not mean false. ')
         prompt += ('\nDiagnosis uses shared observer/reference hypotheses with AND conditions, not votes. '
                    'candidate_ids and stable_candidate_ids are conditional on the bounded proposal set. '
                    'Category/appearance checks use supplied real RGB crops when available. '
-                   'Unreviewed instances are uncertain; unknown does not mean false. '
+                   +category_status+
                    'Signed directions are measured in the observer frame, never the inspection camera. '
                    'A side condition is not a leftmost/rightmost ranking. Near is not nearest. '
                    'If diagnosis is missing/ambiguous/conflict, still give a best-effort Predicted ID '

@@ -176,5 +176,42 @@ class RealSceneTests(unittest.TestCase):
             self.assertEqual(first['camera_and_render'],second['camera_and_render'])
             self.assertEqual((root/'ranked/view.png').read_bytes(),(root/'diagnostic/view.png').read_bytes())
 
+    def test_gt_table_retrieves_mislabeled_target_and_is_sent_to_ground(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.scene(root)
+            gt=json.loads((root/'objects.json').read_text());gt[0]['target']='trash can'
+            gt[0]['evaluation_only_fixture']='DO_NOT_SEND_QUERY_ANSWER'
+            (root/'objects_gt.json').write_text(json.dumps(gt))
+            answer=reply(json.dumps({'Target':['trash can'],'Anchor':['tv'],
+                         'Relations':[{'target_category':'trash can','anchor_category':'tv',
+                                       'relation':'nearest','phrase':'nearest tv'}],
+                         'Observer':{},'Attributes':[],'Unhandled':[]}))
+            with patch('real_scene.chat',return_value=answer), \
+                 patch('rgb_review.chat') as review, \
+                 patch('run.chat',return_value=reply('Predicted ID: 1')) as ground:
+                pred=run_query(root,'trash can nearest tv',root/'pred',mode='diagnostic',object_table='pred',review_limit=1)
+                result=run_query(root,'trash can nearest tv',root/'gt',mode='diagnostic',object_table='gt',review_limit=1)
+            review.assert_not_called()
+            record=json.loads((root/'gt/run.json').read_text())
+            self.assertEqual(record['category_target_ids'],[1])
+            self.assertTrue(record['gt_categories_supplied_to_model'])
+            self.assertFalse(record['query_target_id_supplied_to_model'])
+            self.assertEqual(result['objects_file'],'objects_gt.json')
+            self.assertEqual(result['decision_status'],'resolved')
+            self.assertEqual(pred['decision_status'],'missing')
+            prompt=ground.call_args.args[0][0]['content'][-1]['text']
+            self.assertIn('"target": "trash can"',prompt)
+            self.assertNotIn('water cooler',prompt)
+            self.assertNotIn('DO_NOT_SEND_QUERY_ANSWER',prompt)
+            self.assertNotIn('csv_row',prompt)
+
+    def test_invalid_or_missing_table_fails_without_api_fallback(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.scene(root)
+            with patch('real_scene.chat') as api:
+                with self.assertRaises(ValueError):run_query(root,'query',root/'a',object_table='other')
+                with self.assertRaises(FileNotFoundError):run_query(root,'query',root/'b',object_table='gt')
+            api.assert_not_called()
+
 
 if __name__=='__main__':unittest.main()

@@ -12,6 +12,13 @@ from evidence import (match_categories, distance_evidence, match_retrieval_categ
                       distance_rankings, propose_category_checks, validate_distance_relations)
 
 MODES=['baseline','geometry','visual_review','ranked_geometry','category_review','diagnostic']
+OBJECT_TABLES={'pred':'objects.json','gt':'objects_gt.json'}
+
+
+def object_table_path(scene_dir, object_table):
+    if object_table not in OBJECT_TABLES:
+        raise ValueError('object-table must be gt or pred')
+    return scene_dir/OBJECT_TABLES[object_table]
 
 
 def select_objects(names, objects):
@@ -91,24 +98,31 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--scene-dir',type=Path,default=ROOT/'local_outputs/scene0011_00')
     p.add_argument('--query',required=True);p.add_argument('--run-name',default='manual_trial')
     p.add_argument('--mode',choices=MODES,default='baseline')
+    p.add_argument('--object-table',choices=OBJECT_TABLES,default='pred')
     p.add_argument('--review-limit',type=int,default=6);a=p.parse_args()
     if a.review_limit<1:raise ValueError('review-limit must be positive')
     if not re.fullmatch(r'[A-Za-z0-9_-]+',a.run_name):raise ValueError('run-name 只能使用字母、数字、下划线或连字符')
     out=a.scene_dir/a.run_name
     if out.exists():raise ValueError('输出目录已存在，请换一个 run-name，防止覆盖既有实验')
-    run_query(a.scene_dir,a.query,out,mode=a.mode,review_limit=a.review_limit)
+    run_query(a.scene_dir,a.query,out,mode=a.mode,review_limit=a.review_limit,object_table=a.object_table)
 
 
-def run_query(scene_dir, query, out, query_source='manually authored exploratory query, NOT an Nr3D benchmark annotation', mode='baseline', review_limit=6):
+def run_query(scene_dir, query, out, query_source='manually authored exploratory query, NOT an Nr3D benchmark annotation', mode='baseline', review_limit=6, object_table='pred'):
     if mode not in MODES:
         raise ValueError('未知实验模式')
     if review_limit<1:raise ValueError('review-limit must be positive')
     started=perf_counter()
-    objects=load_objects(scene_dir/'objects.json')
+    objects_path=object_table_path(scene_dir,object_table)
+    objects=load_objects(objects_path)
     out.mkdir(parents=True,exist_ok=True)
     calls=[]
     record={'query':query,'query_source':query_source,'mode':mode,'calls':calls,
-            'ground_truth_supplied_to_model':False,'adaptations':['CPU pinhole rendering','predicted category labels']}
+            'object_table':object_table,'objects_file':objects_path.name,
+            'ground_truth_supplied_to_model':object_table=='gt',
+            'gt_categories_supplied_to_model':object_table=='gt',
+            'query_target_id_supplied_to_model':False,
+            'adaptations':['CPU pinhole rendering',
+                           'annotated category labels (oracle OLT)' if object_table=='gt' else 'predicted category labels']}
     stage='load_scene'
     try:
         with np.load(scene_dir/'scene.npz',allow_pickle=False) as cloud:
@@ -128,13 +142,15 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         if mode=='diagnostic':
             stage='diagnostic_review'
             from rgb_review import selective_review
-            proposed=propose_category_checks(objects,matched_targets,anchors,review_limit)
+            proposed=[] if object_table=='gt' else propose_category_checks(objects,matched_targets,anchors,review_limit)
             # Expand recall conservatively; unknown proposals remain uncertain, never certified targets.
             diagnostic_targets=list({o['bbox_id']:o for o in matched_targets+proposed}.values()) or objects
             room_center=(xyz.min(0)+xyz.max(0))/2
-            diagnosis=selective_review(parsed,objects,diagnostic_targets,room_center,scene_dir,calls,review_limit)
+            diagnosis=selective_review(parsed,objects,diagnostic_targets,room_center,scene_dir,calls,review_limit,
+                                       trusted_categories=object_table=='gt')
             record.update(diagnosis=diagnosis,review_proposal={'ids':[o['bbox_id'] for o in diagnostic_targets],
-                          'policy':'predicted targets plus bounded spatial neighbors; incomplete recall'},
+                          'policy':'annotated-category candidates' if object_table=='gt' else
+                                   'predicted targets plus bounded spatial neighbors; incomplete recall'},
                           review_limit=review_limit)
         record.update(parsed_query=parsed,category_target_ids=[o['bbox_id'] for o in matched_targets],
                       category_anchor_ids=[o['bbox_id'] for o in matched_anchors],
@@ -205,9 +221,11 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         if diagnosis is not None:
             evidence['diagnosis']=diagnosis
             evidence['supplementary_geometry']=distance_evidence(diagnostic_targets,anchors)
+        if evidence is not None:
+            evidence['object_table']=object_table
         print(json.dumps({'parsed':parsed,'marked_ids':info['marked_ids'],'mode':mode},ensure_ascii=False),flush=True)
         stage='ground'
-        prediction=ground(SimpleNamespace(image=str(out/'view.png'),objects=str(scene_dir/'objects.json'),
+        prediction=ground(SimpleNamespace(image=str(out/'view.png'),objects=str(objects_path),object_table=object_table,
                           query=query,dry_run=False,output=str(out/'prediction.json'),
                           evidence=evidence,extra_images=extra))
         calls.append({'stage':'ground','response':prediction['response'],'usage':prediction['usage'],
@@ -224,7 +242,9 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             prediction.update(decision_status=status,accepted=status=='resolved',
                               decision_reasons=reasons,diagnosis=diagnosis)
             record['decision_status']=status
-        prediction.update(mode=mode,pipeline_latency_s=round(perf_counter()-started,4),
+        prediction.update(mode=mode,object_table=object_table,objects_file=objects_path.name,
+                          gt_categories_supplied_to_model=object_table=='gt',query_target_id_supplied_to_model=False,
+                          pipeline_latency_s=round(perf_counter()-started,4),
                           api_calls=len(calls),call_usage=[c.get('usage') for c in calls])
         (out/'prediction.json').write_text(json.dumps(prediction,ensure_ascii=False,indent=2))
         return prediction

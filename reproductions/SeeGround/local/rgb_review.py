@@ -73,11 +73,11 @@ def review_need(need, crops, calls):
     return result
 
 
-def selective_review(parsed, objects, candidates, room_center, scene_dir, calls, limit):
+def selective_review(parsed, objects, candidates, room_center, scene_dir, calls, limit, trusted_categories=False):
     from diagnostic import diagnose
     crops = load_crops(scene_dir, objects)
     checks, actions, attempted = [], [], set()
-    diagnosis = diagnose(parsed, objects, candidates, room_center)
+    diagnosis = diagnose(parsed, objects, candidates, room_center, trusted_categories=trusted_categories)
     initial = diagnosis['status']
     for _ in range(limit):
         needs = [n for n in diagnosis['visual_needs'] if (n['id'], n['category']) not in attempted]
@@ -92,7 +92,7 @@ def selective_review(parsed, objects, candidates, room_center, scene_dir, calls,
         attempted.add((need['id'], need['category']))
         actions.append({'action':'rgb_review','trigger_status':diagnosis['status'], **need})
         checks.append(review_need(need, crops, calls))
-        diagnosis = diagnose(parsed, objects, candidates, room_center, checks)
+        diagnosis = diagnose(parsed, objects, candidates, room_center, checks, trusted_categories=trusted_categories)
     diagnosis.update(initial_status=initial, actions=actions, review_limit=limit,
                      rgb_manifest_present=(scene_dir/'rgb_crops.json').exists(),
                      rgb_binding='user-supplied projected-instance provenance, not independently certified')

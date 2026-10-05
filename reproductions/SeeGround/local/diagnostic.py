@@ -159,7 +159,7 @@ def attributes_for(parsed, category):
     return [a['phrase'] for a in parsed['Attributes'] if retrieval_category(a['category']) == retrieval_category(category)]
 
 
-def diagnose(parsed, objects, candidates, room_center, checks=()):
+def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_categories=False):
     """Unknown category evidence stays eligible; predicates are ANDed per interpretation."""
     target_names = parsed['Target'] if isinstance(parsed['Target'], list) else [parsed['Target']]
     names = {retrieval_category(n) for n in target_names if retrieval_category(n)}
@@ -168,7 +168,13 @@ def diagnose(parsed, objects, candidates, room_center, checks=()):
         missing.append('requires one bound target category')
     category = next(iter(names)) if len(names) == 1 else ''
     checks_by_key = {(c['id'], c['category']): c for c in checks}
+    by_id = {o['bbox_id']:o for o in objects}
     def verdict(oid, name):
+        if trusted_categories:
+            if not match_retrieval_categories([name], [by_id[oid]]):
+                return 'no'
+            if not attributes_for(parsed, name):
+                return 'yes'
         return checks_by_key.get((oid, retrieval_category(name)), {}).get('verdict', 'uncertain')
     eligible = [o for o in candidates if verdict(o['bbox_id'], category) != 'no']
     directions = any(r['relation'] in ('left', 'right', 'front', 'back') for r in parsed['Relations'])
@@ -291,4 +297,6 @@ def diagnose(parsed, objects, candidates, room_center, checks=()):
             'hypotheses': hypotheses, 'visual_needs': needs, 'checks': list(checks),
             'scope': 'bounded proposed instances, center-distance geometry, parser and VLM evidence; not linguistic uniqueness',
             'room_center_definition': 'center of point-cloud AABB, approximation only',
-            'hypotheses_are_votes': False}
+            'hypotheses_are_votes': False, 'category_source': 'annotated' if trusted_categories else 'predicted',
+            'category_policy': 'annotated categories trusted; appearance still requires evidence' if trusted_categories
+                               else 'category and appearance require visual support'}
