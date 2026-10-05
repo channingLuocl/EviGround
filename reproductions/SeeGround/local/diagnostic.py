@@ -322,6 +322,23 @@ def _size_ids(objects, category, phrase):
         'proxy': 'AABB volume' if metric == 'volume_m3' else 'AABB height'}
 
 
+def _candidate_metrics(objects, category, selected):
+    """Expose comparable box measurements without turning adjectives into filters."""
+    pool = match_retrieval_categories([category], objects)
+    volume_order = sorted(pool, key=lambda obj: _box_metrics(obj)['volume_m3'])
+    height_order = sorted(pool, key=lambda obj: _box_metrics(obj)['height_m'])
+    volume_rank = {obj['bbox_id']: index + 1 for index, obj in enumerate(volume_order)}
+    height_rank = {obj['bbox_id']: index + 1 for index, obj in enumerate(height_order)}
+    records = []
+    for obj in selected:
+        metrics = _box_metrics(obj)
+        records.append({'id': obj['bbox_id'], 'category': category,
+                        **metrics, 'volume_rank': volume_rank.get(obj['bbox_id']),
+                        'height_rank': height_rank.get(obj['bbox_id']),
+                        'pool_size': len(pool)})
+    return records
+
+
 def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_categories=False):
     """Unknown category evidence stays eligible; predicates are ANDed per interpretation."""
     rewritten = parsed.get('query_rewrite') if isinstance(parsed, dict) else None
@@ -356,6 +373,10 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
             'horizontal_gap_max_m': HORIZONTAL_ALIGNMENT_GAP_M,
             'vertical_clearance_tolerance_m': VERTICAL_CLEARANCE_TOLERANCE_M,
             'requires_vertical_separation': True,
+        },
+        'size_policy': {
+            'metric': 'AABB volume, footprint and height',
+            'adjective_policy': 'small/large are soft evidence; only explicit superlatives filter',
         },
     }
     def verdict(oid, name):
@@ -426,6 +447,11 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
             missing.append('missing reference category: ' + name)
         else:
             references[name] = matches
+    geometry['candidate_metrics'] = _candidate_metrics(objects, category, eligible) if category else []
+    geometry['reference_metrics'] = [
+        metric for name, matches in references.items()
+        for metric in _candidate_metrics(objects, name, matches)
+    ]
     anchor_names = parsed.get('Anchor', [])
     if isinstance(anchor_names, str):
         anchor_names = [anchor_names]

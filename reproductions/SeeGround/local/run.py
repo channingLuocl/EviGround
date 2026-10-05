@@ -174,6 +174,8 @@ def ground(args):
         prompt += ('\nGeometry conditions separate target and reference noun phrases, even for the same category. '
                    'Use measured height and world-Z position to distinguish tall from upper/lower. '
                    'For smallest/largest compare both AABB volume and footprint within the stated category pool; '
+                   'For ordinary small/large adjectives, use candidate size metrics as soft evidence only; '
+                   'do not silently convert them into a smallest/largest filter. '
                    'these are proxies, not physical object volume or a bound linguistic subset. '
                    'A tall reference is not automatically the tallest. Check reference descriptors independently '
                    'from target descriptors, then use distances for that SAME reference ID. '

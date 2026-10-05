@@ -267,6 +267,20 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(result['geometry']['size_constraints'][0]['metric'], 'volume_m3')
         self.assertEqual(result['visual_needs'],[])
 
+    def test_candidate_size_metrics_are_soft_evidence_for_adjectives(self):
+        objects=[obj(1,'cabinet',0,0), obj(2,'cabinet',1,0)]
+        objects[0]['bbox_3d'][3:] = [.4,.4,.5]
+        objects[1]['bbox_3d'][3:] = [1.,1.,2.]
+        raw={'Target':['cabinet'],'Anchor':[],'Relations':[],
+             'Observer':{},'Attributes':[{'category':'cabinet','phrase':'small'}], 'Unhandled':[]}
+        data=validate_structure('the small cabinet', raw)
+        result=diagnose(data, objects, objects, [0,0,.5], supported(objects),
+                        trusted_categories=True)
+        metrics={item['id']:item for item in result['geometry']['candidate_metrics']}
+        self.assertEqual(metrics[1]['volume_rank'], 1)
+        self.assertEqual(metrics[2]['volume_rank'], 2)
+        self.assertEqual(result['candidate_ids'], [1,2])
+
 
 class RGBReviewTests(unittest.TestCase):
     def fixture(self, root):
