@@ -53,6 +53,8 @@ def distance_evidence(targets, anchors):
 def retrieval_category(name):
     """Remove common appearance modifiers only for category retrieval."""
     text = canonical_category(name)
+    if text in {'wall', 'floor', 'ground', 'ceiling'}:
+        return text
     modifiers = {'large', 'small', 'big', 'little', 'black', 'white', 'red', 'blue',
                  'green', 'gray', 'grey', 'brown', 'wooden', 'wall', 'mounted'}
     return ' '.join(word for word in text.split() if word not in modifiers)

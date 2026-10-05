@@ -4,6 +4,21 @@ from query_rewrite import constraints_as_relations, rewrite_query
 
 
 class QueryRewriteTests(unittest.TestCase):
+    def test_between_keeps_two_reference_bindings(self):
+        query = 'the cabinet between the stove and the wall'
+        result = rewrite_query(query, {
+            'Target': ['cabinet'], 'Anchor': ['stove', 'wall'],
+            'Relations': [{'target_category': 'cabinet',
+                           'anchor_categories': ['stove', 'wall'],
+                           'relation': 'between', 'scope': 'relative_anchors',
+                           'phrase': 'between the stove and the wall'}],
+            'Attributes': [], 'Unhandled': [], 'Observer': {},
+        })
+        self.assertEqual(result['constraints'][0]['type'], 'between')
+        self.assertEqual(result['constraints'][0]['references'], ['stove', 'wall'])
+        relation = constraints_as_relations(result)[0]
+        self.assertEqual(relation['anchor_categories'], ['stove', 'wall'])
+
     def test_category_alias_is_normalized_and_kept_for_audit(self):
         query = 'the cabinet above the countertop'
         result = rewrite_query(query, {

@@ -182,7 +182,9 @@ def ground(args):
                    'Never bind an object to itself or average over different reference instances. '
                    'Do not replace next to/away from with nearest/farthest. '
                    'Positive center-Z difference does not prove the boxes are disjoint or directly above; '
-                   'check vertical bounds and horizontal overlap. No geometric proxy certifies missing appearance.')
+                   'check vertical bounds and horizontal overlap. For between, use the reported target-to-reference '
+                   'horizontal corridor and require both reference IDs in the same hypothesis. '
+                   'No geometric proxy certifies missing appearance.')
     if evidence is not None and evidence.get('query_rewrite'):
         prompt += ('\nDeterministic query rewrite (audit record): '+json.dumps(evidence['query_rewrite'])+
                    '\nUse it only as a normalization of quoted language. Preserve the original query as authoritative; '

@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 import numpy as np
 from PIL import Image
-from diagnostic import recover_distance_relations, validate_structure, diagnose
+from diagnostic import recover_between_relations, recover_distance_relations, validate_structure, diagnose
 from evidence import validate_distance_relations
 from rgb_review import load_crops, input_hashes, selective_review
 
@@ -253,6 +253,32 @@ class DiagnosticTests(unittest.TestCase):
         self.assertTrue(pair['horizontal_alignment_passes'])
         self.assertTrue(pair['vertical_separation_passes'])
         self.assertEqual(result['geometry']['vertical_policy']['horizontal_gap_max_m'], .5)
+
+    def test_between_relation_uses_two_reference_centers(self):
+        objects=[obj(1,'cabinet',0,0), obj(2,'stove',-2,0), obj(3,'wall',2,0)]
+        raw={'Target':['cabinet'],'Anchor':['stove','wall'],'Relations':[],
+             'Observer':{},'Attributes':[],'Unhandled':[]}
+        data=validate_structure('cabinet between the stove and the wall',
+                                recover_between_relations('cabinet between the stove and the wall', raw))
+        result=diagnose(data, objects, objects[:1], [0,0,.5], supported(objects),
+                        trusted_categories=True)
+        self.assertEqual(result['candidate_ids'], [1])
+        evidence=result['geometry']['between_triplets'][0]
+        self.assertAlmostEqual(evidence['projection_t'], .5, places=6)
+        self.assertTrue(evidence['passes'])
+
+    def test_between_rejects_lateral_and_endpoint_candidates(self):
+        anchors=[obj(2,'stove',-2,0), obj(3,'wall',2,0)]
+        for target in (obj(1,'cabinet',0,1), obj(1,'cabinet',3,0)):
+            objects=[target, *anchors]
+            raw={'Target':['cabinet'],'Anchor':['stove','wall'],'Relations':[],
+                 'Observer':{},'Attributes':[],'Unhandled':[]}
+            query='cabinet between the stove and the wall'
+            data=validate_structure(query, recover_between_relations(query, raw))
+            result=diagnose(data, objects, objects[:1], [0,0,.5], supported(objects),
+                            trusted_categories=True)
+            self.assertEqual(result['candidate_ids'], [])
+            self.assertFalse(result['geometry']['between_triplets'][0]['passes'])
 
     def test_size_and_floor_constraints_use_box_proxies(self):
         objects=[obj(1,'cabinet',0,0), obj(2,'cabinet',0,1)]

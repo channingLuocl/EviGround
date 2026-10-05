@@ -34,7 +34,8 @@ Use facing.group=true ONLY when the description explicitly faces a plural/group.
 Direction relations use left|right|front|back, plus scope=relative_anchor|side.
 relative_anchor means target is on a named reference's side in the observer frame;
 side means a signed side of the observer, NOT leftmost/rightmost among peers.
-Use other+Unhandled for extremes, object-intrinsic axes, between, ordinal or unsupported relations.
+Use between with anchor_categories for a target located between two named references.
+Use other+Unhandled for extremes, object-intrinsic axes, ordinal or unsupported relations.
 Separate facing references from target relations; include their categories in Anchor.
 Resolve pronouns to an actual category in the description, never use a pronoun as a category.
 Every relation and observer phrase must be a nonempty EXACT quote.
@@ -116,8 +117,45 @@ def recover_vertical_relations(query, parsed):
     return parsed
 
 
+def recover_between_relations(query, parsed):
+    """Recover a two-reference horizontal relation omitted by the parser."""
+    parsed = dict(parsed)
+    relations = [dict(r) for r in (parsed.get('Relations') or []) if isinstance(r, dict)]
+    targets = parsed.get('Target') if isinstance(parsed.get('Target'), list) else []
+    anchors = parsed.get('Anchor') if isinstance(parsed.get('Anchor'), list) else []
+    if len(targets) != 1 or len(anchors) < 2:
+        parsed['Relations'] = relations
+        return parsed
+    for relation in relations:
+        if relation.get('relation') == 'between':
+            names = relation.get('anchor_categories')
+            if (not isinstance(names, list) or len(names) != 2) and len(anchors) >= 2:
+                relation['anchor_categories'] = [name.strip() for name in anchors[:2]
+                                                 if isinstance(name, str) and name.strip()]
+            relation.setdefault('scope', 'relative_anchors')
+            parsed['Relations'] = relations
+            return parsed
+    match = re.search(r'\bbetween\b', query, re.I)
+    if not match:
+        parsed['Relations'] = relations
+        return parsed
+    anchor_categories = [name.strip() for name in anchors[:2]
+                         if isinstance(name, str) and name.strip()]
+    if len(anchor_categories) != 2:
+        parsed['Relations'] = relations
+        return parsed
+    phrase = query[match.start():].strip().rstrip('.,!?')
+    relations.append({'target_category': targets[0],
+                      'anchor_categories': anchor_categories,
+                      'relation': 'between', 'scope': 'relative_anchors',
+                      'phrase': phrase})
+    parsed['Relations'] = relations
+    parsed['recovered_between_relations'] = [relations[-1]]
+    return parsed
+
+
 def validate_structure(query, parsed):
-    parsed = recover_vertical_relations(query, dict(parsed))
+    parsed = recover_between_relations(query, recover_vertical_relations(query, dict(parsed)))
     missing = []
     relations = parsed.get('Relations', [])
     valid = []
@@ -125,9 +163,15 @@ def validate_structure(query, parsed):
         kind = relation.get('relation')
         phrase = relation.get('phrase')
         valid_quote = quoted(query, phrase)
-        target_name, anchor_name = relation.get('target_category'), relation.get('anchor_category', '')
+        target_name = relation.get('target_category')
+        anchor_name = relation.get('anchor_category', '')
+        anchor_names = relation.get('anchor_categories', []) if kind == 'between' else [anchor_name]
         valid_quote = valid_quote and isinstance(target_name, str) and bool(target_name.strip())
-        if kind in ('nearest', 'farthest', 'near', 'above', 'below') or relation.get('scope') == 'relative_anchor':
+        if kind == 'between':
+            valid_quote = (valid_quote and isinstance(anchor_names, list) and len(anchor_names) == 2
+                           and all(isinstance(name, str) and bool(name.strip()) for name in anchor_names)
+                           and bool(re.search(r'\bbetween\b', phrase, re.I)))
+        elif kind in ('nearest', 'farthest', 'near', 'above', 'below') or relation.get('scope') == 'relative_anchor':
             valid_quote = valid_quote and isinstance(anchor_name, str) and bool(anchor_name.strip())
         if kind in ('left', 'right', 'front', 'back'):
             words = {'left': r'\bleft\b', 'right': r'\bright\b',
@@ -136,7 +180,7 @@ def validate_structure(query, parsed):
             valid_quote = valid_quote and relation.get('scope') in ('relative_anchor', 'side')
         if kind in ('above', 'below'):
             valid_quote = valid_quote and bool(re.search(r'\b(above|over|below|under|beneath)\b', phrase, re.I))
-        if not valid_quote or kind not in ('nearest', 'farthest', 'near', 'left', 'right', 'front', 'back', 'above', 'below'):
+        if not valid_quote or kind not in ('nearest', 'farthest', 'near', 'left', 'right', 'front', 'back', 'above', 'below', 'between'):
             missing.append('unsupported relation: ' + phrase if quoted(query, phrase)
                            else 'parser produced an unquoted relation; not a query condition')
         else:
@@ -208,7 +252,7 @@ def validate_structure(query, parsed):
                                   (r'\b(next to|beside|near)\b', ('near',), 'proximity')):
         if re.search(pattern, query, re.I) and not any(r['relation'] in kinds for r in parsed['Relations']):
             missing.append(label + ' condition not represented')
-    if re.search(r'\b(corner|between|leftmost|rightmost|second|third)\b', query, re.I):
+    if re.search(r'\b(corner|leftmost|rightmost|second|third)\b', query, re.I):
         missing.append('corner/ordinal/support/extreme conditions require additional predicates')
     if re.search(r'\b(above|over|below|under|beneath)\b', query, re.I) and not any(
             r['relation'] in ('above', 'below') for r in parsed['Relations']):
@@ -271,6 +315,39 @@ def _pair_geometry(target, anchor):
             'horizontal_overlap_m2': float(horizontal_overlap[0] * horizontal_overlap[1]),
             'vertical_overlap_m': float(vertical_overlap),
             'center_distance_m': float(np.linalg.norm(a[:3] - b[:3]))}
+
+
+def _between_geometry(target, anchor_a, anchor_b):
+    """Measure whether a target footprint lies in the horizontal corridor A-B."""
+    target_box = np.asarray(target['bbox_3d'], dtype=float)
+    a_box = np.asarray(anchor_a['bbox_3d'], dtype=float)
+    b_box = np.asarray(anchor_b['bbox_3d'], dtype=float)
+    start, end, point = a_box[:2], b_box[:2], target_box[:2]
+    direction = end - start
+    length = float(np.linalg.norm(direction))
+    if length <= 1e-6:
+        return {'target_id': target['bbox_id'], 'anchor_ids': [anchor_a['bbox_id'], anchor_b['bbox_id']],
+                'relation': 'between', 'projection_t': None, 'perpendicular_distance_m': None,
+                'lateral_tolerance_m': None, 'within_segment': False, 'passes': False,
+                'reason': 'reference centers are coincident'}
+    unit = direction / length
+    normal = np.asarray([-unit[1], unit[0]])
+    projection_t = float(np.dot(point - start, direction) / (length * length))
+    projected = start + projection_t * direction
+    perpendicular_distance = float(np.linalg.norm(point - projected))
+    # Project the target's XY AABB onto the corridor normal. The small margin
+    # covers reconstruction noise without allowing a separate nearby object.
+    half_lateral_extent = 0.5 * (abs(normal[0]) * target_box[3] +
+                                 abs(normal[1]) * target_box[4])
+    lateral_tolerance = max(0.15, float(half_lateral_extent) + 0.10)
+    within_segment = 0.0 <= projection_t <= 1.0
+    return {'target_id': target['bbox_id'], 'anchor_ids': [anchor_a['bbox_id'], anchor_b['bbox_id']],
+            'relation': 'between', 'projection_t': projection_t,
+            'perpendicular_distance_m': perpendicular_distance,
+            'lateral_tolerance_m': lateral_tolerance,
+            'within_segment': within_segment,
+            'passes': bool(within_segment and perpendicular_distance <= lateral_tolerance),
+            'reference_center_distance_m': length}
 
 
 def _vertical_match(pair, relation):
@@ -368,6 +445,7 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
     by_id = {o['bbox_id']:o for o in objects}
     geometry = {
         'size_constraints': [], 'floor_constraint': None, 'relation_pairs': [],
+        'between_triplets': [],
         'vertical_policy': {
             'horizontal_overlap_required': False,
             'horizontal_gap_max_m': HORIZONTAL_ALIGNMENT_GAP_M,
@@ -424,7 +502,10 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
             continue
         if relation['relation'] == 'near':
             missing.append('near has no calibrated predicate; distances are evidence only')
-        if relation['relation'] in ('nearest', 'farthest', 'near') or relation.get('scope') == 'relative_anchor':
+        if relation['relation'] == 'between':
+            reference_names.update(retrieval_category(name)
+                                   for name in relation.get('anchor_categories', []))
+        elif relation['relation'] in ('nearest', 'farthest', 'near') or relation.get('scope') == 'relative_anchor':
             reference_names.add(retrieval_category(relation.get('anchor_category', '')))
     references = {}
     for name in sorted(reference_names):
@@ -484,11 +565,27 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                 if retrieval_category(relation.get('target_category', '')) != category:
                     continue
                 kind = relation['relation']
-                anchor = binding.get(retrieval_category(relation.get('anchor_category', '')))
+                relation_anchor_names = (relation.get('anchor_categories', [])
+                                         if kind == 'between' else
+                                         [relation.get('anchor_category', '')])
+                relation_anchors = [binding.get(retrieval_category(name))
+                                    for name in relation_anchor_names]
+                anchor = relation_anchors[0] if relation_anchors else None
                 if anchor and anchor['bbox_id'] == oid:
                     passed = False
                     break
-                if kind in ('nearest', 'farthest') and anchor:
+                if kind == 'between':
+                    if len(relation_anchors) != 2 or any(item is None for item in relation_anchors):
+                        passed = False
+                        continue
+                    if any(item['bbox_id'] == oid for item in relation_anchors):
+                        passed = False
+                        break
+                    between = _between_geometry(target, relation_anchors[0], relation_anchors[1])
+                    geometry['between_triplets'].append(between)
+                    measured.append(between)
+                    passed = passed and between['passes']
+                elif kind in ('nearest', 'farthest') and anchor:
                     distances = [(o['bbox_id'], float(np.linalg.norm(np.asarray(o['bbox_3d'][:3])-anchor['bbox_3d'][:3])))
                                  for o in eligible if o['bbox_id'] != anchor['bbox_id']]
                     best = (min if kind == 'nearest' else max)(d for _, d in distances)

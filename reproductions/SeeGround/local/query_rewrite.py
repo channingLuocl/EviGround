@@ -14,6 +14,7 @@ RELATION_TYPES = {
     'back': 'back_of',
     'above': 'above',
     'below': 'below',
+    'between': 'between',
 }
 VERTICAL_WORDS = {'over': 'above', 'above': 'above', 'below': 'below',
                   'under': 'below', 'beneath': 'below'}
@@ -105,16 +106,29 @@ def rewrite_query(query, parsed):
         relation_type = relation.get('relation')
         phrase = relation.get('phrase', '')
         target = _category(relation.get('target_category', ''))
-        reference = _category(relation.get('anchor_category', ''))
-        if relation_type not in RELATION_TYPES or not target or not reference or not _quote(query, phrase):
+        raw_references = (relation.get('anchor_categories', []) if relation_type == 'between'
+                          else [relation.get('anchor_category', '')])
+        references_for_relation = [_category(value) for value in raw_references]
+        if (relation_type not in RELATION_TYPES or not target or
+                any(not reference for reference in references_for_relation) or
+                not _quote(query, phrase) or
+                (relation_type == 'between' and len(references_for_relation) != 2)):
             unresolved.append({'phrase': phrase, 'reason': 'relation is incomplete or unquoted'})
             continue
-        add_reference(relation.get('anchor_category', ''), 'anchor', phrase)
-        constraints.append({'type': RELATION_TYPES[relation_type], 'target': target,
-                            'reference': reference, 'raw_target_category': _raw_category(relation.get('target_category', '')),
-                            'raw_reference_category': _raw_category(relation.get('anchor_category', '')),
-                            'scope': relation.get('scope', ''),
-                            'phrase': phrase, 'confidence': 'lexical'})
+        for raw_reference in raw_references:
+            add_reference(raw_reference, 'anchor', phrase)
+        constraint = {'type': RELATION_TYPES[relation_type], 'target': target,
+                      'scope': relation.get('scope', ''),
+                      'phrase': phrase, 'confidence': 'lexical'}
+        if relation_type == 'between':
+            constraint.update({'references': references_for_relation,
+                               'raw_reference_categories': [_raw_category(value) for value in raw_references],
+                               'raw_target_category': _raw_category(relation.get('target_category', ''))})
+        else:
+            constraint.update({'reference': references_for_relation[0],
+                               'raw_target_category': _raw_category(relation.get('target_category', '')),
+                               'raw_reference_category': _raw_category(raw_references[0])})
+        constraints.append(constraint)
 
     for attribute in parsed.get('Attributes', []) or []:
         compiled = _attribute_constraint(attribute, query, target_category)
@@ -165,10 +179,19 @@ def constraints_as_relations(rewritten):
     for constraint in rewritten.get('constraints', []) if isinstance(rewritten, dict) else []:
         relation = next((name for name, kind in RELATION_TYPES.items()
                          if kind == constraint.get('type')), None)
-        if relation is None or not constraint.get('reference'):
+        if relation is None:
             continue
-        result.append({'target_category': constraint.get('target', ''),
-                       'anchor_category': constraint.get('reference', ''),
-                       'relation': relation, 'scope': constraint.get('scope', ''),
-                       'phrase': constraint.get('phrase', '')})
+        if relation == 'between':
+            references = constraint.get('references', [])
+            if len(references) != 2:
+                continue
+            result.append({'target_category': constraint.get('target', ''),
+                           'anchor_categories': references, 'relation': relation,
+                           'scope': constraint.get('scope', ''),
+                           'phrase': constraint.get('phrase', '')})
+        elif constraint.get('reference'):
+            result.append({'target_category': constraint.get('target', ''),
+                           'anchor_category': constraint.get('reference', ''),
+                           'relation': relation, 'scope': constraint.get('scope', ''),
+                           'phrase': constraint.get('phrase', '')})
     return result

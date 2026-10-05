@@ -59,14 +59,16 @@ def parse_query(query, mode='baseline', calls=None):
                 'Return exactly this JSON shape (arrays may be empty): '
                 '{"Target":["category"],"Anchor":["category"],'
                 '"Relations":[{"target_category":"category","anchor_category":"category",'
+                '"anchor_categories":["category","category"],'
                 '"relation":"near","scope":"","phrase":"exact quote"}],'
                 '"Viewpoint":"","Observer":{"origin":{"kind":"unspecified",'
                 '"category":"","phrase":""},"facing":{"category":"",'
                 '"group":false,"phrase":""}},"Attributes":[],"Unhandled":[]}. '
                 'Return Target and Anchor as arrays, Relations as an array, and Viewpoint as a string. '
                 'Each relation has target_category, anchor_category, relation, scope and phrase. '
-                'relation is nearest|farthest|near|left|right|front|back|above|below|other. '
-                'scope is side|relative_anchor; use an empty scope for distance relations. '
+                'relation is nearest|farthest|near|left|right|front|back|above|below|between|other. '
+                'For between, provide anchor_categories with exactly two named references. '
+                'scope is side|relative_anchor|relative_anchors; use an empty scope for distance relations. '
                 'Use nearest/farthest only for explicit distance superlatives, never proximity or motion. '
                 'Preserve every condition and its exact quote. Use singular category names without '
                 'appearance modifiers. No observer/category/reference may be invented. '
@@ -87,8 +89,9 @@ def parse_query(query, mode='baseline', calls=None):
     if mode in ('ranked_geometry','category_review','diagnostic'):
         obj=validate_distance_relations(query,obj)
     if mode=='diagnostic':
-        from diagnostic import recover_distance_relations, validate_structure
+        from diagnostic import recover_between_relations, recover_distance_relations, validate_structure
         obj=recover_distance_relations(query,obj)
+        obj=recover_between_relations(query,obj)
         obj=validate_structure(query,obj)
         from query_rewrite import rewrite_query
         obj['query_rewrite'] = rewrite_query(query, obj)
