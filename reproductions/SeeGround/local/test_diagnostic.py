@@ -51,6 +51,15 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(result['status'], 'missing')
         self.assertTrue(result['visual_needs'])
 
+    def test_attribute_modifier_cannot_be_used_as_its_own_category(self):
+        checked = validate_structure('Choose the skinny cabinet.', {
+            'Target': ['cabinet'], 'Anchor': [], 'Relations': [], 'Observer': {},
+            'Attributes': [{'category': 'skinny', 'phrase': 'skinny'}], 'Unhandled': [],
+        })
+        self.assertEqual(checked['Attributes'], [])
+        self.assertIn('appearance condition not represented: skinny',
+                      checked['diagnostic_missing'])
+
     def test_containment_cannot_resolve_even_with_positive_appearance_check(self):
         for verb in ('includes', 'contains', 'including', 'containing'):
             with self.subTest(verb=verb):

@@ -225,7 +225,34 @@ def validate_structure(query, parsed):
     if not isinstance(attrs, list) or any(not isinstance(a, dict) for a in attrs):
         missing.append('attribute coverage not supplied by parser')
         attrs = []
-    parsed['Attributes'] = [a for a in attrs if quoted(query, a.get('phrase')) and isinstance(a.get('category'), str)]
+    bound_categories = set()
+    for key in ('Target', 'Anchor'):
+        names = parsed.get(key, [])
+        names = names if isinstance(names, list) else [names]
+        bound_categories.update(retrieval_category(name) for name in names
+                                if isinstance(name, str) and retrieval_category(name))
+    for relation in parsed['Relations']:
+        for key in ('target_category', 'anchor_category'):
+            name = relation.get(key, '')
+            if isinstance(name, str) and retrieval_category(name):
+                bound_categories.add(retrieval_category(name))
+        for name in relation.get('anchor_categories', []):
+            if isinstance(name, str) and retrieval_category(name):
+                bound_categories.add(retrieval_category(name))
+    observer = parsed['Observer']
+    for role in ('origin', 'facing'):
+        name = observer.get(role, {}).get('category', '')
+        if isinstance(name, str) and retrieval_category(name):
+            bound_categories.add(retrieval_category(name))
+    valid_attrs = []
+    for attribute in attrs:
+        category_name = attribute.get('category')
+        if (quoted(query, attribute.get('phrase')) and isinstance(category_name, str)
+                and retrieval_category(category_name) in bound_categories):
+            valid_attrs.append(attribute)
+        elif quoted(query, attribute.get('phrase')):
+            missing.append('attribute category is not a supplied target/reference: ' + category_name)
+    parsed['Attributes'] = valid_attrs
     if len(parsed['Attributes']) != len(attrs):
         missing.append('unquoted or unbound appearance attribute')
     covered = ' '.join(a['phrase'] for a in parsed['Attributes'])
