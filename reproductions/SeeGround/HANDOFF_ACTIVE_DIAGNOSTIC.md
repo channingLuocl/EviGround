@@ -4,7 +4,7 @@
 
 The current objective is to improve real-scene Nr3D grounding. Category matching creates the initial target candidates. The model then chooses the next evidence dimension from the query and current candidate differences. Python tools produce auditable evidence and update the live candidate set. The loop continues until one candidate remains or records insufficient evidence.
 
-JEV is out of scope for this phase. Prioritize candidate disambiguation and operation quality.
+The outer ReAct planner now defaults to JEV with text/JSON state only. Qwen remains the query parser and internal visual verifier. Individual evidence algorithms are the next work.
 
 The intended bounded ReAct loop is:
 
@@ -28,24 +28,30 @@ The worktree contains unrelated untracked files under `viewpoint_exploration/`. 
 
 ## Action Protocol
 
-The model may return `compute` with one of `viewpoint`, `position`, `distance`, `appearance`, or `size`; `render` with focus IDs and camera parameters; `visual_check` with `yes/no/uncertain` per rendered candidate; or `finish` with a target ID.
+The model returns `evidence` with one of `position`, `distance`, `size`, `appearance`, or `viewpoint`; `finish` with a target ID; or `stop` with a reason. For example: `{"action":"evidence","dimension":"position","reason":"check reference relations"}`. Computation, rendering, and visual verification are internal steps. Legacy outer actions are rejected.
 
 Rules:
 
-- `compute position` returns candidate-level `pass/fail/unknown` relation evidence.
-- `compute distance` does the same for explicit `nearest`/`farthest` rankings.
+- `evidence position` returns candidate-level `pass/fail/unknown` relation evidence.
+- `evidence distance` does the same for explicit `nearest`/`farthest` rankings.
 - Only a definite `fail` across all available reference interpretations removes a candidate.
 - Passing or unknown alternative interpretations preserve a candidate.
-- `compute size` exposes soft AABB evidence and must not turn `skinny`, `small`, or `large` into an unstated hard threshold.
-- `compute appearance` exposes shape metrics and visual needs; color/material evidence still requires a rendered view.
-- `render` accepts at most 6 focus IDs. Prefer a few target alternatives plus specific references.
-- `visual_check=no` can exclude a candidate. `yes` does not prove all other candidates are wrong. `uncertain` preserves the candidate.
-- Failed or repeated actions are recorded in `active_trace` and do not consume successful tool budget. Controller feedback is added to the next prompt.
+- `evidence size` exposes soft AABB evidence and must not turn `skinny`, `small`, or `large` into an unstated hard threshold. Size and viewpoint summaries do not certify candidates.
+- `evidence appearance` exposes shape metrics and visual needs, renders one group, and performs one internal visual verification. It accepts at most 6 known focus IDs including a live target, with optional camera/context parameters. Defaults are the first 6 live targets, azimuth 90, elevation 25, scene context.
+- A visual `no` can exclude a marked live candidate. `yes` does not prove all other candidates are wrong. `uncertain` preserves the candidate. Verification receives only target-bound attributes.
+- All operations return a shared envelope with coverage, missing evidence, internal steps, and optional next evidence suggestions. The controller appends candidate updates and the current evidence state.
+- Invalid parameters and identical requests on unchanged evidence do not consume evidence budget. Relevant state changes or different appearance groups/views permit rechecking. Visual verification failures retain unknown candidates but consume the completed evidence operation; all internal calls are recorded.
+- `--review-limit` counts evidence operations, with at most one render and one internal visual call per appearance operation. `internal_usage` records internal steps separately; total API usage includes internal verification.
+- While evidence budget remains, finish requires resolved evidence and a unique live target; otherwise the controller requests further evidence or stop. A budget-exhausted guess remains unaccepted when unresolved.
 - A final choice outside the live candidate set is rejected. An empty live set falls back to the initial category set but is not accepted as resolved.
 
 ## Implementation
 
-`active_diagnostic.py` contains `position_candidate_evidence()`, `distance_candidate_evidence()`, `apply_computed_evidence()`, `compute_observation()`, `render_action()`, `_check_payload()`, and `active_ground()`.
+`active_diagnostic.py` contains the public validator `evidence_request()` and executor `execute_evidence()`, with the existing computation/render helpers inside. `active_ground()` retains the outer ReAct loop. Query parsing/rewriting and initial audit remain unchanged; individual evidence algorithms are the next work.
+
+`react_decision.py` adapts the existing TypeSafe Choice API to next-task selection and a separate final target Choice. Appearance options cover groups of at most six live targets with scene/isolated context and inspection azimuths 90/180. These are a bounded inspection menu, not recovered speaker views. JEV task reasons are selected option descriptions, not generated model explanations. Raw answers, probabilities, warnings, usage and model names remain in call records; confidence never certifies grounding.
+
+Set `SEEGROUND_REACT_BACKEND=jev`, `TYPESAFE_API_KEY`, and `SEEGROUND_JEV_MODEL` for JEV; the existing `SEEGROUND_*` Qwen settings serve parsing and visual checks. `SEEGROUND_REACT_BACKEND=qwen` retains a text-only planner comparison. Missing JEV configuration fails before parsing, without fallback. Batch manifests bind the planner backend/model and adapter code to prevent cache reuse across configurations.
 
 `diagnose()` remains the deterministic audit function. Its category verdict logic respects an explicit active visual `no` even when annotated GT categories are trusted.
 
@@ -59,7 +65,7 @@ python -m py_compile local/active_diagnostic.py local/test_active_diagnostic.py
 git diff --check
 ```
 
-The current local suite passes **130 tests**. Active tests cover candidate-level statuses, conservative removal, repeated actions, invalid render recovery, focus limits, visual exclusion/preservation, and selectable dimensions.
+Active tests cover candidate-level statuses, conservative removal, repeated actions, invalid request recovery, focus limits, visual exclusion/preservation, internal call failures, target attribute scope, and selectable dimensions. A `real_scene.run_query()` integration test uses an actual CPU render with mocked model responses to verify image encoding, query rewriting, GT table integration, API accounting, and saved traces. These tests do not measure real-model grounding accuracy.
 
 ## Server Smoke Test
 
@@ -123,4 +129,4 @@ These are development smoke tests, not benchmark results. Do not infer accuracy 
 5. Verify the model moves to an unused dimension after duplicate-action correction.
 6. Only after the single-query trace is coherent, run a small multi-query smoke test. Do not call it a score improvement without a fixed held-out plan.
 
-Do not add JEV or change the final benchmark protocol until active operation semantics and traces are stable.
+The user has authorized JEV as the outer planner. Keep the evidence/state semantics and benchmark protocol stable while testing the new model routing.

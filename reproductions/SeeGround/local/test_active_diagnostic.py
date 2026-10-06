@@ -8,6 +8,7 @@ import numpy as np
 
 from active_diagnostic import (apply_computed_evidence, _check_payload,
                                active_ground, compute_observation,
+                               evidence_request, execute_evidence,
                                position_candidate_evidence, render_action)
 from diagnostic import diagnose
 
@@ -26,19 +27,32 @@ def parsed():
 
 
 class ActiveDiagnosticTests(unittest.TestCase):
-    def run_actions(self, actions, limit=4, compute=None):
+    def setUp(self):
+        env = patch.dict('os.environ', {'SEEGROUND_REACT_BACKEND': 'qwen'})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def run_actions(self, actions, limit=4, compute=None, visual=None, render=None):
         objects = [obj(1, 'window', 0, 0), obj(2, 'window', 2, 0)]
         messages_seen = []
         responses = iter(actions)
+        visual_responses = iter(visual or [])
         def fake_chat(messages, **kwargs):
+            if messages[0]['content'].startswith('Verify only'):
+                reply = next(visual_responses)
+                if isinstance(reply, Exception):
+                    raise reply
+                return {'_content': json.dumps(reply),
+                        '_baseline': {'model': 'mock', 'latency_s': .01},
+                        '_finish_reason': 'stop', 'usage': {}}
             messages_seen.append(messages)
             return {'_content': json.dumps(next(responses)),
                     '_baseline': {'model': 'mock', 'latency_s': .01},
                     '_finish_reason': 'stop', 'usage': {}}
         with tempfile.TemporaryDirectory() as directory, patch(
                 'active_diagnostic.chat', side_effect=fake_chat), patch(
-                'active_diagnostic.render_action', return_value={
-                    'tool': 'render', 'image': 'mock.png', 'focus_ids': [1, 2]}), patch(
+                'active_diagnostic.render_action', side_effect=render or (lambda action, *args: {
+                    'tool': 'render', 'image': 'mock.png', 'focus_ids': action['focus_ids']})), patch(
                 'active_diagnostic.image_part', return_value={'type': 'text', 'text': 'mock image'}), patch(
                 'active_diagnostic.compute_observation', wraps=compute or compute_observation):
             trace, calls = {}, []
@@ -56,6 +70,34 @@ class ActiveDiagnosticTests(unittest.TestCase):
         self.assertEqual(result['decision_status'], 'missing')
         self.assertEqual(result['active_trace']['final_candidate_ids'], [1, 2])
 
+    def test_jev_confidence_cannot_bypass_unresolved_finish_guard(self):
+        decisions = iter(['finish', '1', 'stop'])
+        def decision(backend, state, questions):
+            choice = next(decisions)
+            return {'model': 'jev-mock', 'latency_s': .01, 'validation_warnings': [],
+                    'answers': {key: {'type': 'choice', 'choice': choice, 'confidence': 1.,
+                        'probabilities': {option: float(option == choice) for option in q['criteria']}}
+                        for key, q in questions.items()}}
+        with patch.dict('os.environ', {'SEEGROUND_REACT_BACKEND': 'jev'}), patch(
+                'react_decision.decide', side_effect=decision):
+            result, messages = self.run_actions([], limit=2)
+        self.assertEqual(messages, [])
+        self.assertEqual(result['active_trace']['rejected_actions'], 1)
+        self.assertEqual(result['active_trace']['successful_tools'], 0)
+        self.assertEqual(result['active_trace']['final_candidate_ids'], [1, 2])
+        self.assertIsNone(result['predicted_id'])
+        self.assertFalse(result['accepted'])
+
+    def test_qwen_planner_also_receives_text_only_after_visual_evidence(self):
+        result, messages = self.run_actions([
+            {'action': 'evidence', 'dimension': 'appearance', 'reason': 'inspect'},
+            {'action': 'stop', 'reason': 'still uncertain'},
+        ], visual=[{'checks': [{'id': 1, 'verdict': 'uncertain', 'reason': 'occluded'}]}])
+        for message in messages:
+            self.assertTrue(all(part['type'] == 'text' for part in message[1]['content']))
+            self.assertNotIn('mock.png', json.dumps(message))
+        self.assertEqual(result['images'], ['mock.png'])
+
     def test_invalid_finish_can_recover(self):
         result, messages = self.run_actions([
             {'action': 'finish', 'predicted_id': 99, 'reason': 'invalid ID'},
@@ -68,22 +110,20 @@ class ActiveDiagnosticTests(unittest.TestCase):
 
     def test_yes_for_one_candidate_requires_comparison_before_finish(self):
         result, messages = self.run_actions([
-            {'action': 'render', 'reason': 'compare windows'},
-            {'action': 'visual_check', 'checks': [
-                {'id': 1, 'verdict': 'yes', 'reason': 'visible match'}], 'reason': 'check first'},
+            {'action': 'evidence', 'dimension': 'appearance', 'focus_ids': [1], 'reason': 'check first'},
             {'action': 'finish', 'predicted_id': 1, 'reason': 'first matches'},
-            {'action': 'visual_check', 'checks': [
-                {'id': 2, 'verdict': 'no', 'reason': 'visible mismatch'}], 'reason': 'check alternative'},
+            {'action': 'evidence', 'dimension': 'appearance', 'focus_ids': [2], 'reason': 'check alternative'},
             {'action': 'finish', 'predicted_id': 1, 'reason': 'alternative excluded'},
-        ])
-        self.assertIn('Premature finish', messages[3][0]['content'])
+        ], visual=[{'checks': [{'id': 1, 'verdict': 'yes', 'reason': 'visible match'}]},
+                   {'checks': [{'id': 2, 'verdict': 'no', 'reason': 'visible mismatch'}]}])
+        self.assertIn('Premature finish', messages[2][0]['content'])
         self.assertEqual(result['active_trace']['rejected_actions'], 1)
         self.assertEqual(result['active_trace']['final_candidate_ids'], [1])
         self.assertTrue(result['accepted'])
 
     def test_budget_finish_remains_unaccepted_with_multiple_candidates(self):
         result, _ = self.run_actions([
-            {'action': 'compute', 'dimension': 'size', 'reason': 'inspect'},
+            {'action': 'evidence', 'dimension': 'size', 'reason': 'inspect'},
             {'action': 'finish', 'predicted_id': 1, 'reason': 'budget guess'},
         ], limit=1)
         self.assertEqual(result['predicted_id'], 1)
@@ -92,7 +132,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
         self.assertEqual(result['active_trace']['stop_reason'], 'budget_final_choice')
 
     def test_repeated_actions_stop_at_attempt_limit(self):
-        action = {'action': 'compute', 'dimension': 'appearance', 'reason': 'inspect'}
+        action = {'action': 'evidence', 'dimension': 'size', 'reason': 'inspect'}
         result, _ = self.run_actions([action] * 7, limit=2)
         trace = result['active_trace']
         self.assertEqual(trace['stop_reason'], 'action_attempt_budget_exhausted')
@@ -103,8 +143,8 @@ class ActiveDiagnosticTests(unittest.TestCase):
 
     def test_ignored_tool_budget_does_not_execute_extra_tool(self):
         result, _ = self.run_actions([
-            {'action': 'compute', 'dimension': 'size', 'reason': 'inspect size'},
-            {'action': 'compute', 'dimension': 'appearance', 'reason': 'inspect color'},
+            {'action': 'evidence', 'dimension': 'size', 'reason': 'inspect size'},
+            {'action': 'evidence', 'dimension': 'appearance', 'reason': 'inspect color'},
         ], limit=1)
         self.assertEqual(result['active_trace']['stop_reason'], 'tool_budget_exhausted')
         self.assertEqual(result['active_trace']['successful_tools'], 1)
@@ -112,33 +152,144 @@ class ActiveDiagnosticTests(unittest.TestCase):
 
     def test_visual_check_cannot_revive_excluded_candidate(self):
         result, messages = self.run_actions([
-            {'action': 'render', 'reason': 'inspect'},
-            {'action': 'visual_check', 'checks': [
-                {'id': 1, 'verdict': 'no', 'reason': 'visible mismatch'}], 'reason': 'exclude'},
-            {'action': 'visual_check', 'checks': [
-                {'id': 1, 'verdict': 'yes', 'reason': 'changed mind'}], 'reason': 'revive'},
-            {'action': 'finish', 'predicted_id': 2, 'reason': 'remaining match'},
-        ])
+            {'action': 'evidence', 'dimension': 'appearance', 'focus_ids': [1], 'reason': 'exclude'},
+            {'action': 'evidence', 'dimension': 'appearance', 'focus_ids': [2], 'reason': 'check remaining'},
+            {'action': 'stop', 'reason': 'remaining candidate not verified'},
+        ], visual=[{'checks': [{'id': 1, 'verdict': 'no', 'reason': 'visible mismatch'}]},
+                   {'checks': [{'id': 1, 'verdict': 'yes', 'reason': 'changed mind'}]}])
         self.assertEqual(result['active_trace']['final_candidate_ids'], [2])
-        self.assertEqual(result['active_trace']['rejected_actions'], 1)
-        update = result['active_trace']['steps'][1]['observation']['candidate_update']
+        self.assertIn('appearance verification failed',
+                      result['active_trace']['steps'][1]['observation']['missing'][0])
+        update = result['active_trace']['steps'][0]['observation']['candidate_update']
         self.assertEqual(update, {'before': [1, 2], 'removed_ids': [1], 'after': [2]})
         state = json.loads(messages[2][1]['content'][-1]['text'])
         self.assertEqual(state['evidence_state']['remaining_candidate_ids'], [2])
+
+    def test_legacy_actions_are_rejected_without_using_budget(self):
+        result, _ = self.run_actions([
+            {'action': 'compute', 'dimension': 'position', 'reason': 'legacy'},
+            {'action': 'render', 'reason': 'legacy'},
+            {'action': 'visual_check', 'checks': [], 'reason': 'legacy'},
+            {'action': 'stop', 'reason': 'stop after invalid requests'},
+        ])
+        trace = result['active_trace']
+        self.assertEqual(trace['rejected_actions'], 3)
+        self.assertEqual(trace['successful_tools'], 0)
+        self.assertEqual(trace['internal_usage'], {'compute': 0, 'render': 0, 'visual_check': 0})
+
+    def test_evidence_can_repeat_after_candidate_change(self):
+        request = {'action': 'evidence', 'dimension': 'position', 'reason': 'check relation'}
+        result, messages = self.run_actions([
+            request,
+            {'action': 'evidence', 'dimension': 'appearance', 'reason': 'compare targets'},
+            request,
+            {'action': 'finish', 'predicted_id': 2, 'reason': 'combined evidence'},
+        ], visual=[{'checks': [
+            {'id': 1, 'verdict': 'no', 'reason': 'visible contradiction'},
+            {'id': 2, 'verdict': 'yes', 'reason': 'visible match'}]}])
+        self.assertEqual(result['active_trace']['successful_tools'], 3)
+        self.assertEqual(result['active_trace']['rejected_actions'], 0)
+        state = json.loads(messages[2][1]['content'][-1]['text'])
+        self.assertIn('position', state['available_dimensions'])
+        self.assertIn('position', state['used_dimensions'])
+        self.assertEqual(state['remaining_candidate_ids'], [2])
+
+    def test_visual_failure_preserves_candidates_and_accounts_internal_call(self):
+        result, _ = self.run_actions([
+            {'action': 'evidence', 'dimension': 'appearance', 'reason': 'inspect'},
+            {'action': 'finish', 'predicted_id': 1, 'reason': 'budget guess'},
+        ], limit=1, visual=[ValueError('mock verification failure')])
+        trace = result['active_trace']
+        self.assertEqual(trace['final_candidate_ids'], [1, 2])
+        self.assertEqual(trace['successful_tools'], 1)
+        self.assertEqual(trace['internal_usage'], {'compute': 1, 'render': 1, 'visual_check': 1})
+        observation = trace['steps'][0]['observation']
+        self.assertEqual(observation['coverage']['unknown_ids'], [1, 2])
+        self.assertEqual(observation['operation_status'], 'partial')
+        self.assertEqual(observation['internal_steps'][-1]['call']['error'], 'mock verification failure')
+        self.assertFalse(result['accepted'])
+
+    def test_camera_change_is_a_new_appearance_request(self):
+        result, _ = self.run_actions([
+            {'action': 'evidence', 'dimension': 'appearance', 'azimuth_deg': 90, 'reason': 'first view'},
+            {'action': 'evidence', 'dimension': 'appearance', 'azimuth_deg': 180, 'reason': 'new view'},
+            {'action': 'stop', 'reason': 'still occluded'},
+        ], visual=[{'checks': [{'id': 1, 'verdict': 'uncertain', 'reason': 'occluded'}]}] * 2)
+        self.assertEqual(result['active_trace']['successful_tools'], 2)
+        self.assertEqual(result['active_trace']['rejected_actions'], 0)
+
+    def test_unmarked_target_cannot_receive_a_visual_no(self):
+        result, _ = self.run_actions([
+            {'action': 'evidence', 'dimension': 'appearance', 'reason': 'inspect'},
+            {'action': 'stop', 'reason': 'unmarked target needs another view'},
+        ], visual=[{'checks': [
+            {'id': 1, 'verdict': 'no', 'reason': 'invented contradiction'}]}],
+            render=lambda action, *args: {'tool': 'render', 'image': 'mock.png',
+                                          'focus_ids': [1, 2], 'unmarked_focus_ids': [1]})
+        self.assertEqual(result['active_trace']['final_candidate_ids'], [1, 2])
+        self.assertEqual(result['active_trace']['steps'][0]['observation']['coverage']['unknown_ids'], [1, 2])
+
+    def test_default_appearance_group_reports_uninspected_candidates(self):
+        objects = [obj(index, 'window', index, 0) for index in range(1, 9)]
+        request = evidence_request({'action': 'evidence', 'dimension': 'appearance', 'reason': 'inspect'},
+                                   list(range(1, 9)), objects)
+        diagnosis = diagnose(parsed(), objects, objects, [0, 0, .5], trusted_categories=True)
+        reply = {'_content': json.dumps({'checks': [
+            {'id': index, 'verdict': 'yes', 'reason': 'visible match'} for index in range(1, 7)]}),
+            '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
+        with patch('active_diagnostic.render_action', return_value={
+                'tool': 'render', 'image': 'mock.png', 'focus_ids': list(range(1, 7))}), patch(
+                'active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'active_diagnostic.chat', return_value=reply):
+            result = execute_evidence(request, 'window', parsed(), diagnosis, objects, objects,
+                                      None, None, None, Path('/tmp'), 1, [])
+        self.assertEqual(result['coverage']['uninspected_ids'], [7, 8])
+        self.assertEqual(result['operation_status'], 'partial')
+        self.assertEqual(result['next_evidence'][0]['focus_ids'], [7, 8])
+        self.assertEqual(diagnosis['candidate_ids'], list(range(1, 9)))
+
+    def test_summary_only_evidence_does_not_certify_candidates(self):
+        result, _ = self.run_actions([
+            {'action': 'evidence', 'dimension': 'size', 'reason': 'measure'},
+            {'action': 'stop', 'reason': 'measurements insufficient'},
+        ])
+        observation = result['active_trace']['steps'][0]['observation']
+        self.assertEqual(observation['operation_status'], 'information_only')
+        self.assertEqual(observation['candidate_evidence'], [])
+        self.assertEqual(observation['coverage']['uninspected_ids'], [1, 2])
+
+    def test_internal_verification_receives_only_target_attributes(self):
+        objects = [obj(1, 'window', 0, 0), obj(2, 'tv', 2, 0)]
+        query = parsed()
+        query['Attributes'] = [{'category': 'window', 'phrase': 'large'},
+                               {'category': 'television', 'phrase': 'black'}]
+        diagnosis = diagnose(query, objects, objects[:1], [0, 0, .5], trusted_categories=True)
+        request = evidence_request({'action': 'evidence', 'dimension': 'appearance',
+                                    'reason': 'inspect target'}, [1], objects)
+        reply = {'_content': json.dumps({'checks': [
+            {'id': 1, 'verdict': 'yes', 'reason': 'visible match'}]}),
+            '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
+        with patch('active_diagnostic.render_action', return_value={
+                'tool': 'render', 'image': 'mock.png', 'focus_ids': [1]}), patch(
+                'active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'active_diagnostic.chat', return_value=reply) as api:
+            execute_evidence(request, 'large window by black television', query, diagnosis,
+                             objects[:1], objects, None, None, None, Path('/tmp'), 1, [])
+        payload = json.loads(api.call_args.args[0][1]['content'][1]['text'])
+        self.assertEqual(payload['attributes'], [query['Attributes'][0]])
 
     def test_visual_evidence_preserves_computed_exclusions(self):
         def compute(*args):
             return {'tool': 'compute', 'dimension': 'position', 'candidate_evidence': [
                 {'candidate_id': 1, 'status': 'fail'}, {'candidate_id': 2, 'status': 'pass'}]}
         result, _ = self.run_actions([
-            {'action': 'compute', 'dimension': 'position', 'reason': 'check relation'},
-            {'action': 'render', 'reason': 'inspect remaining appearance'},
-            {'action': 'visual_check', 'checks': [
-                {'id': 2, 'verdict': 'yes', 'reason': 'visible match'}], 'reason': 'check appearance'},
+            {'action': 'evidence', 'dimension': 'position', 'reason': 'check relation'},
+            {'action': 'evidence', 'dimension': 'appearance', 'reason': 'check appearance'},
             {'action': 'finish', 'predicted_id': 2, 'reason': 'combined evidence'},
-        ], compute=compute)
+        ], compute=compute, visual=[{'checks': [
+            {'id': 2, 'verdict': 'yes', 'reason': 'visible match'}]}])
         self.assertEqual(result['active_trace']['final_candidate_ids'], [2])
-        self.assertEqual(result['active_trace']['successful_tools'], 3)
+        self.assertEqual(result['active_trace']['successful_tools'], 2)
 
     def test_duplicate_visual_verdicts_are_rejected(self):
         with self.assertRaises(ValueError):
@@ -151,7 +302,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
         objects = [obj(1, 'window', 0, 0), obj(2, 'window', 2, 0)]
         responses = iter([
             {'_content': json.dumps({
-                'action': 'render', 'focus_ids': [1, 2, 3, 4, 5, 6, 7],
+                'action': 'evidence', 'dimension': 'appearance', 'focus_ids': [1, 2, 3, 4, 5, 6, 7],
                 'azimuth_deg': 90, 'elevation_deg': 25,
                 'context': 'scene', 'reason': 'too many focus instances',
             }), '_baseline': {'model': 'mock', 'latency_s': .01},
@@ -177,8 +328,8 @@ class ActiveDiagnosticTests(unittest.TestCase):
 
     def test_duplicate_successful_action_is_recoverable(self):
         objects = [obj(1, 'window', 0, 0), obj(2, 'window', 2, 0)]
-        action = {'action': 'compute', 'dimension': 'appearance',
-                  'reason': 'inspect appearance'}
+        action = {'action': 'evidence', 'dimension': 'size',
+                  'reason': 'inspect size'}
         responses = iter([
             {'_content': json.dumps(action),
              '_baseline': {'model': 'mock', 'latency_s': .01},

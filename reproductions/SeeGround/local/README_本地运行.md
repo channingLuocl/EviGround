@@ -619,12 +619,13 @@ candidate_ids 仍表示在部分解释下未排除的候选，不等于全部具
 
 该模式先用类别得到初始候选，再让模型根据原句、候选差异和当前证据选择下一步。
 可选维度是 viewpoint、position、distance、appearance、size，没有固定顺序。
-`compute` 只返回可审计的计算证据；需要检查颜色、材质或形状时，模型先调用
-`render`，再用 `visual_check` 标记 `yes/no/uncertain`。只有可见的 `no` 会排除候选，
+外层统一请求 `{"action":"evidence","dimension":"position","reason":"..."}`，
+dimension 可取上述五种类型。计算、渲染和视觉复核属于证据操作的内部步骤。
+`appearance` 内部渲染一组实例并调用视觉模型，返回 `yes/no/uncertain`。只有可见的 `no` 会排除候选，
 `uncertain` 保留候选。每一步都写入 `active_trace`，包括动作、观察、剩余候选和停止原因。
 位置和显式距离操作还会为每个候选输出 `pass/fail/unknown`：只有所有可用参照解释都失败
 才移除候选；任一解释通过或未知都会保留。每次视觉复核后，这些计算过滤会重新应用，
-避免复核过程把已经确认的几何排除结果重置。单次 `render` 最多包含 6 个焦点实例，
+避免复核过程把已经确认的几何排除结果重置。单次外观操作最多包含 6 个焦点实例，
 应优先选择少量候选及其具体参照物。
 无效的工具请求会记录在 `active_trace`，但不消耗有效证据步数；模型可以在预算内修正
 焦点数量或相机参数后重试。有效步数预算仍由 `--review-limit` 控制。
@@ -647,7 +648,7 @@ candidate_ids 仍表示在部分解释下未排除的候选，不等于全部具
 
 每轮新增 `evidence_state`，集中展示当前候选、审计状态、缺失证据和视觉复核需求。
 `used_dimensions` 只表示已经查看过，不表示该维度已解决。视觉检查只能作用于最近渲染的
-当前候选，同一动作中不能对一个编号提交多个判定，已排除候选不会由后续视觉检查复活。
+当前且在图中标号的候选，同一动作中不能对一个编号提交多个判定，已排除候选不会由后续视觉检查复活。
 视觉检查与计算操作都记录候选变化；切换到视觉证据后仍保留已有计算过滤。
 
 新增 `stop` 动作：模型认为无法继续获取有效证据时，可说明原因后停止，
@@ -713,3 +714,95 @@ visual_check，但九个候选均未排除；模型只确认编号 2 就 finish�
 本轮不修改墙面拟合与 between 谓词：存在无效墙面解释时继续保留 unknown，不能为缩小
 候选集而把 unknown 当作 fail。重跑时使用新的 run-name，先检查属性是否进入视觉待办、
 模型是否比较了其他候选，而非只确认一个候选就结束。
+
+### 外层公共接口：按证据类型请求（2026-10-06）
+
+查询解析、确定性查询重写、所选物体表加载和初始 `diagnose()` 审计继续保留。
+外层 ReAct 只输出 `evidence`、`finish` 或 `stop`，不再单独输出
+`compute`、`render` 或 `visual_check`；旧动作会收到控制器纠正反馈。
+
+```json
+{"action":"evidence","dimension":"position","reason":"核查候选与参照物的位置关系"}
+```
+
+五种证据共享 `execute_evidence()` 入口，统一返回 `scope_ids`、`candidate_evidence`、
+`details`、`images`、`checks`、`missing`、`coverage`、`operation_status`、
+`internal_steps` 和 `next_evidence`。控制器负责更新候选并追加 `candidate_update`
+和 `evidence_state`。操作中的 `missing` 描述本次检查的覆盖缺口；
+`evidence_state.missing` 描述整句审计仍缺失的条件。
+
+当前能力仍复用原有实现：position 返回已有关系审计，distance 返回显式最近/最远排序；
+size 返回 AABB 尺寸与形状摘要，viewpoint 返回显式观察者线索和已有坐标系假设。
+摘要操作标记为 `information_only`，不能把看过该维度当成条件已满足。
+本次不新增位置谓词、参照物恢复、说话者姿态恢复或大小形容词的硬阈值。
+
+appearance 内部执行一次渲染和一次视觉复核，仅验证目标类别与绑定到目标的原文属性。
+可选参数为 `focus_ids`、`azimuth_deg`、`elevation_deg`、`context`；
+默认检查当前前 6 个候选，方位角 90°、仰角 25°、场景上下文。
+不会自动检查第二组或换视角。`coverage` 分别记录有判定、未知和未检查的候选；
+未标号、漏报或复核失败的候选保留 unknown，并提供后续检查建议。
+相机角度属于世界坐标下的检查方向，不作为说话者的左右参照系。
+
+`--review-limit` 现在计算证据操作次数；一次 appearance 最多包含一次渲染和一次视觉请求，
+与旧版按 compute/render/visual_check 分别计步的预算不直接等价。
+复核失败但已有渲染观察的操作仍消耗一证据步；参数无效的请求不消耗证据预算。
+`active_trace` 新增 `interface=evidence_by_dimension`、`evidence_budget`、
+`internal_limits` 和 `internal_usage`；内部视觉请求记录为 `active_evidence_visual_check`，
+计入总 `api_calls`。`successful_tools` 保留字段名，其含义为已完成的证据操作数。
+
+五种维度始终可选。相同请求在证据状态不变时被拒绝；候选或相关证据变化后可以重查，
+外观也可以更换焦点组或相机参数。`finish` 与 `stop` 继续使用已有认证和预算规则。
+`inspect_active_trace.py` 可直接显示新协议的覆盖、缺口、建议和内部执行记录。
+
+### JEV 外层决策＋千问视觉取证（2026-10-06）
+
+`active_diagnostic` 默认外层为 JEV。外层只接收查询、解析、候选、几何测量、
+视觉复核的文字结论、缺失项、历史和预算；不接收图片像素、图片文件路径或视觉原始回复。
+图片和完整内部调用继续保存在本地轨迹中。查询解析仍由原千问配置完成，
+需要视觉证据时，证据执行器用该千问 VLM 检查带编号图，再把结构化观察返回外层。
+代码控制器负责候选变化、预算和结束校验；模型置信度不作为判定通过的证据。
+
+配置文件字段如下；密钥使用当前环境或 `.env` 中的已有字段：
+
+```dotenv
+SEEGROUND_REACT_BACKEND=jev
+SEEGROUND_JEV_MODEL=jev-latest
+TYPESAFE_API_KEY=
+SEEGROUND_BASE_URL=
+SEEGROUND_MODEL=qwen3-vl-flash
+SEEGROUND_API_KEY=
+```
+
+JEV 复用 `decision_api.py` 的 TypeSafe `Choice` 协议。每轮选择 `next_task`；
+请求 finish 时另调用一次 `target` Choice，仅提供剩余候选编号，
+候选为空时提供原类别候选作为未认证回退。两次都计入 API 调用数。
+position/distance/size/viewpoint 是维度选项；appearance 提供每组最多 6 个候选、
+scene/isolated 上下文、90°/180°检查方位角和 25°仰角的任务选项。
+这使全部候选都有可选检查任务，并能换视图；当前 JEV 菜单不支持任意相机参数、
+任意候选组合或单独检查参照物，后续取证改进可扩展任务生成器。
+Choice 单题最多 255 个选项，超出则报告协议限制，不截断候选。
+
+JEV 只选择选项，动作中的 reason 来自任务描述，标记 `reason_source=selected_task_description`，
+不能当作模型自由生成的推理解释。原始 `answers`、概率、confidence、
+`validation_warnings`、模型版本、用量和耗时均记录在 `run.json.calls`。
+最终目标选择记录为 `active_target_decision`；内部视觉检查仍为
+`active_evidence_visual_check`，各调用注明 `backend` 和 `role`。
+缺少 TypeSafe 密钥时在查询解析前失败，不自动切回千问。
+批量缓存设置包含外层后端、JEV 模型与适配器代码哈希，换配置须用新输出目录。
+
+已有场景和两个接口配置后运行：
+
+```bash
+.venv/bin/python local/real_scene.py \
+  --scene-dir local_outputs/scene0149_00 \
+  --query 'Choose the skinny cabinet between the stove and the wall.' \
+  --mode active_diagnostic --object-table gt --review-limit 8 \
+  --run-name jev_react_01
+.venv/bin/python local/inspect_active_trace.py \
+  local_outputs/scene0149_00/jev_react_01/prediction.json
+```
+
+对照外层模型时，可设 `SEEGROUND_REACT_BACKEND=qwen`，该外层同样不接收图片。
+Qwen 对照仍可生成自由证据参数，而 JEV 选择给定任务菜单；当前两组不是严格的
+模型能力消融，正式比较时应统一可选任务空间。
+本地回归包含实际 CPU 渲染、模拟 JEV/千问接口的整条闭环，不代表真实接口成功或准确率。

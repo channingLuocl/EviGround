@@ -60,6 +60,14 @@ def experiment_settings(scene_dir, mode, review_limit=6, object_table='pred'):
         structural_path=scene_dir/'scene_instances.json'
         if structural_path.exists():
             settings['structural_instances_sha256']=hashlib.sha256(structural_path.read_bytes()).hexdigest()
+    if mode=='active_diagnostic':
+        from decision_api import JEV_URL, jev_model
+        from react_decision import react_backend
+        settings.update(decision_backend=react_backend(),planner_input='text_only',visual_backend='qwen')
+        if settings['decision_backend']=='jev':
+            settings.update(jev_model=jev_model(),jev_url=JEV_URL)
+        for name in ('react_decision.py','decision_api.py'):
+            settings['code_sha256'][name]=hashlib.sha256((code_dir/name).read_bytes()).hexdigest()
     return settings
 
 def report(out,results,manifest):

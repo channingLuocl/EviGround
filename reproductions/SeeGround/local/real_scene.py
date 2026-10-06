@@ -226,6 +226,12 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                            'annotated category labels (oracle OLT)' if object_table=='gt' else 'predicted category labels']}
     stage='load_scene'
     try:
+        if mode=='active_diagnostic':
+            from react_decision import validate_react_config
+            stage='react_configuration'
+            record.update(decision_backend=validate_react_config(),planner_input='text_only',
+                          visual_backend='qwen')
+        stage='load_scene'
         with np.load(scene_dir/'scene.npz',allow_pickle=False) as cloud:
             xyz,rgb,ids=cloud['xyz'],cloud['rgb'],cloud['ids']
         if mode in ('diagnostic','active_diagnostic'):
@@ -256,6 +262,8 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                                      out,calls,trace,review_limit,object_table=='gt')
             record.update(diagnosis=prediction['diagnosis'],decision_status=prediction['decision_status'])
             prediction.update(mode=mode,object_table=object_table,objects_file=objects_path.name,
+                              decision_backend=trace['decision_backend'],planner_input='text_only',
+                              visual_backend='qwen',
                               gt_categories_supplied_to_model=object_table=='gt',query_target_id_supplied_to_model=False,
                               pipeline_latency_s=round(perf_counter()-started,4),api_calls=len(calls),
                               call_usage=[call.get('usage') for call in calls])

@@ -1,7 +1,6 @@
 """Model-directed, bounded evidence loop for candidate disambiguation."""
 from copy import deepcopy
 import json
-from pathlib import Path
 
 import numpy as np
 
@@ -9,17 +8,27 @@ from diagnostic import diagnose
 from evidence import distance_rankings, match_retrieval_categories, retrieval_category
 from object_geometry import build_geometry
 from qwen_api import QwenAPIError, chat, image_part, parse_json_object
+from react_decision import jev_action, react_backend, text_state
 from run import render
 
 
 DIMENSIONS = ('viewpoint', 'position', 'distance', 'appearance', 'size')
+EVIDENCE_CAPABILITIES = {
+    'position': 'Existing geometry audit; only definite relation failures exclude candidates.',
+    'distance': 'Explicit nearest/farthest rankings from object centers.',
+    'size': 'AABB dimensions and shape summary; no new adjective verdict.',
+    'appearance': 'One rendered group and one visual verification per request; no automatic extra views.',
+    'viewpoint': 'Explicit observer clues and existing frame hypotheses; no speaker-pose recovery.',
+}
 
 INSTRUCTIONS = '''You locate one target object from a natural-language description.
 The category-filtered candidates are already supplied. Choose the next useful evidence
 dimension from the description and the differences between the remaining candidates.
 There is no fixed order: position may be enough, or size/shape, distance, viewpoint,
 or appearance may be more useful. Use only the supplied computed evidence and rendered
-views. A computed predicate is evidence, not a visual certificate; unknown is never a pass.
+view observations. No image pixels are supplied to the outer planner; visual observations
+come from internal verification calls. A computed predicate is evidence, not a visual
+certificate; unknown is never a pass.
 Keep candidates that are uncertain. Do not vote over alternative reference bindings.
 Never turn small, large, skinny, or narrow into an unstated hard threshold. Never invent
 a reference, viewpoint, relation, or target ID. The final ID must be one of the remaining
@@ -27,26 +36,27 @@ candidate IDs, unless the remaining set is empty and the initial category candid
 explicitly provided as fallback.
 
 Actions (return one JSON object with a short evidence-based reason):
-{"action":"compute","dimension":"viewpoint|position|distance|appearance|size","reason":"..."}
-{"action":"render","focus_ids":[1,2],"azimuth_deg":90,"elevation_deg":25,
- "context":"scene|isolated","reason":"what distinction this view can inspect"}
-{"action":"visual_check","checks":[{"id":1,"verdict":"yes|no|uncertain","reason":"visible evidence"}],
- "reason":"..."}
+{"action":"evidence","dimension":"viewpoint|position|distance|appearance|size","reason":"..."}
+For appearance only, you may additionally provide focus_ids (1-6 known objects,
+including at least one remaining target), azimuth_deg [0,360), elevation_deg [10,75],
+and context="scene|isolated". Defaults: first 6 remaining targets, 90, 25, scene.
+Example: {"action":"evidence","dimension":"appearance","focus_ids":[1,2],
+ "azimuth_deg":90,"elevation_deg":25,"context":"scene","reason":"compare shape"}
 {"action":"finish","predicted_id":1,"reason":"evidence supporting the choice"}
 {"action":"stop","reason":"which evidence is still missing and why no useful action remains"}
 
-Use at most 6 focus_ids in a render; prefer 2-4 remaining target candidates plus the
-specific reference instances needed for the relation. For visual_check, use only IDs in the most recent rendered focus and use no only when
-the rendered view visibly contradicts the target category or quoted appearance. A view
-can show shape or appearance, but an isolated view cannot prove room position. Camera
-azimuth is a world inspection direction, never the speaker's left/right frame.
-Consult evidence_state for current missing evidence and visual needs. A computed
-appearance/size summary is not a visual check. After rendering, inspect the image
-with visual_check before requesting the same evidence again. Preserve earlier
-constraints when switching dimensions. Used dimensions mean inspected, not solved.
+Rendering and visual verification are internal steps, not separate outer actions.
+Appearance evidence checks category and quoted appearance only, not spatial relations.
+Camera azimuth is a world inspection direction, never the speaker's left/right frame.
+Consult evidence_state and evidence_capabilities. Summary-only operations do not
+certify candidates. Inspect coverage and missing evidence before choosing another task.
+Preserve earlier constraints when switching dimensions. Used dimensions mean inspected,
+not solved. A dimension can be requested again after relevant evidence changes; do not
+repeat an identical request on unchanged evidence. For appearance, another group or
+camera angle is a different request.
 If no useful action remains, use stop rather than inventing a target or repeating tools.
 One candidate receiving yes does not exclude any alternatives. Compare remaining
-alternatives in small rendered groups and record no only for visible contradictions.
+alternatives through appearance evidence in small groups.
 Candidate-level pass means at least one reference interpretation supports that
 predicate, not that all interpretations or the full description are confirmed.
 While tool budget remains, finish is allowed only when evidence_state is resolved
@@ -307,6 +317,124 @@ def _check_payload(action, focus_ids, candidates, parsed):
     return result
 
 
+def evidence_request(action, candidate_ids, geometry_objects):
+    """Validate the public request and make inspection defaults explicit."""
+    dimension = action.get('dimension')
+    if action.get('action') != 'evidence' or dimension not in DIMENSIONS:
+        raise ValueError('choose action=evidence with a supported dimension, finish or stop')
+    allowed = {'action', 'dimension', 'reason'}
+    if dimension == 'appearance':
+        allowed.update(('focus_ids', 'azimuth_deg', 'elevation_deg', 'context'))
+    if set(action) - allowed:
+        raise ValueError('unsupported evidence parameters; camera/focus options are appearance-only')
+    request = dict(action)
+    if dimension == 'appearance':
+        request.setdefault('focus_ids', list(candidate_ids)[:6])
+        request.setdefault('azimuth_deg', 90)
+        request.setdefault('elevation_deg', 25)
+        request.setdefault('context', 'scene')
+        focus = request['focus_ids']
+        known = {obj['bbox_id'] for obj in geometry_objects}
+        if (not isinstance(focus, list) or not 1 <= len(focus) <= 6
+                or any(type(oid) is not int or oid not in known for oid in focus)
+                or len(set(focus)) != len(focus) or not set(focus) & set(candidate_ids)):
+            raise ValueError('appearance needs 1-6 distinct known focus_ids including a remaining target')
+        azimuth, elevation = request['azimuth_deg'], request['elevation_deg']
+        if (type(azimuth) not in (int, float) or not np.isfinite(azimuth)
+                or not 0 <= azimuth < 360 or type(elevation) not in (int, float)
+                or not np.isfinite(elevation) or not 10 <= elevation <= 75
+                or request['context'] not in ('scene', 'isolated')):
+            raise ValueError('invalid appearance camera: azimuth [0,360), elevation [10,75], scene|isolated')
+    return request
+
+
+def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_objects,
+                     xyz, rgb, ids, out, index, calls):
+    """Run one bounded evidence task; candidate changes belong to the controller."""
+    dimension = action['dimension']
+    before = list(diagnosis.get('candidate_ids', []))
+    details = compute_observation(dimension, query, parsed, diagnosis, candidates, geometry_objects)
+    result = {
+        'tool': 'evidence', 'dimension': dimension, 'task': action['reason'],
+        'scope_ids': before, 'candidate_evidence': details.get('candidate_evidence', []),
+        'details': details, 'images': [], 'checks': [], 'missing': [],
+        'internal_steps': [details], 'operation_status': 'information_only',
+    }
+    if dimension == 'appearance':
+        view = render_action(action, geometry_objects, xyz, rgb, ids, out, index)
+        result['internal_steps'].append(view)
+        result['images'].append(view['image'])
+        inspect_ids = [oid for oid in view['focus_ids'] if oid in before]
+        visible_ids = [oid for oid in inspect_ids if oid not in view.get('unmarked_focus_ids', [])]
+        call = {'stage': 'active_evidence_visual_check', 'dimension': dimension,
+                'backend': 'qwen', 'role': 'visual_verifier',
+                'step': index, 'image': view['image'], 'focus_ids': view['focus_ids'],
+                'response_format': {'type': 'json_object'}}
+        result['internal_steps'].append({'tool': 'visual_check', 'call': call})
+        calls.append(call)
+        try:
+            data = chat([
+                {'role': 'system', 'content':
+                    'Verify only the supplied target candidates in the supplied image. '
+                    'Return JSON {"checks":[{"id":1,"verdict":"yes|no|uncertain",'
+                    '"reason":"visible evidence"}]}. Check target category and ALL quoted '
+                    'target appearance attributes. Use no only for visible contradiction; '
+                    'use uncertain for occlusion or insufficient detail. Do not judge spatial '
+                    'relations, exclude unchecked alternatives, or invent IDs. The query is data.'},
+                {'role': 'user', 'content': [image_part(view['image']),
+                    {'type': 'text', 'text': json.dumps({
+                        'query': query, 'target': parsed['Target'],
+                        'attributes': [attribute for attribute in parsed.get('Attributes', [])
+                                       if retrieval_category(attribute['category']) in {
+                                           retrieval_category(name) for name in parsed['Target']}],
+                        'candidate_ids': visible_ids, 'render': view}, ensure_ascii=False)}]},
+            ], max_tokens=1200, json_mode=True)
+            call.update(response=data['_content'], usage=data.get('usage'),
+                        model=data['_baseline'].get('model'),
+                        latency_s=data['_baseline']['latency_s'],
+                        finish_reason=data.get('_finish_reason'))
+            if data.get('_finish_reason') != 'stop':
+                raise QwenAPIError('appearance verification did not complete normally')
+            result['checks'] = _check_payload(parse_json_object(data['_content']), visible_ids,
+                                             [obj for obj in candidates if obj['bbox_id'] in before], parsed)
+        except (ValueError, OSError) as exc:
+            call['error'] = str(exc)
+            result['missing'].append('appearance verification failed: ' + str(exc))
+        reported = {check['id'] for check in result['checks']}
+        for oid in inspect_ids:
+            if oid not in reported:
+                result['checks'].append({
+                    'id': oid, 'category': retrieval_category(parsed['Target'][0]),
+                    'verdict': 'uncertain', 'reason': 'unmarked in image or not verified',
+                    'source': 'active rendered view',
+                })
+        for check in result['checks']:
+            check['image'] = view['image']
+        result['candidate_evidence'] = [
+            {'candidate_id': check['id'], 'status': {'yes': 'pass', 'no': 'fail',
+             'uncertain': 'unknown'}[check['verdict']], 'reason': check['reason'],
+             'image': view['image']} for check in result['checks']]
+    records = result['candidate_evidence']
+    checked = [item['candidate_id'] for item in records if item.get('status') != 'not_applicable']
+    unknown = [item['candidate_id'] for item in records if item.get('status') == 'unknown']
+    uninspected = [oid for oid in before if oid not in checked]
+    result['coverage'] = {'checked_ids': checked, 'unknown_ids': unknown,
+                          'uninspected_ids': uninspected}
+    if checked:
+        result['operation_status'] = 'partial' if unknown or uninspected or result['missing'] else 'evaluated'
+    if uninspected:
+        result['missing'].append('candidates without a verdict in this operation: ' + str(uninspected))
+    if unknown:
+        result['missing'].append('candidate evidence remains unknown: ' + str(unknown))
+    result['next_evidence'] = ([{'dimension': 'appearance', 'focus_ids': uninspected[:6],
+                                'reason': 'inspect remaining target candidates'}]
+                               if dimension == 'appearance' and uninspected else [])
+    if dimension == 'appearance' and unknown:
+        result['next_evidence'].append({'dimension': 'appearance', 'focus_ids': unknown[:6],
+                                        'reason': 'use another view for uncertain candidates'})
+    return result
+
+
 def evidence_state(diagnosis):
     """Expose current audit needs without calling inspected dimensions solved."""
     return {
@@ -319,6 +447,7 @@ def evidence_state(diagnosis):
 
 def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb, ids,
                   out, calls, trace, limit, trusted_categories):
+    backend = react_backend()
     room_center = (xyz.min(0) + xyz.max(0)) / 2
     diagnosis = diagnose(parsed, geometry_objects, candidates, room_center,
                          trusted_categories=trusted_categories)
@@ -327,10 +456,13 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
     observation = geometry_observation(diagnosis, category_candidates)
     history, images, used = [], [], set()
     checks, used_dimensions, computed_filters = [], set(), []
-    last_render_focus = []
     controller_feedback = None
     trace.update(
         policy='category first; model selects the next evidence dimension; no fixed order',
+        interface='evidence_by_dimension', evidence_budget=limit,
+        decision_backend=backend, planner_input='text_only', visual_backend='qwen',
+        internal_limits={'renders_per_evidence': 1, 'visual_calls_per_evidence': 1},
+        internal_usage={'compute': 0, 'render': 0, 'visual_check': 0},
         tool_budget=limit, category_candidates=category_candidates,
         initial_diagnosis=deepcopy(diagnosis), steps=history,
     )
@@ -358,13 +490,14 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         trace.update(stop_reason=stop_reason, final_candidate_ids=list(remaining),
                      final_checks=checks, final_evidence_state=evidence_state(diagnosis))
         obj = next((obj for obj in objects if obj['bbox_id'] == oid), None)
+        final_data = data.get('_target_decision') or data
         return {
             'query': query, 'predicted_id': oid,
             'bbox_3d': obj['bbox_3d'] if obj else None,
-            'response': data.get('_content', ''), 'usage': data.get('usage'),
-            'model': data.get('_baseline', {}).get('model'),
-            'latency_s': data.get('_baseline', {}).get('latency_s'),
-            'finish_reason': data.get('_finish_reason'), 'images': images,
+            'response': final_data.get('_content', ''), 'usage': final_data.get('usage'),
+            'model': final_data.get('_baseline', {}).get('model'),
+            'latency_s': final_data.get('_baseline', {}).get('latency_s'),
+            'finish_reason': final_data.get('_finish_reason'), 'images': images,
             'diagnosis': diagnosis, 'decision_status': status,
             'accepted': oid is not None and status == 'resolved',
             'decision_reasons': [action['reason']],
@@ -383,8 +516,8 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             'action_attempts_remaining': max_attempts - attempts,
             'used_dimensions': sorted(used_dimensions),
             'computed_filters': [item['dimension'] for item in computed_filters],
-            'available_dimensions': [d for d in DIMENSIONS if d not in used_dimensions],
-            'last_render_focus_ids': last_render_focus,
+            'available_dimensions': list(DIMENSIONS),
+            'evidence_capabilities': EVIDENCE_CAPABILITIES,
             'tools_remaining': max(0, limit - tool_count),
         }
         instructions = INSTRUCTIONS
@@ -392,18 +525,21 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             instructions += '\nController correction: ' + controller_feedback
         if tool_count >= limit:
             instructions += '\nThe tool budget is exhausted. Return action=finish or action=stop now.'
-        parts = []
-        for path in images:
-            parts.extend([{'type': 'text', 'text': f'Inspection {Path(path).name}'}, image_part(path)])
-        parts.append({'type': 'text', 'text': json.dumps(state, ensure_ascii=False)})
+        state = text_state(state)
         call = {'stage': 'active_decision', 'step': attempts + 1,
+                'backend': backend, 'role': 'planner',
                 'response_format': {'type': 'json_object'}}
         calls.append(call)
         trace['action_attempts'] += 1
         try:
-            data = chat([{'role': 'system', 'content': instructions},
-                         {'role': 'user', 'content': parts}], max_tokens=900, json_mode=True)
+            if backend == 'jev':
+                data = jev_action(state, instructions, call, calls)
+            else:
+                data = chat([{'role': 'system', 'content': instructions},
+                             {'role': 'user', 'content': [{'type': 'text', 'text':
+                                 json.dumps(state, ensure_ascii=False)}]}], max_tokens=900, json_mode=True)
             call.update(response=data['_content'], usage=data.get('usage'),
+                        model=data['_baseline'].get('model'),
                         latency_s=data['_baseline']['latency_s'],
                         finish_reason=data.get('_finish_reason'))
             if data.get('_finish_reason') != 'stop':
@@ -445,72 +581,73 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             return finish_result(
                 {'action': 'stop', 'reason': 'tool budget exhausted without a valid final decision'},
                 'tool_budget_exhausted')
-        signature = json.dumps({k: v for k, v in action.items() if k != 'reason'}, sort_keys=True)
+        try:
+            request = evidence_request(action, remaining, geometry_objects)
+        except ValueError as exc:
+            observation = {'tool': 'evidence', 'error': str(exc), 'no_evidence_acquired': True}
+            history.append({'action': action, 'observation': observation,
+                            'remaining_candidate_ids': list(remaining)})
+            controller_feedback = str(exc)
+            trace['rejected_actions'] += 1
+            attempts += 1
+            continue
+        signature = (
+            json.dumps({k: v for k, v in request.items() if k != 'reason'}, sort_keys=True),
+            json.dumps({'state': evidence_state(diagnosis), 'checks': list({
+                            (check['id'], check['category']): {
+                                key: check[key] for key in ('id', 'category', 'verdict', 'reason')
+                                if key in check}
+                            for check in checks}.values()),
+                        'hypotheses': diagnosis.get('hypotheses', []),
+                        'geometry': diagnosis.get('geometry', {})}, sort_keys=True),
+        )
         if signature in used:
             history.append({
                 'action': action,
                 'observation': {
                     'tool': action.get('action'),
-                    'error': 'this tool action was already executed; choose another observation or finish',
+                    'error': 'identical evidence request on unchanged evidence; choose another task or stop',
                     'no_evidence_acquired': True,
                 },
                 'remaining_candidate_ids': diagnosis.get('candidate_ids', []),
             })
             controller_feedback = (
                 'The previous action was a duplicate and acquired no evidence. '
-                'Do not repeat it. Choose one dimension from available_dimensions, '
-                'or render a smaller focus set, or finish if the evidence is sufficient.'
+                'Do not repeat it on unchanged evidence. Choose another evidence dimension, '
+                'or change the appearance focus/view, or stop if no useful task remains.'
             )
             trace['rejected_actions'] += 1
             attempts += 1
             continue
-        entry = {'action': action}
+        entry = {'action': request}
         before = list(diagnosis.get('candidate_ids', []))
         try:
-            name = action.get('action')
-            if name == 'compute':
-                dimension = action.get('dimension')
-                if dimension not in DIMENSIONS:
-                    raise ValueError('compute needs a supported dimension')
-                observation = compute_observation(dimension, query, parsed, diagnosis,
-                                                  candidates, geometry_objects)
-                used_dimensions.add(dimension)
-                if dimension in ('position', 'distance'):
-                    candidate_evidence = observation.get('candidate_evidence', [])
-                    update = apply_computed_evidence(diagnosis, candidate_evidence, dimension)
-                    computed_filters.append({'dimension': dimension,
-                                             'evidence': candidate_evidence})
-                    observation['candidate_update'] = update
-                    observation['candidate_ids'] = diagnosis.get('candidate_ids', [])
-            elif name == 'render':
-                observation = render_action(action, geometry_objects, xyz, rgb, ids, out, tool_count + 1)
-                images.append(observation['image'])
-                last_render_focus = list(observation['focus_ids'])
-            elif name == 'visual_check':
-                if not last_render_focus:
-                    raise ValueError('visual_check requires a preceding render action')
-                new_checks = _check_payload(
-                    action, last_render_focus,
-                    [obj for obj in candidates if obj['bbox_id'] in before], parsed)
-                checks.extend(new_checks)
+            dimension = request['dimension']
+            observation = execute_evidence(
+                request, query, parsed, diagnosis, candidates, geometry_objects,
+                xyz, rgb, ids, out, tool_count + 1, calls)
+            images.extend(observation['images'])
+            for step in observation['internal_steps']:
+                trace['internal_usage'][step['tool']] += 1
+            used_dimensions.add(dimension)
+            if observation['checks']:
+                checks.extend(observation['checks'])
                 diagnosis = diagnose(parsed, geometry_objects, candidates, room_center, checks,
                                      trusted_categories=trusted_categories)
                 for computed in computed_filters:
                     apply_computed_evidence(diagnosis, computed['evidence'], computed['dimension'],
                                             record=False)
-                observation = {
-                    'tool': 'visual_check', 'checks': new_checks,
-                    'candidate_update': {
-                        'before': before,
-                        'removed_ids': [oid for oid in before if oid not in diagnosis['candidate_ids']],
-                        'after': list(diagnosis['candidate_ids']),
-                    },
-                    'candidate_ids': diagnosis.get('candidate_ids', []),
-                    'stable_candidate_ids': diagnosis.get('stable_candidate_ids', []),
-                    'status': diagnosis.get('status'),
-                }
-            else:
-                raise ValueError('unknown action; choose compute, render, visual_check or finish')
+            if dimension in ('position', 'distance'):
+                candidate_evidence = observation['candidate_evidence']
+                apply_computed_evidence(diagnosis, candidate_evidence, dimension)
+                computed_filters.append({'dimension': dimension, 'evidence': candidate_evidence})
+            observation['candidate_update'] = {
+                'before': before,
+                'removed_ids': [oid for oid in before if oid not in diagnosis['candidate_ids']],
+                'after': list(diagnosis['candidate_ids']),
+            }
+            observation['candidate_ids'] = list(diagnosis['candidate_ids'])
+            observation['evidence_state'] = evidence_state(diagnosis)
         except (ValueError, OSError) as exc:
             observation = {'tool': action.get('action'), 'error': str(exc),
                            'no_evidence_acquired': True}

@@ -14,14 +14,18 @@ def main():
         'query', 'predicted_id', 'decision_status', 'accepted', 'api_calls', 'pipeline_latency_s')}
     summary.update({key: trace.get(key) for key in (
         'stop_reason', 'category_candidates', 'final_candidate_ids', 'tool_budget',
-        'action_attempt_budget', 'action_attempts', 'successful_tools', 'rejected_actions')})
+        'action_attempt_budget', 'action_attempts', 'successful_tools', 'rejected_actions',
+        'interface', 'evidence_budget', 'internal_limits', 'internal_usage',
+        'decision_backend', 'planner_input', 'visual_backend')})
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     for index, step in enumerate(trace.get('steps', []), 1):
         observation = step.get('observation', {})
         record = {'step': index, 'action': step.get('action'),
                   'remaining_candidate_ids': step.get('remaining_candidate_ids')}
         for key in ('error', 'no_evidence_acquired', 'candidate_update',
-                    'candidate_evidence', 'checks', 'image', 'unmarked_focus_ids'):
+                    'candidate_evidence', 'checks', 'image', 'unmarked_focus_ids',
+                    'dimension', 'task', 'scope_ids', 'operation_status', 'coverage',
+                    'missing', 'next_evidence', 'images', 'internal_steps'):
             if key in observation:
                 record[key] = observation[key]
         if 'evidence_state' in step:

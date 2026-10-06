@@ -135,6 +135,24 @@ class BatchTests(unittest.TestCase):
                 {'id':1,'image':'crop.png','binding':'projected_instance','source_frame':'001.jpg'}]}))
             self.assertNotEqual(first,experiment_settings(scene,'diagnostic',2))
 
+    def test_active_manifest_tracks_planner_model_and_backend_without_credentials(self):
+        with tempfile.TemporaryDirectory() as td:
+            scene=Path(td)
+            (scene/'scene.npz').write_bytes(b'fixture')
+            objects=json.dumps([{'bbox_id':1,'target':'tv','bbox_3d':[0,0,0,1,1,1]}])
+            (scene/'objects_gt.json').write_text(objects);(scene/'objects.json').write_text(objects)
+            with patch.dict('os.environ',{'SEEGROUND_REACT_BACKEND':'jev',
+                                         'SEEGROUND_JEV_MODEL':'jev-A','TYPESAFE_API_KEY':'secret-fixture'}):
+                first=experiment_settings(scene,'active_diagnostic')
+                with patch.dict('os.environ',{'SEEGROUND_JEV_MODEL':'jev-B'}):
+                    self.assertNotEqual(first,experiment_settings(scene,'active_diagnostic'))
+                with patch.dict('os.environ',{'SEEGROUND_REACT_BACKEND':'qwen'}):
+                    self.assertNotEqual(first,experiment_settings(scene,'active_diagnostic'))
+            self.assertEqual(first['planner_input'],'text_only')
+            self.assertEqual(first['jev_model'],'jev-A')
+            self.assertIn('react_decision.py',first['code_sha256'])
+            self.assertNotIn('secret-fixture',json.dumps(first))
+
     def test_manifest_tracks_mode_and_model_without_key(self):
         with tempfile.TemporaryDirectory() as d:
             scene=Path(d)
