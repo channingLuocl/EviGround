@@ -264,9 +264,10 @@ def compute_observation(dimension, query, parsed, diagnosis, candidates, geometr
         return {
             'tool': 'compute', 'dimension': dimension,
             'attributes': parsed.get('Attributes', []),
+            'candidate_shape_evidence': geometry.get('candidate_metrics', []),
             'visual_needs': diagnosis.get('visual_needs', []),
             'candidate_ids': diagnosis.get('candidate_ids', []),
-            'policy': 'appearance cannot be certified without a rendered or supplied view',
+            'policy': 'AABB shape is a soft proxy; colors/materials still require a rendered view',
         }
     raise ValueError('dimension must be viewpoint, position, distance, appearance or size')
 
@@ -313,7 +314,10 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
     target_ids = set(category_candidates)
     references = [{'bbox_id': obj['bbox_id'], 'category': obj['target']}
                   for obj in geometry_objects if obj['bbox_id'] not in target_ids]
-    for index in range(limit + 1):
+    attempts = 0
+    tool_count = 0
+    max_attempts = max(limit * 2 + 3, limit + 3)
+    while attempts < max_attempts:
         remaining = diagnosis.get('candidate_ids') or []
         state = {
             'query': query, 'parsed_query': parsed, 'target_table': target_table,
@@ -325,15 +329,15 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             'computed_filters': [item['dimension'] for item in computed_filters],
             'available_dimensions': [d for d in DIMENSIONS if d not in used_dimensions],
             'last_render_focus_ids': last_render_focus,
-            'tools_remaining': max(0, limit - index),
+            'tools_remaining': max(0, limit - tool_count),
         }
         instructions = INSTRUCTIONS + ('\nThe tool budget is exhausted. Return action=finish now.'
-                                       if index == limit else '')
+                                       if tool_count >= limit else '')
         parts = []
         for path in images:
             parts.extend([{'type': 'text', 'text': f'Inspection {Path(path).name}'}, image_part(path)])
         parts.append({'type': 'text', 'text': json.dumps(state, ensure_ascii=False)})
-        call = {'stage': 'active_decision', 'step': index + 1,
+        call = {'stage': 'active_decision', 'step': attempts + 1,
                 'response_format': {'type': 'json_object'}}
         calls.append(call)
         try:
@@ -360,7 +364,7 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             if not remaining:
                 status = 'conflict'
             obj = next(obj for obj in objects if obj['bbox_id'] == oid)
-            trace['stop_reason'] = 'budget_final_choice' if index == limit else 'model_finish'
+            trace['stop_reason'] = 'budget_final_choice' if tool_count >= limit else 'model_finish'
             trace['final_candidate_ids'] = sorted(remaining)
             trace['final_checks'] = checks
             return {
@@ -374,7 +378,7 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 'diagnosis_policy': 'active_model_selected_evidence',
                 'active_trace': trace,
             }
-        if index == limit:
+        if tool_count >= limit:
             raise QwenAPIError('active decision ignored exhausted tool budget')
         signature = json.dumps({k: v for k, v in action.items() if k != 'reason'}, sort_keys=True)
         if signature in used:
@@ -398,7 +402,7 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                     observation['candidate_update'] = update
                     observation['candidate_ids'] = diagnosis.get('candidate_ids', [])
             elif name == 'render':
-                observation = render_action(action, geometry_objects, xyz, rgb, ids, out, index + 1)
+                observation = render_action(action, geometry_objects, xyz, rgb, ids, out, tool_count + 1)
                 images.append(observation['image'])
                 last_render_focus = list(observation['focus_ids'])
             elif name == 'visual_check':
@@ -422,8 +426,16 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         except (ValueError, OSError) as exc:
             observation = {'tool': action.get('action'), 'error': str(exc),
                            'no_evidence_acquired': True}
+            entry.update(observation=observation,
+                         remaining_candidate_ids=diagnosis.get('candidate_ids', []))
+            history.append(entry)
+            trace['diagnosis_after_step'] = diagnosis
+            attempts += 1
+            continue
+        tool_count += 1
         entry.update(observation=observation,
                      remaining_candidate_ids=diagnosis.get('candidate_ids', []))
         history.append(entry)
         trace['diagnosis_after_step'] = diagnosis
-    raise QwenAPIError('active decision ended without a target')
+        attempts += 1
+    raise QwenAPIError('active decision exceeded action-attempt budget without a target')

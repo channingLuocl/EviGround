@@ -1,11 +1,14 @@
+import json
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
 from active_diagnostic import (apply_computed_evidence, _check_payload,
-                               compute_observation, position_candidate_evidence,
-                               render_action)
+                               active_ground, compute_observation,
+                               position_candidate_evidence, render_action)
 from diagnostic import diagnose
 
 
@@ -23,6 +26,34 @@ def parsed():
 
 
 class ActiveDiagnosticTests(unittest.TestCase):
+    def test_invalid_render_does_not_consume_successful_tool_budget(self):
+        objects = [obj(1, 'window', 0, 0), obj(2, 'window', 2, 0)]
+        responses = iter([
+            {'_content': json.dumps({
+                'action': 'render', 'focus_ids': [1, 2, 3, 4, 5, 6, 7],
+                'azimuth_deg': 90, 'elevation_deg': 25,
+                'context': 'scene', 'reason': 'too many focus instances',
+            }), '_baseline': {'model': 'mock', 'latency_s': .01},
+             '_finish_reason': 'stop', 'usage': {}},
+            {'_content': json.dumps({
+                'action': 'finish', 'predicted_id': 1,
+                'reason': 'fallback after invalid tool request',
+            }), '_baseline': {'model': 'mock', 'latency_s': .01},
+             '_finish_reason': 'stop', 'usage': {}},
+        ])
+        parsed_query = parsed()
+        with tempfile.TemporaryDirectory() as directory, patch(
+                'active_diagnostic.chat', side_effect=lambda *args, **kwargs: next(responses)):
+            trace, calls = {}, []
+            result = active_ground(
+                'window', parsed_query, objects, objects, objects,
+                np.zeros((2, 3)), np.zeros((2, 3), dtype=np.uint8),
+                np.array([1, 2]), Path(directory), calls, trace, 1, True)
+        self.assertEqual(result['predicted_id'], 1)
+        self.assertEqual(trace['stop_reason'], 'model_finish')
+        self.assertEqual(len(trace['steps']), 2)
+        self.assertTrue(trace['steps'][0]['observation']['no_evidence_acquired'])
+
     def test_position_evidence_distinguishes_fail_from_unknown(self):
         diagnosis = {
             'candidate_ids': [1, 2, 3], 'stable_candidate_ids': [], 'missing': [],
