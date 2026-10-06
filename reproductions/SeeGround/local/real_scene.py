@@ -11,7 +11,7 @@ from qwen_api import chat, parse_json_object, QwenAPIError
 from evidence import (match_categories, distance_evidence, match_retrieval_categories,
                       distance_rankings, propose_category_checks, validate_distance_relations)
 
-MODES=['baseline','geometry','visual_review','ranked_geometry','category_review','diagnostic']
+MODES=['baseline','geometry','visual_review','ranked_geometry','category_review','diagnostic','active_diagnostic']
 OBJECT_TABLES={'pred':'objects.json','gt':'objects_gt.json'}
 
 
@@ -37,6 +37,8 @@ def select_objects(names, objects):
 
 
 def parse_query(query, mode='baseline', calls=None):
+    if mode=='active_diagnostic':
+        mode='diagnostic'
     # No target ID or GT category labels are supplied to the parser.
     prompt=('Extract target and anchor object category names from the description. '
             'Return only JSON {"Target":["category"],"Anchor":["category"]}. '
@@ -152,7 +154,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
     started=perf_counter()
     objects_path=object_table_path(scene_dir,object_table)
     objects=load_objects(objects_path)
-    structural=structural_objects(scene_dir,objects) if mode=='diagnostic' else []
+    structural=structural_objects(scene_dir,objects) if mode in ('diagnostic','active_diagnostic') else []
     geometry_objects=objects+structural
     out.mkdir(parents=True,exist_ok=True)
     calls=[]
@@ -167,19 +169,40 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
     try:
         with np.load(scene_dir/'scene.npz',allow_pickle=False) as cloud:
             xyz,rgb,ids=cloud['xyz'],cloud['rgb'],cloud['ids']
-        if mode=='diagnostic':
+        if mode in ('diagnostic','active_diagnostic'):
             from wall_geometry import attach_wall_geometry
             geometry_objects=attach_wall_geometry(geometry_objects,xyz,ids)
         stage='parse_query'
         parsed=parse_query(query,mode,calls)
         stage='retrieve_objects'
         matcher=select_objects if mode=='baseline' else match_categories
-        if mode in ('ranked_geometry','category_review','diagnostic'):
+        if mode in ('ranked_geometry','category_review','diagnostic','active_diagnostic'):
             matcher=match_retrieval_categories
         matched_targets=matcher(parsed['Target'],objects)
         matched_anchors=matcher(parsed['Anchor'],geometry_objects)
         targets=matched_targets or objects
         anchors=(matched_anchors or targets) if mode=='baseline' else matched_anchors
+        if mode=='active_diagnostic':
+            from active_diagnostic import active_ground
+            stage='active_diagnostic'
+            proposed=[] if object_table=='gt' else propose_category_checks(objects,matched_targets,anchors,review_limit)
+            candidates=list({obj['bbox_id']:obj for obj in matched_targets+proposed}.values()) or objects
+            trace={}
+            record.update(parsed_query=parsed, active_diagnostic=trace,
+                          category_target_ids=[obj['bbox_id'] for obj in matched_targets],
+                          category_anchor_ids=[obj['bbox_id'] for obj in matched_anchors],
+                          review_proposal={'ids':[obj['bbox_id'] for obj in candidates]},
+                          structural_reference_ids=[obj['bbox_id'] for obj in structural])
+            prediction=active_ground(query,parsed,objects,geometry_objects,candidates,xyz,rgb,ids,
+                                     out,calls,trace,review_limit,object_table=='gt')
+            record.update(diagnosis=prediction['diagnosis'],decision_status=prediction['decision_status'])
+            prediction.update(mode=mode,object_table=object_table,objects_file=objects_path.name,
+                              gt_categories_supplied_to_model=object_table=='gt',query_target_id_supplied_to_model=False,
+                              pipeline_latency_s=round(perf_counter()-started,4),api_calls=len(calls),
+                              call_usage=[call.get('usage') for call in calls])
+            (out/'prediction.json').write_text(json.dumps(prediction,ensure_ascii=False,indent=2))
+            print(f'预测编号：{prediction["predicted_id"]}；主动诊断步骤：{len(trace["steps"])}；结果：{out/"prediction.json"}',flush=True)
+            return prediction
         inspection_targets=targets
         diagnosis=None
         if mode=='diagnostic':

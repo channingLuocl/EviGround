@@ -494,12 +494,14 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
         },
     }
     def verdict(oid, name):
-        if trusted_categories:
-            if not match_retrieval_categories([name], [by_id[oid]]):
-                return 'no'
-            if not attributes_for(parsed, name):
-                return 'yes'
-        return checks_by_key.get((oid, retrieval_category(name)), {}).get('verdict', 'uncertain')
+        if trusted_categories and not match_retrieval_categories([name], [by_id[oid]]):
+            return 'no'
+        checked = checks_by_key.get((oid, retrieval_category(name)))
+        if checked:
+            return checked.get('verdict', 'uncertain')
+        if trusted_categories and not attributes_for(parsed, name):
+            return 'yes'
+        return 'uncertain'
     eligible = [o for o in candidates if verdict(o['bbox_id'], category) != 'no']
     # Explicit superlatives and "on the floor" are deterministic box predicates.
     size_allowed = None

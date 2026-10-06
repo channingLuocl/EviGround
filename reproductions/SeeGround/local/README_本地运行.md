@@ -614,3 +614,25 @@ between_unknown_ids（至少一组参照无法计算）与 candidate_shape_metri
 candidate_ids 仍表示在部分解释下未排除的候选，不等于全部具备几何支持。
 尺寸软证据新增水平长短边、水平长短边比和高长比，均从世界坐标 AABB 计算；
 不是物体固有宽深，不能直接把 skinny 解释为短边最小，不增加硬筛选。
+
+## 主动证据模式 active_diagnostic
+
+该模式先用类别得到初始候选，再让模型根据原句、候选差异和当前证据选择下一步。
+可选维度是 viewpoint、position、distance、appearance、size，没有固定顺序。
+`compute` 只返回可审计的计算证据；需要检查颜色、材质或形状时，模型先调用
+`render`，再用 `visual_check` 标记 `yes/no/uncertain`。只有可见的 `no` 会排除候选，
+`uncertain` 保留候选。每一步都写入 `active_trace`，包括动作、观察、剩余候选和停止原因。
+
+先跑一题确认动作轨迹：
+
+```bash
+.venv/bin/python local/real_scene.py \
+  --scene-dir local_outputs/scene0149_00 \
+  --query 'Choose the skinny cabinet between the stove and the wall.' \
+  --mode active_diagnostic --object-table gt --review-limit 5 \
+  --run-name active_between_01
+```
+
+查看 `local_outputs/scene0149_00/active_between_01/prediction.json` 中的
+`active_trace.steps`。单题只用于确认模型是否按候选差异选择证据，不能作为准确率结论；
+确认协议后再用 `batch_nr3d.py --mode active_diagnostic` 扩大样本。

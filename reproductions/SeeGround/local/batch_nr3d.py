@@ -47,14 +47,14 @@ def experiment_settings(scene_dir, mode, review_limit=6, object_table='pred'):
     code_dir=Path(__file__).resolve().parent
     selected_path=object_table_path(scene_dir,object_table)
     settings={'mode':mode,'object_table':object_table,'objects_file':selected_path.name,
-            'review_limit':review_limit if mode in ('category_review','diagnostic') else None,
+            'review_limit':review_limit if mode in ('category_review','diagnostic','active_diagnostic') else None,
             'model':os.getenv('SEEGROUND_MODEL','').strip(),
             'base_url':os.getenv('SEEGROUND_BASE_URL','').strip().rstrip('/'),
             'code_sha256':{name:hashlib.sha256((code_dir/name).read_bytes()).hexdigest() for name in
-                           ['run.py','real_scene.py','qwen_api.py','evidence.py','object_geometry.py','visual_review.py','category_review.py','diagnostic.py','wall_geometry.py','rgb_review.py','metrics.py','batch_nr3d.py']},
+                           ['run.py','real_scene.py','qwen_api.py','evidence.py','object_geometry.py','visual_review.py','category_review.py','diagnostic.py','wall_geometry.py','active_diagnostic.py','rgb_review.py','metrics.py','batch_nr3d.py']},
             'scene_sha256':{name:hashlib.sha256((scene_dir/name).read_bytes()).hexdigest() for name in
                             ['scene.npz','objects_gt.json']}}
-    if mode=='diagnostic':
+    if mode in ('diagnostic','active_diagnostic'):
         from rgb_review import input_hashes
         settings['rgb_sha256']=input_hashes(scene_dir,load_objects(selected_path))
         structural_path=scene_dir/'scene_instances.json'
