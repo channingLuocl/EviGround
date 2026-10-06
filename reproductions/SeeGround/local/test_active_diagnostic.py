@@ -54,6 +54,32 @@ class ActiveDiagnosticTests(unittest.TestCase):
         self.assertEqual(len(trace['steps']), 2)
         self.assertTrue(trace['steps'][0]['observation']['no_evidence_acquired'])
 
+    def test_duplicate_successful_action_is_recoverable(self):
+        objects = [obj(1, 'window', 0, 0), obj(2, 'window', 2, 0)]
+        action = {'action': 'compute', 'dimension': 'appearance',
+                  'reason': 'inspect appearance'}
+        responses = iter([
+            {'_content': json.dumps(action),
+             '_baseline': {'model': 'mock', 'latency_s': .01},
+             '_finish_reason': 'stop', 'usage': {}},
+            {'_content': json.dumps(action),
+             '_baseline': {'model': 'mock', 'latency_s': .01},
+             '_finish_reason': 'stop', 'usage': {}},
+            {'_content': json.dumps({'action': 'finish', 'predicted_id': 1,
+                                     'reason': 'finish after duplicate'}),
+             '_baseline': {'model': 'mock', 'latency_s': .01},
+             '_finish_reason': 'stop', 'usage': {}},
+        ])
+        with tempfile.TemporaryDirectory() as directory, patch(
+                'active_diagnostic.chat', side_effect=lambda *args, **kwargs: next(responses)):
+            trace, calls = {}, []
+            result = active_ground(
+                'window', parsed(), objects, objects, objects,
+                np.zeros((2, 3)), np.zeros((2, 3), dtype=np.uint8),
+                np.array([1, 2]), Path(directory), calls, trace, 2, True)
+        self.assertEqual(result['predicted_id'], 1)
+        self.assertTrue(trace['steps'][1]['observation']['no_evidence_acquired'])
+
     def test_position_evidence_distinguishes_fail_from_unknown(self):
         diagnosis = {
             'candidate_ids': [1, 2, 3], 'stable_candidate_ids': [], 'missing': [],

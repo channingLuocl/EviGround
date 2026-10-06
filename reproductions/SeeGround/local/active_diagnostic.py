@@ -382,7 +382,17 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             raise QwenAPIError('active decision ignored exhausted tool budget')
         signature = json.dumps({k: v for k, v in action.items() if k != 'reason'}, sort_keys=True)
         if signature in used:
-            raise QwenAPIError('this tool action was already executed; choose another observation or finish')
+            history.append({
+                'action': action,
+                'observation': {
+                    'tool': action.get('action'),
+                    'error': 'this tool action was already executed; choose another observation or finish',
+                    'no_evidence_acquired': True,
+                },
+                'remaining_candidate_ids': diagnosis.get('candidate_ids', []),
+            })
+            attempts += 1
+            continue
         entry = {'action': action}
         try:
             name = action.get('action')
