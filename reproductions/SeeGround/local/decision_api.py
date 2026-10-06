@@ -56,12 +56,26 @@ def decide(backend, state, questions):
     if backend=='jev':
         key=os.getenv('TYPESAFE_API_KEY','').strip()
         if not key or not jev_model():raise ValueError('请配置 TYPESAFE_API_KEY 和 SEEGROUND_JEV_MODEL')
+        payload={'model':jev_model(),'state':state,'questions':questions}
         try:
-            response=requests.post(JEV_URL,headers={'Authorization':'Bearer '+key},
-                json={'model':jev_model(),'state':state,'questions':questions},timeout=(15,120))
+            # Fail locally on non-JSON values; otherwise requests would emit NaN and
+            # the service would return an opaque 400 for malformed state.
+            json.dumps(payload, ensure_ascii=False, allow_nan=False)
+            response=requests.post(JEV_URL,headers={'Authorization':'Bearer '+key,
+                                                     'Content-Type':'application/json'},
+                json=payload,timeout=(15,120))
         except requests.RequestException as exc:
             raise ValueError('Jev API 网络连接失败') from exc
-        if not response.ok:raise ValueError(f'Jev API 返回 HTTP {response.status_code}')
+        except (ValueError, TypeError) as exc:
+            raise ValueError('Jev 请求状态不是严格 JSON：' + str(exc)) from exc
+        if not response.ok:
+            try:
+                detail=response.json()
+            except ValueError:
+                detail=response.text[:1000]
+            raise DecisionAPIError(
+                f'Jev API 返回 HTTP {response.status_code}：{detail}',
+                {'status_code': response.status_code, 'body': detail})
         try:data=response.json()
         except ValueError as exc:raise ValueError('Jev API 返回非 JSON') from exc
     elif backend=='qwen':

@@ -157,6 +157,26 @@ class DecisionTests(unittest.TestCase):
                 with self.assertRaises(ValueError) as error:decide('jev',state,questions)
                 self.assertNotIn('secret-fixture',str(error.exception))
 
+    def test_jev_http_error_preserves_safe_service_diagnostic(self):
+        run,objects=fixture();state,questions=build_input(run,objects)
+        body={'error':'invalid question criteria'}
+        with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}), \
+             patch('decision_api.requests.post',return_value=Mock(ok=False,status_code=400,
+                                                                   json=lambda:body)):
+            with self.assertRaises(DecisionAPIError) as error:decide('jev',state,questions)
+        self.assertIn('invalid question criteria',str(error.exception))
+        self.assertEqual(error.exception.response_data,{'status_code':400,'body':body})
+        self.assertNotIn('secret-fixture',str(error.exception))
+
+    def test_jev_rejects_non_finite_state_before_network(self):
+        state={'bad':float('nan')};questions={'q':{'type':'choice','instructions':'pick',
+                                                   'criteria':{'a':'A','b':'B'}}}
+        with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}), \
+             patch('decision_api.requests.post') as post:
+            with self.assertRaisesRegex(ValueError,'严格 JSON'):
+                decide('jev',state,questions)
+        post.assert_not_called()
+
     def test_state_has_no_old_prediction_or_image_paths(self):
         run,objects=fixture();state,questions=build_input(run,objects)
         self.assertNotIn('ANSWER_MUST_NOT_LEAK',json.dumps(state))
