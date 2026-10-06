@@ -252,6 +252,7 @@ def validate_structure(query, parsed):
             valid_attrs.append(attribute)
         elif quoted(query, attribute.get('phrase')):
             missing.append('attribute category is not a supplied target/reference: ' + category_name)
+            missing.append('appearance condition not represented: ' + attribute.get('phrase', ''))
     parsed['Attributes'] = valid_attrs
     if len(parsed['Attributes']) != len(attrs):
         missing.append('unquoted or unbound appearance attribute')

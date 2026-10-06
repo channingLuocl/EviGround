@@ -49,6 +49,20 @@ class RealSceneTests(unittest.TestCase):
         self.assertNotIn('appearance condition not represented: skinny',
                          result['diagnostic_missing'])
 
+    def test_active_parser_repairs_full_modifier_phrase_used_as_category(self):
+        answer={'Target':['cabinet'],'Anchor':[],'Relations':[],
+                'Observer':{},'Attributes':[{'category':'skinny',
+                                             'phrase':'skinny cabinet'}],
+                'Unhandled':[]}
+        with patch('real_scene.chat',side_effect=[
+                reply(json.dumps(answer)),
+                reply(json.dumps({'Attributes':[{'category':'cabinet','phrase':'skinny cabinet'}]}))]) as api:
+            result=parse_query('Choose the skinny cabinet.',mode='active_diagnostic')
+        self.assertEqual(api.call_count,2)
+        self.assertEqual(result['Attributes'],
+                         [{'category':'cabinet','phrase':'skinny cabinet'}])
+        self.assertFalse(result['diagnostic_missing'])
+
     def test_attribute_repair_keeps_prior_fields_and_rejects_invented_binding(self):
         answer={'Target':['cabinet'],'Anchor':[],'Relations':[],
                 'Observer':{},'Attributes':[],'Unhandled':[]}

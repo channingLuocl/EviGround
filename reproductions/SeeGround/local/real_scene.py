@@ -182,9 +182,14 @@ def repair_missing_attributes(query, parsed, calls):
             if attr not in combined:
                 combined.append(attr)
         corrected=validate_structure(query,{**parsed,'Attributes':combined})
+        repairable_prefixes = (
+            'appearance condition not represented:',
+            'attribute category is not a supplied target/reference:',
+            'unquoted or unbound appearance attribute',
+        )
         corrected['diagnostic_missing']=list(dict.fromkeys(
             [item for item in parsed['diagnostic_missing']
-             if not item.startswith('appearance condition not represented:')]
+             if not item.startswith(repairable_prefixes)]
             +corrected['diagnostic_missing']))
         call['remaining_missing']=corrected['diagnostic_missing']
         return corrected
