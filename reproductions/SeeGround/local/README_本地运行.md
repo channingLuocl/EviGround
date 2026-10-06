@@ -694,3 +694,22 @@ ACTIVE_RUN="active_flow_$(date +%Y%m%d_%H%M%S)"
 
 后续再补覆盖位置、距离、大小、外观、视角的样本与多证据组合样本；根据运行轨迹确定
 分项优化顺序，不预设视角是唯一瓶颈。GT 物体表属于给定候选条件下的验证。
+
+### 首次真实循环后的修正：属性遗漏与过早结束
+
+`active_flow_20261006_131106` 的服务器轨迹执行了 appearance、size、position、render、
+visual_check，但九个候选均未排除；模型只确认编号 2 就 finish，最终正确标为 missing。
+这说明工具链可运行，尚不能说明候选消歧有效，也没有验证编号 2 就是正确答案。
+
+主动模式检测到 `appearance condition not represented` 后，最多额外请求一次属性补全。
+只允许返回原文引用及已有类别绑定，合并 Attributes 后重新验证；其他解析字段不由该请求
+改写，原有非属性缺失项继续保留。补全失败仍保留 missing；不把 skinny 变成最窄硬筛选。
+额外调用在 run.json 中以 parse_query_attribute_repair 记录，并计入调用与耗时。
+
+工具预算未耗尽时，只有审计 resolved 且剩余一个候选才能 finish；否则反馈给模型比较
+其他候选或补充缺失条件。无法继续时可 stop。预算耗尽后仍可保留未认证的最终猜测，
+不会将其标记为 accepted。该规则替代上一节允许提前输出多候选猜测的行为。
+
+本轮不修改墙面拟合与 between 谓词：存在无效墙面解释时继续保留 unknown，不能为缩小
+候选集而把 unknown 当作 fail。重跑时使用新的 run-name，先检查属性是否进入视觉待办、
+模型是否比较了其他候选，而非只确认一个候选就结束。

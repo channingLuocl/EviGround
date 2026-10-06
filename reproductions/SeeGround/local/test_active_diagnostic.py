@@ -66,6 +66,31 @@ class ActiveDiagnosticTests(unittest.TestCase):
         self.assertEqual(result['active_trace']['action_attempts'], 2)
         self.assertIn('Controller correction', messages[1][0]['content'])
 
+    def test_yes_for_one_candidate_requires_comparison_before_finish(self):
+        result, messages = self.run_actions([
+            {'action': 'render', 'reason': 'compare windows'},
+            {'action': 'visual_check', 'checks': [
+                {'id': 1, 'verdict': 'yes', 'reason': 'visible match'}], 'reason': 'check first'},
+            {'action': 'finish', 'predicted_id': 1, 'reason': 'first matches'},
+            {'action': 'visual_check', 'checks': [
+                {'id': 2, 'verdict': 'no', 'reason': 'visible mismatch'}], 'reason': 'check alternative'},
+            {'action': 'finish', 'predicted_id': 1, 'reason': 'alternative excluded'},
+        ])
+        self.assertIn('Premature finish', messages[3][0]['content'])
+        self.assertEqual(result['active_trace']['rejected_actions'], 1)
+        self.assertEqual(result['active_trace']['final_candidate_ids'], [1])
+        self.assertTrue(result['accepted'])
+
+    def test_budget_finish_remains_unaccepted_with_multiple_candidates(self):
+        result, _ = self.run_actions([
+            {'action': 'compute', 'dimension': 'size', 'reason': 'inspect'},
+            {'action': 'finish', 'predicted_id': 1, 'reason': 'budget guess'},
+        ], limit=1)
+        self.assertEqual(result['predicted_id'], 1)
+        self.assertFalse(result['accepted'])
+        self.assertEqual(result['decision_status'], 'missing')
+        self.assertEqual(result['active_trace']['stop_reason'], 'budget_final_choice')
+
     def test_repeated_actions_stop_at_attempt_limit(self):
         action = {'action': 'compute', 'dimension': 'appearance', 'reason': 'inspect'}
         result, _ = self.run_actions([action] * 7, limit=2)
@@ -132,8 +157,8 @@ class ActiveDiagnosticTests(unittest.TestCase):
             }), '_baseline': {'model': 'mock', 'latency_s': .01},
              '_finish_reason': 'stop', 'usage': {}},
             {'_content': json.dumps({
-                'action': 'finish', 'predicted_id': 1,
-                'reason': 'fallback after invalid tool request',
+                'action': 'stop',
+                'reason': 'no useful evidence after invalid tool request',
             }), '_baseline': {'model': 'mock', 'latency_s': .01},
              '_finish_reason': 'stop', 'usage': {}},
         ])
@@ -145,8 +170,8 @@ class ActiveDiagnosticTests(unittest.TestCase):
                 'window', parsed_query, objects, objects, objects,
                 np.zeros((2, 3)), np.zeros((2, 3), dtype=np.uint8),
                 np.array([1, 2]), Path(directory), calls, trace, 1, True)
-        self.assertEqual(result['predicted_id'], 1)
-        self.assertEqual(trace['stop_reason'], 'model_finish')
+        self.assertIsNone(result['predicted_id'])
+        self.assertEqual(trace['stop_reason'], 'model_stop')
         self.assertEqual(len(trace['steps']), 2)
         self.assertTrue(trace['steps'][0]['observation']['no_evidence_acquired'])
 
@@ -161,8 +186,8 @@ class ActiveDiagnosticTests(unittest.TestCase):
             {'_content': json.dumps(action),
              '_baseline': {'model': 'mock', 'latency_s': .01},
              '_finish_reason': 'stop', 'usage': {}},
-            {'_content': json.dumps({'action': 'finish', 'predicted_id': 1,
-                                     'reason': 'finish after duplicate'}),
+            {'_content': json.dumps({'action': 'stop',
+                                     'reason': 'no useful evidence after duplicate'}),
              '_baseline': {'model': 'mock', 'latency_s': .01},
              '_finish_reason': 'stop', 'usage': {}},
         ])
@@ -177,7 +202,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
                 'window', parsed(), objects, objects, objects,
                 np.zeros((2, 3)), np.zeros((2, 3), dtype=np.uint8),
                 np.array([1, 2]), Path(directory), calls, trace, 2, True)
-        self.assertEqual(result['predicted_id'], 1)
+        self.assertIsNone(result['predicted_id'])
         self.assertTrue(trace['steps'][1]['observation']['no_evidence_acquired'])
         self.assertIn('Controller correction', messages_seen[2][0]['content'])
 

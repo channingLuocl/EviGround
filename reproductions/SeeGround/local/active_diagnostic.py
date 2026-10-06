@@ -45,6 +45,12 @@ appearance/size summary is not a visual check. After rendering, inspect the imag
 with visual_check before requesting the same evidence again. Preserve earlier
 constraints when switching dimensions. Used dimensions mean inspected, not solved.
 If no useful action remains, use stop rather than inventing a target or repeating tools.
+One candidate receiving yes does not exclude any alternatives. Compare remaining
+alternatives in small rendered groups and record no only for visible contradictions.
+Candidate-level pass means at least one reference interpretation supports that
+predicate, not that all interpretations or the full description are confirmed.
+While tool budget remains, finish is allowed only when evidence_state is resolved
+with one candidate. Otherwise continue useful evidence collection or explicitly stop.
 '''
 
 
@@ -413,11 +419,18 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         if action.get('action') == 'finish':
             oid = action.get('predicted_id')
             allowed = set(remaining) or set(category_candidates)
-            if type(oid) is int and oid in allowed:
+            valid_id = type(oid) is int and oid in allowed
+            resolved = diagnosis.get('status') == 'resolved' and len(remaining) == 1
+            if valid_id and (resolved or tool_count >= limit):
                 return finish_result(action, 'budget_final_choice' if tool_count >= limit
                                      else 'model_finish', oid)
+            error = ('finish requires an ID from the remaining candidates; use stop if unresolved'
+                     if not valid_id else
+                     'Premature finish: the evidence has not resolved a unique target. '
+                     'A yes for one candidate does not exclude others. Compare unchecked alternatives '
+                     'or inspect missing conditions; use stop if no useful evidence can be acquired.')
             observation = {'tool': 'finish', 'no_evidence_acquired': True,
-                           'error': 'finish requires an ID from the remaining candidates; use stop if unresolved'}
+                           'error': error}
             history.append({'action': action, 'observation': observation,
                             'remaining_candidate_ids': list(remaining)})
             trace['rejected_actions'] += 1

@@ -14,6 +14,54 @@ def reply(content, finish='stop'):
 
 
 class RealSceneTests(unittest.TestCase):
+    def test_active_parser_repairs_missing_attribute_binding_once(self):
+        answer={'Target':['cabinet'],'Anchor':[],'Relations':[],
+                'Observer':{},'Attributes':[],'Unhandled':[]}
+        calls=[]
+        with patch('real_scene.chat',side_effect=[reply(json.dumps(answer)),
+                reply(json.dumps({'Attributes':[{'category':'cabinet','phrase':'skinny'}]}))]) as api:
+            result=parse_query('Choose the skinny cabinet.',mode='active_diagnostic',calls=calls)
+        self.assertEqual(api.call_count,2)
+        self.assertEqual(result['Attributes'],[{'category':'cabinet','phrase':'skinny'}])
+        self.assertNotIn('appearance condition not represented: skinny',result['diagnostic_missing'])
+        self.assertEqual(calls[1]['stage'],'parse_query_attribute_repair')
+        from diagnostic import diagnose
+        objects=[{'bbox_id':1,'target':'cabinet','bbox_3d':[0,0,.5,.4,.4,1.]}]
+        diagnosis=diagnose(result,objects,objects,[0,0,.5],trusted_categories=True)
+        self.assertEqual(diagnosis['visual_needs'][0]['id'],1)
+        self.assertEqual(diagnosis['status'],'missing')
+
+    def test_attribute_repair_keeps_prior_fields_and_rejects_invented_binding(self):
+        answer={'Target':['cabinet'],'Anchor':[],'Relations':[],
+                'Observer':{},'Attributes':[],'Unhandled':[]}
+        for correction in ({'Attributes':[{'category':'chair','phrase':'skinny'}]},
+                           {'Attributes':[{'category':'cabinet','phrase':'red'}]},
+                           {'Attributes':[]}):
+            with self.subTest(correction=correction), patch('real_scene.chat',side_effect=[
+                    reply(json.dumps(answer)),reply(json.dumps(correction))]) as api:
+                result=parse_query('skinny cabinet',mode='active_diagnostic')
+            self.assertEqual(api.call_count,2)
+            self.assertEqual(result['Attributes'],[])
+            self.assertIn('appearance condition not represented: skinny',result['diagnostic_missing'])
+
+    def test_active_parser_does_not_retry_complete_attributes(self):
+        answer={'Target':['cabinet'],'Anchor':[],'Relations':[],
+                'Observer':{},'Attributes':[{'category':'cabinet','phrase':'skinny'}],'Unhandled':[]}
+        with patch('real_scene.chat',return_value=reply(json.dumps(answer))) as api:
+            parse_query('skinny cabinet',mode='active_diagnostic')
+        self.assertEqual(api.call_count,1)
+
+    def test_attribute_repair_does_not_clear_other_parser_failures(self):
+        answer={'Target':['cabinet'],'Anchor':['stove'],'Relations':[
+            {'target_category':'cabinet','anchor_category':'stove',
+             'relation':'other','phrase':'beside the stove'}],
+            'Observer':{},'Attributes':[],'Unhandled':[]}
+        with patch('real_scene.chat',side_effect=[reply(json.dumps(answer)),
+                reply(json.dumps({'Attributes':[{'category':'cabinet','phrase':'skinny'}]}))]):
+            result=parse_query('skinny cabinet beside the stove',mode='active_diagnostic')
+        self.assertIn('unsupported relation: beside the stove',result['diagnostic_missing'])
+        self.assertNotIn('appearance condition not represented: skinny',result['diagnostic_missing'])
+
     def test_diagnostic_query_is_separate_from_instructions_and_schema_has_scope(self):
         query='This trash can is next to a large black television.'
         answer={'Target':['trash can'],'Anchor':['tv'],'Relations':[],
