@@ -29,6 +29,69 @@ def text_state(value):
     return value
 
 
+def jev_state(state):
+    """Send decision-relevant summaries instead of the full local audit trace."""
+    parsed = state.get('parsed_query') or {}
+    parsed = {key: parsed[key] for key in (
+        'Target', 'Anchor', 'Relations', 'Viewpoint', 'Observer', 'Attributes', 'Unhandled'
+    ) if key in parsed}
+    source_observation = state.get('observation') or {}
+    observation = {key: source_observation[key] for key in
+                   ('tool', 'dimension', 'status', 'candidate_ids', 'candidate_evidence',
+                    'coverage', 'missing', 'next_evidence', 'policy')
+                   if key in source_observation}
+    geometry = source_observation.get('geometry')
+    if isinstance(geometry, dict):
+        geometry = {key: value for key, value in geometry.items()
+                    if key != 'between_triplets'}
+        observation['geometry'] = geometry
+    details = source_observation.get('details')
+    if isinstance(details, dict):
+        compact_details = {key: details[key] for key in
+                           ('dimension', 'candidate_ids', 'candidate_evidence', 'policy',
+                            'candidate_metrics', 'attributes', 'visual_needs')
+                           if key in details}
+        if 'distance_rankings' in details:
+            rankings = details['distance_rankings']
+            compact_details['distance_rankings'] = {
+                'rankings': [{'relation': row.get('relation'), 'anchor_id': row.get('anchor_id'),
+                              'best_ids': row.get('best_ids'), 'ordered_targets': row.get('ordered_targets')}
+                             for row in rankings.get('rankings', [])],
+                'ignored': rankings.get('ignored', []),
+            }
+        observation['details'] = compact_details
+    history = []
+    for item in state.get('history', [])[-8:]:
+        row = {key: item[key] for key in ('action', 'remaining_candidate_ids', 'evidence_state')
+               if key in item}
+        prior_observation = item.get('observation')
+        if isinstance(prior_observation, dict):
+            row['observation'] = {key: prior_observation[key] for key in
+                                  ('dimension', 'candidate_evidence', 'coverage', 'missing')
+                                  if key in prior_observation}
+        history.append(row)
+    def labels(rows):
+        return [{'bbox_id': row['bbox_id'], 'category': row.get('category', row.get('target', ''))}
+                for row in rows if isinstance(row, dict) and 'bbox_id' in row]
+    return {
+        'query': state.get('query', ''),
+        'parsed_query': parsed,
+        'target_candidates': labels(state.get('target_table', [])),
+        'reference_candidates': labels(state.get('reference_table', [])),
+        'category_candidates': state.get('category_candidates', []),
+        'remaining_candidate_ids': state.get('remaining_candidate_ids', []),
+        'evidence_state': state.get('evidence_state', {}),
+        'observation': observation,
+        'history': history,
+        'action_attempts_remaining': state.get('action_attempts_remaining'),
+        'used_dimensions': state.get('used_dimensions', []),
+        'computed_filters': state.get('computed_filters', []),
+        'available_dimensions': state.get('available_dimensions', []),
+        'evidence_capabilities': state.get('evidence_capabilities', {}),
+        'tools_remaining': state.get('tools_remaining', 0),
+    }
+
+
 def evidence_tasks(state):
     tasks = {dimension: {'action': 'evidence', 'dimension': dimension,
                         'reason': state['evidence_capabilities'][dimension]}
@@ -64,10 +127,12 @@ def jev_action(state, instructions, call, calls):
         'Finish before the evidence budget is exhausted only if status is resolved with one '
         'remaining candidate; otherwise collect useful evidence or stop. '
         'Confidence is not evidence or permission to exclude a candidate.', 'criteria': tasks}}
+    request_state = jev_state(state)
+    request_state['instructions'] = instructions
     call.update(backend='jev', role='planner', questions=questions,
                 response_format={'type': 'choice'})
     try:
-        result = decide('jev', {'instructions': instructions, **state}, questions)
+        result = decide('jev', request_state, questions)
     except DecisionAPIError as exc:
         call['error_response'] = exc.response_data
         raise
@@ -90,7 +155,7 @@ def jev_action(state, instructions, call, calls):
                        'response_format': {'type': 'choice'}}
         calls.append(target_call)
         try:
-            target = decide('jev', state, questions)
+            target = decide('jev', request_state, questions)
         except (ValueError, OSError) as exc:
             target_call['error'] = str(exc)
             if isinstance(exc, DecisionAPIError):

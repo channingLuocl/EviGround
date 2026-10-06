@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from active_diagnostic import EVIDENCE_CAPABILITIES
 from decision_api import DecisionAPIError
-from react_decision import evidence_tasks, jev_action, react_backend, text_state
+from react_decision import evidence_tasks, jev_action, jev_state, react_backend, text_state
 
 
 def state():
@@ -41,6 +41,24 @@ class ReactDecisionTests(unittest.TestCase):
         self.assertEqual(cleaned['history'][0]['checks'][0]['reason'], 'occluded')
         self.assertIn('images', source['history'][0])
 
+    def test_jev_state_keeps_decision_summaries_and_drops_verbose_audit_data(self):
+        source = state()
+        source.update(query='skinny cabinet', instructions='long duplicate rules',
+                      parsed_query={'Target': ['cabinet'], 'query_rewrite': {'verbose': 'x' * 1000}},
+                      target_table=[{'bbox_id': 1, 'category': 'cabinet', 'bbox_3d': [0] * 6}],
+                      reference_table=[{'bbox_id': 9, 'category': 'stove', 'bbox_3d': [0] * 6}],
+                      observation={'tool': 'initial_diagnosis', 'geometry': {
+                          'between_triplets': [{'large': 'x' * 1000}],
+                          'between_candidate_evidence': [{'target_id': 1, 'status': 'pass'}]}})
+        compact = jev_state(source)
+        encoded = json.dumps(compact)
+        self.assertNotIn('long duplicate rules', encoded)
+        self.assertNotIn('query_rewrite', encoded)
+        self.assertNotIn('bbox_3d', encoded)
+        self.assertNotIn('between_triplets', encoded)
+        self.assertIn('between_candidate_evidence', encoded)
+        self.assertEqual(compact['target_candidates'], [{'bbox_id': 1, 'category': 'cabinet'}])
+
     def test_tasks_cover_all_targets_and_offer_alternative_views(self):
         tasks = evidence_tasks(state())
         for dimension in ('position', 'distance', 'size', 'viewpoint'):
@@ -60,6 +78,7 @@ class ReactDecisionTests(unittest.TestCase):
         def mock(backend, current, questions):
             self.assertEqual(backend, 'jev')
             self.assertEqual(current['instructions'], 'rules')
+            self.assertEqual(current['remaining_candidate_ids'], list(range(1, 9)))
             return answer(questions, 'size')
         call = {'step': 1};calls = [call]
         with patch('react_decision.decide', side_effect=mock):
