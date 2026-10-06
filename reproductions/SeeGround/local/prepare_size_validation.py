@@ -28,11 +28,13 @@ def download(url, destination):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--manifest', type=Path,
+                        default=ROOT / 'local/validation/nr3d_size_cases.json')
     parser.add_argument('--downloads', type=Path, default=ROOT / 'local_outputs/downloads')
     parser.add_argument('--output', type=Path, default=ROOT / 'local_outputs')
     parser.add_argument('--base-url', default='https://kaldir.vc.in.tum.de/scannet/v2/scans')
     args = parser.parse_args()
-    manifest = json.loads((ROOT / 'local/validation/nr3d_size_cases.json').read_text())
+    manifest = json.loads(args.manifest.read_text())
     scenes = sorted({row['scene'] for row in manifest['rows']})
     args.downloads.mkdir(parents=True, exist_ok=True)
     # Check the existing OLT before downloading any point clouds.
@@ -65,7 +67,7 @@ def main():
             if row['scene'] == scene and not set(row['stimulus_candidate_ids']).issubset(known):
                 raise ValueError(f'NR3D candidate IDs missing: CSV row {row["csv_row"]}')
         print(f'Validated {scene}: point cloud / OLT alignment and NR3D IDs', flush=True)
-    print('All five scenes prepared. No inference calls made.', flush=True)
+    print(f'All {len(scenes)} scenes prepared. No inference calls made.', flush=True)
 
 
 if __name__ == '__main__':
