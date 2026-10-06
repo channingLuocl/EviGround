@@ -140,7 +140,7 @@ def parse_query(query, mode='baseline', calls=None):
 
 def repair_missing_attributes(query, parsed, calls):
     """Request omitted attribute bindings once, keeping other parsed fields fixed."""
-    from diagnostic import quoted, validate_structure
+    from diagnostic import quoted, validate_structure, covered_attribute_request
     from evidence import retrieval_category
     missing=[item for item in parsed['diagnostic_missing']
              if item.startswith('appearance condition not represented:')]
@@ -189,6 +189,8 @@ def repair_missing_attributes(query, parsed, calls):
         )
         covered_nouns = {'unsupported relation: ' + a['phrase'].casefold() + ' ' +
                          a['category'].casefold() for a in corrected['Attributes']}
+        if covered_attribute_request(query, corrected):
+            covered_nouns.add('unhandled condition: ' + query.casefold())
         corrected['diagnostic_missing']=list(dict.fromkeys(
             [item for item in parsed['diagnostic_missing']
              if not item.startswith(repairable_prefixes) and item.casefold() not in covered_nouns]

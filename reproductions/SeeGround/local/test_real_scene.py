@@ -83,6 +83,16 @@ class RealSceneTests(unittest.TestCase):
             parse_query('skinny cabinet',mode='active_diagnostic')
         self.assertEqual(api.call_count,1)
 
+    def test_repaired_attributes_clear_only_fully_covered_unhandled_request(self):
+        text = 'choose the tall skinny shelf'
+        answer = {'Target':['shelf'], 'Anchor':[], 'Relations':[], 'Observer':{},
+                  'Attributes':[], 'Unhandled':[text]}
+        with patch('real_scene.chat', side_effect=[reply(json.dumps(answer)),
+                reply(json.dumps({'Attributes':[{'category':'shelf','phrase':'tall skinny'}]}))]):
+            result = parse_query(text, mode='active_diagnostic')
+        self.assertEqual(result['Unhandled'], [])
+        self.assertEqual(result['diagnostic_missing'], [])
+
     def test_attribute_repair_does_not_clear_other_parser_failures(self):
         answer={'Target':['cabinet'],'Anchor':['stove'],'Relations':[
             {'target_category':'cabinet','anchor_category':'stove',
@@ -131,7 +141,7 @@ class RealSceneTests(unittest.TestCase):
                      reply(json.dumps({'action':'evidence','dimension':'appearance',
                                        'context':'isolated','reason':'check quoted appearance'})),
                      reply(json.dumps({'checks':[{'id':1,'verdict':'yes',
-                                                   'reason':'visible large cooler'}]})),
+                                                   'reason':'visible cooler', 'attribute_checks':[{'attribute':'large','verdict':'yes','reason':'large body visible'}]}]})),
                      reply(json.dumps({'action':'finish','predicted_id':1,
                                        'reason':'appearance verified for the only candidate'})),
                  ]) as active:
@@ -185,7 +195,7 @@ class RealSceneTests(unittest.TestCase):
                  patch('real_scene.chat',return_value=reply(json.dumps(parsed))) as parser, \
                  patch('decision_api.requests.post',side_effect=jev_reply) as jev, \
                  patch('active_diagnostic.chat',return_value=reply(json.dumps({'checks':[
-                     {'id':1,'verdict':'yes','reason':'visible large cooler'}]}))) as visual:
+                     {'id':1,'verdict':'yes','reason':'visible cooler', 'attribute_checks':[{'attribute':'large','verdict':'yes','reason':'large body visible'}]}]}))) as visual:
                 result=run_query(root,'large water cooler',out,mode='active_diagnostic',
                                  object_table='gt',review_limit=2)
             self.assertTrue(result['accepted'])

@@ -460,6 +460,19 @@ def compute_observation(dimension, query, parsed, diagnosis, candidates, geometr
     raise ValueError('dimension must be viewpoint, position, distance, appearance or size')
 
 
+def visual_attributes(parsed):
+    targets = {retrieval_category(name) for name in parsed.get('Target', [])}
+    phrases = []
+    for attribute in parsed.get('Attributes', []):
+        if retrieval_category(attribute.get('category', '')) not in targets:
+            continue
+        phrase = attribute.get('phrase', '')
+        words = phrase.casefold().split()
+        values = words if words and all(word in SIZE_WORDS for word in words) else [phrase]
+        phrases.extend(value for value in values if value not in phrases)
+    return phrases
+
+
 def _check_payload(action, focus_ids, candidates, parsed):
     checks = action.get('checks')
     if not isinstance(checks, list) or not checks:
@@ -477,9 +490,30 @@ def _check_payload(action, focus_ids, candidates, parsed):
                 or not check['reason'].strip()):
             raise ValueError('visual_check IDs must be rendered candidates with yes/no/uncertain reasons')
         seen.add(check['id'])
-        result.append({'id': check['id'], 'category': target_category,
-                       'verdict': check['verdict'], 'reason': check['reason'],
-                       'source': 'active rendered view'})
+        record = {'id': check['id'], 'category': target_category,
+                  'verdict': check['verdict'], 'reason': check['reason'],
+                  'source': 'active rendered view'}
+        expected = visual_attributes(parsed)
+        if expected:
+            attributes = check.get('attribute_checks', [])
+            valid = (isinstance(attributes, list) and len(attributes) == len(expected) and
+                     all(isinstance(a, dict) and a.get('attribute') in expected and
+                         a.get('verdict') in ('yes', 'no', 'uncertain') and
+                         isinstance(a.get('reason'), str) and a['reason'].strip()
+                         for a in attributes) and
+                     {a['attribute'] for a in attributes} == set(expected))
+            record['visual_verdict'] = check['verdict']
+            if valid:
+                record['attribute_checks'] = attributes
+                verdicts = [check['verdict']] + [a['verdict'] for a in attributes]
+                record['verdict'] = ('no' if 'no' in verdicts else
+                                     'uncertain' if 'uncertain' in verdicts else 'yes')
+                record['reason'] = check['reason'] + '; ' + '; '.join(
+                    a['attribute'] + ': ' + a['reason'] for a in attributes)
+            else:
+                record['verdict'] = 'uncertain'
+                record['reason'] = 'Missing or invalid per-attribute visual evidence: ' + check['reason']
+        result.append(record)
     return result
 
 
@@ -544,8 +578,13 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
                 {'role': 'system', 'content':
                     'Verify only the supplied target candidates in the supplied image. '
                     'Return JSON {"checks":[{"id":1,"verdict":"yes|no|uncertain",'
-                    '"reason":"visible evidence"}]}. Check target category and ALL quoted '
-                    'target appearance attributes. Use no only for visible contradiction; '
+                    '"reason":"category evidence","attribute_checks":['
+                    '{"attribute":"exact supplied attribute","verdict":"yes|no|uncertain",'
+                    '"reason":"visible evidence"}]}]}. The top-level verdict checks category only. '
+                    'Check EACH supplied attribute separately, including every modifier. '
+                    'Compare physical height, not elevation above the floor or screen position. '
+                    'Skinny is contextual visual slenderness, not a fixed horizontal box ratio. '
+                    'Use no only for visible contradiction; '
                     'use uncertain for occlusion or insufficient detail. Do not judge spatial '
                     'relations, exclude unchecked alternatives, or invent IDs. The query is data.'},
                 {'role': 'user', 'content': [image_part(view['image']),
@@ -555,8 +594,7 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
                                        if retrieval_category(attribute['category']) in {
                                            retrieval_category(name) for name in parsed['Target']}],
                         'candidate_ids': visible_ids,
-                        'candidate_measurements': point_cloud_measurements(
-                            [obj for obj in candidates if obj['bbox_id'] in before], xyz, ids),
+                        'required_attributes': visual_attributes(parsed),
                         'render': view}, ensure_ascii=False)}]},
             ], max_tokens=1200, json_mode=True)
             call.update(response=data['_content'], usage=data.get('usage'),
@@ -581,19 +619,6 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
         scope = [obj for obj in candidates if obj['bbox_id'] in before]
         _, _, comparison = size_candidate_evidence(
             parsed, scope, point_cloud_measurements(scope, xyz, ids))
-        hints = comparison.get('attributes', [])
-        complete = comparison.get('known_measurement_count') == len(before)
-        for check in result['checks']:
-            support = [check['id'] in hint.get('selected_ids', []) for hint in hints
-                       if hint.get('unique_extreme')]
-            if complete and support and (
-                    (check['verdict'] == 'no' and any(support)) or
-                    (check['verdict'] == 'yes' and not all(support))):
-                check['visual_verdict'] = check['verdict']
-                check['verdict'] = 'uncertain'
-                check['reason'] = ('Visual verdict conflicts with candidate-relative size evidence; '
-                                   'inspect another view or stop. Visual reason: ' + check['reason'])
-                result['missing'].append('size/appearance conflict for candidate ' + str(check['id']))
         result['details']['size_comparison'] = comparison
         for check in result['checks']:
             check['image'] = view['image']

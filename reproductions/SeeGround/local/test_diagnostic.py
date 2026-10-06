@@ -42,6 +42,18 @@ class DiagnosticTests(unittest.TestCase):
             self.assertIn('unhandled condition: ' + text, checked['diagnostic_missing'])
             self.assertEqual(checked['Attributes'], [])
 
+    def test_only_fully_covered_attribute_requests_clear_unhandled(self):
+        for text, clear in [('choose the tall skinny shelf', True),
+                            ('The tall skinny shelf.', True),
+                            ('choose the tall skinny shelf near the door', False),
+                            ('choose the not tall skinny shelf', False),
+                            ('choose the tall skinny red shelf', False)]:
+            checked = validate_structure(text, {
+                'Target':['shelf'], 'Anchor':[], 'Relations':[], 'Observer':{},
+                'Attributes':[{'category':'shelf','phrase':'tall'},
+                              {'category':'shelf','phrase':'skinny'}], 'Unhandled':[text]})
+            self.assertEqual(checked['Unhandled'], [] if clear else [text])
+
     def test_attribute_noun_phrase_is_not_an_unsupported_relation(self):
         for phrase, keep_error in [('tall skinny shelf', False),
                                    ('shelf beside the door', True)]:

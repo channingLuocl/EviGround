@@ -313,6 +313,41 @@ class ActiveDiagnosticTests(unittest.TestCase):
                          trusted_categories=True)
         self.assertEqual(after['candidate_ids'], [5, 13])
         self.assertNotEqual(after['status'], 'resolved')
+        # A later complete visual comparison can resolve competing soft box hints.
+        response['_content'] = json.dumps({'checks': [
+            {'id': 5, 'verdict': 'yes', 'reason': 'shelf visible', 'attribute_checks': [
+                {'attribute': 'tall', 'verdict': 'no', 'reason': 'shorter body than the other shelf'},
+                {'attribute': 'skinny', 'verdict': 'uncertain', 'reason': 'side obscured'}]},
+            {'id': 13, 'verdict': 'yes', 'reason': 'shelf visible', 'attribute_checks': [
+                {'attribute': 'tall', 'verdict': 'yes', 'reason': 'upright tall body'},
+                {'attribute': 'skinny', 'verdict': 'yes', 'reason': 'narrow upright silhouette'}]}]})
+        with patch('active_diagnostic.render_action', return_value={
+                'tool': 'render', 'image': 'mock2.png', 'focus_ids': [5, 13]}), patch(
+                'active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'active_diagnostic.chat', return_value=response) as api:
+            second = execute_evidence(action, 'tall skinny shelf', query, after,
+                objects, objects, xyz, None, ids, Path('/tmp'), 2, [])
+        payload = json.loads(api.call_args.args[0][1]['content'][1]['text'])
+        self.assertNotIn('candidate_measurements', payload)
+        self.assertEqual(payload['required_attributes'], ['tall', 'skinny'])
+        self.assertEqual([c['verdict'] for c in second['checks']], ['no', 'yes'])
+        resolved = diagnose(query, objects, objects, [0, 0, 0],
+                            observation['checks'] + second['checks'], trusted_categories=True)
+        self.assertEqual(resolved['candidate_ids'], [13])
+        self.assertEqual(resolved['status'], 'resolved')
+
+
+    def test_visual_attribute_evidence_requires_complete_unique_coverage(self):
+        query = parsed()
+        query['Target'] = ['shelf']
+        query['Attributes'] = [{'category': 'shelf', 'phrase': 'tall skinny'}]
+        tall = {'attribute': 'tall', 'verdict': 'yes', 'reason': 'upright body'}
+        skinny = {'attribute': 'skinny', 'verdict': 'uncertain', 'reason': 'occluded'}
+        for attrs in ([], [tall], [tall, tall], [tall, skinny]):
+            checks = _check_payload({'checks': [{'id': 1, 'verdict': 'yes',
+                'reason': 'shelf visible', 'attribute_checks': attrs}]},
+                [1], [obj(1, 'shelf', 0, 0)], query)
+            self.assertEqual(checks[0]['verdict'], 'uncertain')
 
     def test_multiple_size_extremes_require_all_constraints(self):
         query = parsed()

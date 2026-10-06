@@ -159,6 +159,30 @@ def recover_between_relations(query, parsed):
     return parsed
 
 
+def covered_attribute_request(query, parsed):
+    targets = parsed.get('Target', [])
+    targets = [targets] if isinstance(targets, str) else targets
+    if len(targets) != 1 or parsed.get('Anchor') or parsed.get('Relations'):
+        return False
+    words = []
+    allowed = set(('small smallest large largest big little skinny narrow wide thin thick '
+                   'tall tallest high highest short shortest low lowest dark light black white '
+                   'red blue green gray grey brown wooden mounted square round').split())
+    for attribute in parsed.get('Attributes', []):
+        if retrieval_category(attribute.get('category', '')) != retrieval_category(targets[0]):
+            return False
+        tokens = attribute.get('phrase', '').casefold().split()
+        if not tokens or not set(tokens).issubset(allowed):
+            return False
+        words.extend(tokens)
+    if not words:
+        return False
+    match = re.fullmatch(r'\s*(?:(?:choose|select|find)\s+|it is\s+)?(?:the\s+)?'
+                         r'(?P<attributes>[a-z ]+)\s+' + re.escape(targets[0]) +
+                         r'\s*[.!?]?\s*', query, re.I)
+    return bool(match and sorted(match['attributes'].casefold().split()) == sorted(words))
+
+
 def validate_structure(query, parsed):
     parsed = recover_between_relations(query, recover_vertical_relations(query, dict(parsed)))
     # Recover only a complete, simple size request; compound conditions stay untouched.
@@ -285,6 +309,10 @@ def validate_structure(query, parsed):
         parsed['Unhandled'] = [p for p in unhandled if quoted(query, p)]
         if len(parsed['Unhandled']) != len(unhandled):
             missing.append('parser produced unquoted Unhandled entries; these are not query conditions')
+        if covered_attribute_request(query, parsed):
+            parsed['Unhandled'] = [p for p in parsed['Unhandled']
+                                   if p.strip().rstrip('.!?').casefold() !=
+                                   query.strip().rstrip('.!?').casefold()]
         missing.extend('unhandled condition: ' + p for p in parsed['Unhandled'])
     targets = parsed['Target'] if isinstance(parsed['Target'], list) else [parsed['Target']]
     if any(retrieval_category(name) in ('one','correct one','it','object','thing') for name in targets):
