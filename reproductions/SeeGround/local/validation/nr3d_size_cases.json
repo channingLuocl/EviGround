@@ -1,0 +1,111 @@
+{
+  "purpose": "Exploratory size validation, not a benchmark score. Original utterances; target IDs are evaluation-only.",
+  "selection": "correct_guess=True; ScanNet validation split; author GT OLT available; explicit size language, multiple same-category stimulus candidates; short descriptions spanning categories and compound attributes. No model outcomes or metric agreement used for selection.",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "rows": [
+    {
+      "csv_row": 24112,
+      "scene": "scene0704_00",
+      "query": "largest cabinet",
+      "target_id": 5,
+      "stimulus_id": "scene0704_00-cabinets-3-5-14-15",
+      "stimulus_candidate_ids": [
+        5,
+        14,
+        15
+      ],
+      "stage": "size_superlative"
+    },
+    {
+      "csv_row": 4542,
+      "scene": "scene0196_00",
+      "query": "choose the smallest table.",
+      "target_id": 5,
+      "stimulus_id": "scene0196_00-table-5-5-1-2-3-4",
+      "stimulus_candidate_ids": [
+        5,
+        1,
+        2,
+        3,
+        4
+      ],
+      "stage": "size_superlative"
+    },
+    {
+      "csv_row": 24371,
+      "scene": "scene0077_00",
+      "query": "The tallest trashcan.",
+      "target_id": 8,
+      "stimulus_id": "scene0077_00-trash_can-2-8-13",
+      "stimulus_candidate_ids": [
+        8,
+        13
+      ],
+      "stage": "size_superlative"
+    },
+    {
+      "csv_row": 36098,
+      "scene": "scene0357_00",
+      "query": "The small cabinet",
+      "target_id": 15,
+      "stimulus_id": "scene0357_00-cabinet-2-15-13",
+      "stimulus_candidate_ids": [
+        15,
+        13
+      ],
+      "stage": "relative_size"
+    },
+    {
+      "csv_row": 24618,
+      "scene": "scene0343_00",
+      "query": "It is the tall shelf.",
+      "target_id": 13,
+      "stimulus_id": "scene0343_00-shelf-2-13-5",
+      "stimulus_candidate_ids": [
+        13,
+        5
+      ],
+      "stage": "relative_size"
+    },
+    {
+      "csv_row": 28474,
+      "scene": "scene0357_00",
+      "query": "The large brown cabinets.",
+      "target_id": 13,
+      "stimulus_id": "scene0357_00-cabinet-2-13-15",
+      "stimulus_candidate_ids": [
+        13,
+        15
+      ],
+      "stage": "size_and_color"
+    },
+    {
+      "csv_row": 9182,
+      "scene": "scene0343_00",
+      "query": "choose the tall skinny shelf",
+      "target_id": 13,
+      "stimulus_id": "scene0343_00-shelf-2-13-5",
+      "stimulus_candidate_ids": [
+        13,
+        5
+      ],
+      "stage": "size_and_shape"
+    },
+    {
+      "csv_row": 16656,
+      "scene": "scene0343_00",
+      "query": "smallest square top table",
+      "target_id": 14,
+      "stimulus_id": "scene0343_00-table-6-14-3-11-12-15-16",
+      "stimulus_candidate_ids": [
+        14,
+        3,
+        11,
+        12,
+        15,
+        16
+      ],
+      "stage": "size_and_shape"
+    }
+  ]
+}
