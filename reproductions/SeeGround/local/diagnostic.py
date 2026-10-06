@@ -36,7 +36,8 @@ Direction relations use left|right|front|back, plus scope=relative_anchor|side.
 relative_anchor means target is on a named reference's side in the observer frame;
 side means a signed side of the observer, NOT leftmost/rightmost among peers.
 Use between with anchor_categories for a target located between two named references.
-Use other+Unhandled for extremes, object-intrinsic axes, ordinal or unsupported relations.
+Represent smallest/largest/tallest/shortest/highest/lowest as target Attributes, not Unhandled.
+Use other+Unhandled for unsupported extremes, object-intrinsic axes, ordinal or unsupported relations.
 Includes/contains a named object is a containment/composition relation, not appearance;
 use other+Unhandled because this relation has no implemented predicate.
 Separate facing references from target relations; include their categories in Anchor.
@@ -159,6 +160,21 @@ def recover_between_relations(query, parsed):
 
 def validate_structure(query, parsed):
     parsed = recover_between_relations(query, recover_vertical_relations(query, dict(parsed)))
+    # Recover only a complete, simple size request; compound conditions stay untouched.
+    targets = parsed.get('Target', [])
+    targets = [targets] if isinstance(targets, str) else targets
+    if len(targets) == 1:
+        match = re.fullmatch(
+            r'\s*(?:choose|select|find)\s+the\s+'
+            r'(smallest|largest|tallest|shortest|highest|lowest)\s+'
+            + re.escape(targets[0]) + r'\s*[.!?]?\s*', query, re.I)
+        if (match and not parsed.get('Anchor') and not parsed.get('Relations')
+                and isinstance(parsed.get('Unhandled'), list)
+                and all(isinstance(p, str) for p in parsed['Unhandled'])):
+            parsed['Attributes'] = [{'category': targets[0], 'phrase': match.group(1)}]
+            parsed['Unhandled'] = [phrase for phrase in parsed.get('Unhandled', [])
+                                   if phrase.strip().rstrip('.!?').casefold() not in
+                                   (query.strip().rstrip('.!?').casefold(), match.group(1).casefold())]
     missing = []
     relations = parsed.get('Relations', [])
     valid = []
@@ -257,7 +273,7 @@ def validate_structure(query, parsed):
     if len(parsed['Attributes']) != len(attrs):
         missing.append('unquoted or unbound appearance attribute')
     covered = ' '.join(a['phrase'] for a in parsed['Attributes'])
-    for word in re.findall(r'\b(large|small|big|little|skinny|narrow|wide|thin|thick|dark|light|black|white|red|blue|green|gr[ae]y|brown|wooden|mounted)\b', query, re.I):
+    for word in re.findall(r'\b(smallest|largest|tallest|shortest|highest|lowest|large|small|big|little|skinny|narrow|wide|thin|thick|dark|light|black|white|red|blue|green|gr[ae]y|brown|wooden|mounted)\b', query, re.I):
         if not re.search(r'\b' + re.escape(word) + r'\b', covered, re.I):
             missing.append('appearance condition not represented: ' + word)
     unhandled = parsed.get('Unhandled')

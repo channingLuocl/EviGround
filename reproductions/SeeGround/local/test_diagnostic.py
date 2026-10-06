@@ -31,6 +31,17 @@ def response(oid, verdict='yes', finish='stop'):
 
 
 class DiagnosticTests(unittest.TestCase):
+    def test_size_recovery_preserves_compound_and_negated_conditions(self):
+        for text in ('Choose the smallest red cabinet.',
+                     'Choose the tallest cabinet near the door.',
+                     'Choose the cabinet that is not the smallest.'):
+            checked = validate_structure(text, {
+                'Target': ['cabinet'], 'Anchor': [], 'Relations': [],
+                'Observer': {}, 'Attributes': [], 'Unhandled': [text],
+            })
+            self.assertIn('unhandled condition: ' + text, checked['diagnostic_missing'])
+            self.assertEqual(checked['Attributes'], [])
+
     def test_shape_word_in_relation_quote_does_not_cover_missing_attribute(self):
         query = 'Choose the skinny cabinet between the stove and the wall.'
         relation = {'target_category': 'cabinet', 'anchor_categories': ['stove', 'wall'],

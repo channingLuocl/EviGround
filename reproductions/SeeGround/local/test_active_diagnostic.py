@@ -11,7 +11,7 @@ from active_diagnostic import (apply_computed_evidence, _check_payload,
                                evidence_request, execute_evidence,
                                size_candidate_evidence,
                                position_candidate_evidence, render_action)
-from diagnostic import diagnose
+from diagnostic import diagnose, validate_structure
 
 
 def obj(oid, category, x, y, z=.5):
@@ -327,6 +327,53 @@ class ActiveDiagnosticTests(unittest.TestCase):
         self.assertEqual(result['diagnosis']['candidate_ids'], [1])
         self.assertEqual(result['diagnosis']['missing'], [])
         self.assertEqual(result['diagnosis']['visual_needs'], [])
+
+    def test_size_superlative_parser_outputs_and_finish(self):
+        for word, selected, accepted in [('smallest', 2, True), ('largest', 1, True),
+                                          ('shortest', 2, True), ('tallest', 1, True),
+                                          ('small red', 2, False),
+                                          ('unknown', 1, False), ('tied', 1, False)]:
+            with self.subTest(word=word):
+                text = f'Choose the {word if word not in ("unknown", "tied") else "largest"} cabinet.'
+                objects = [obj(1, 'cabinet', 0, 0), obj(2, 'cabinet', 2, 0)]
+                query = {
+                    'Target': ['cabinet'], 'Anchor': [], 'Relations': [],
+                    'Observer': {'origin': {}, 'facing': {}}, 'Viewpoint': '',
+                    'Attributes': [{'category': 'cabinet', 'phrase': word}],
+                    'Unhandled': [text] if word != 'tallest' else [], 'diagnostic_missing': [],
+                }
+                if word in ('smallest', 'shortest'):
+                    query['Attributes'] = []
+                query = validate_structure(text, query)
+                xyz = np.asarray([
+                    [0., 0., 0.], [4., 1., 3.], [2., .5, .5],
+                    [10., 0., 0.], [11., 1., 1.], [10.5, .5, .5],
+                ])
+                ids = np.asarray([1, 1, 1, 2, 2, 2])
+                if word == 'unknown':
+                    ids[3:] = -1
+                elif word == 'tied':
+                    xyz[4] = [14., 1., 3.]
+                responses = iter([
+                    {'action': 'evidence', 'dimension': 'size', 'reason': 'compare cabinet widths'},
+                    {'action': 'finish', 'predicted_id': selected, 'reason': 'cabinet 1 is uniquely skinny'},
+                    {'action': 'stop', 'reason': 'unresolved conditions'},
+                ])
+                def fake_chat(messages, **kwargs):
+                    return {'_content': json.dumps(next(responses)),
+                            '_baseline': {'model': 'mock', 'latency_s': .01},
+                            '_finish_reason': 'stop', 'usage': {}}
+                with tempfile.TemporaryDirectory() as directory, patch(
+                        'active_diagnostic.chat', side_effect=fake_chat):
+                    trace, calls = {}, []
+                    result = active_ground(text, query, objects, objects, objects,
+                                           xyz, np.zeros_like(xyz, dtype=np.uint8), ids,
+                                           Path(directory), calls, trace, 2, True)
+                self.assertEqual(result['accepted'], accepted)
+                if accepted:
+                    self.assertEqual(result['predicted_id'], selected)
+                    self.assertEqual(result['diagnosis']['missing'], [])
+                    self.assertEqual(result['diagnosis']['visual_needs'], [])
 
     def test_internal_verification_receives_only_target_attributes(self):
         objects = [obj(1, 'window', 0, 0), obj(2, 'tv', 2, 0)]

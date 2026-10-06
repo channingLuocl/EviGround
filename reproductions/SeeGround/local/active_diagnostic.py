@@ -721,26 +721,29 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             valid_id = type(oid) is int and oid in allowed
             resolved = diagnosis.get('status') == 'resolved' and len(remaining) == 1
             relative_size_ids = []
+            size_details = {}
             for prior in reversed(history):
                 details = (prior.get('observation') or {}).get('details', {})
                 if details.get('dimension') == 'size':
+                    size_details = details
                     relative_size_ids = details.get('size_decision', {}).get(
                         'candidate_relative_ids', [])
                     break
             relative_size_resolution = (
-                valid_id and relative_size_ids == [oid] and len(remaining) > 1 and
+                valid_id and relative_size_ids == [oid] and len(remaining) >= 1 and
                 trusted_categories and
                 all(retrieval_category(attribute.get('category', '')) ==
                     retrieval_category(parsed.get('Target', [''])[0])
                     for attribute in parsed.get('Attributes', [])) and
-                all(any(word in attribute.get('phrase', '').casefold().split()
-                        for word in SIZE_WORDS)
+                all(attribute.get('phrase', '').strip().casefold() in SIZE_WORDS
                     for attribute in parsed.get('Attributes', [])) and
+                bool(parsed.get('Attributes')) and
+                bool(size_details.get('candidate_metrics')) and
+                set(size_details.get('candidate_ids', [])) ==
+                {item['id'] for item in size_details.get('candidate_metrics', [])} and
+                set(remaining).issubset(set(size_details.get('candidate_ids', []))) and
                 all(item.get('status') == 'known'
-                    for prior in reversed(history)
-                    if (prior.get('observation') or {}).get('details', {}).get('dimension') == 'size'
-                    for item in (prior.get('observation') or {}).get('details', {}).get(
-                        'candidate_metrics', [])) and
+                    for item in size_details.get('candidate_metrics', [])) and
                 not [item for item in diagnosis.get('missing', [])
                      if item != 'category/appearance evidence is uncertain or unreviewed'])
             if relative_size_resolution:
