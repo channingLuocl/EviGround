@@ -6,17 +6,22 @@ import numpy as np
 
 from diagnostic import diagnose
 from evidence import distance_rankings, match_retrieval_categories, retrieval_category
-from object_geometry import build_geometry
+from object_geometry import build_geometry, point_cloud_measurements
 from qwen_api import QwenAPIError, chat, image_part, parse_json_object
 from react_decision import jev_action, react_backend, text_state
 from run import render
 
 
 DIMENSIONS = ('viewpoint', 'position', 'distance', 'appearance', 'size')
+SIZE_WORDS = {
+    'small', 'smallest', 'large', 'largest', 'big', 'little',
+    'skinny', 'narrow', 'thin', 'tall', 'tallest', 'high', 'highest',
+    'short', 'shortest', 'low', 'lowest',
+}
 EVIDENCE_CAPABILITIES = {
     'position': 'Existing geometry audit; only definite relation failures exclude candidates.',
     'distance': 'Explicit nearest/farthest rankings from object centers.',
-    'size': 'AABB dimensions and shape summary; no new adjective verdict.',
+    'size': 'Instance point-cloud dimensions, relative ranks and dynamic adjective hints.',
     'appearance': 'One rendered group and one visual verification per request; no automatic extra views.',
     'viewpoint': 'Explicit observer clues and existing frame hypotheses; no speaker-pose recovery.',
 }
@@ -30,7 +35,9 @@ view observations. No image pixels are supplied to the outer planner; visual obs
 come from internal verification calls. A computed predicate is evidence, not a visual
 certificate; unknown is never a pass.
 Keep candidates that are uncertain. Do not vote over alternative reference bindings.
-Never turn small, large, skinny, or narrow into an unstated hard threshold. Never invent
+Never turn small, large, skinny, or narrow into an unstated absolute threshold. Size evidence
+reports the live candidate pool, unique extremes and metric margins; use those relative hints
+only when the current scope makes the comparison meaningful. Never invent
 a reference, viewpoint, relation, or target ID. The final ID must be one of the remaining
 candidate IDs, unless the remaining set is empty and the initial category candidates are
 explicitly provided as fallback.
@@ -59,8 +66,11 @@ One candidate receiving yes does not exclude any alternatives. Compare remaining
 alternatives through appearance evidence in small groups.
 Candidate-level pass means at least one reference interpretation supports that
 predicate, not that all interpretations or the full description are confirmed.
-While tool budget remains, finish is allowed only when evidence_state is resolved
-with one candidate. Otherwise continue useful evidence collection or explicitly stop.
+While tool budget remains, finish is allowed when evidence_state is resolved with one
+candidate. A size observation may also expose one unique candidate-relative size ID;
+if that comparison covers the live candidates and no other condition is missing, the
+controller will verify a matching finish choice. Otherwise continue useful evidence
+collection or explicitly stop.
 '''
 
 
@@ -168,6 +178,148 @@ def distance_candidate_evidence(rankings, candidate_ids):
     return result
 
 
+def size_candidate_evidence(parsed, candidates, measurements):
+    """Compare target candidates using instance point-cloud measurements.
+
+    Explicit superlatives are deterministic filters. Ordinary adjectives get
+    a candidate-relative hint whose scope and uniqueness are visible to the
+    planner; the hint is not silently converted into a hard threshold.
+    """
+    by_id = {row['id']: row for row in measurements}
+    target_names = parsed.get('Target', [])
+    target_category = retrieval_category(target_names[0]) if target_names else ''
+    attributes = [attribute.get('phrase', '') for attribute in parsed.get('Attributes', [])
+                  if retrieval_category(attribute.get('category', '')) == target_category]
+    rows = [by_id[obj['bbox_id']] for obj in candidates if obj['bbox_id'] in by_id]
+    known = [row for row in rows if row.get('status') == 'known']
+    if not attributes:
+        return [], [], {
+            'attributes': [], 'candidate_count': len(candidates),
+            'known_measurement_count': len(known),
+            'policy': 'no target size attribute was supplied; measurements are descriptive only',
+        }
+    rankings = {}
+    for metric in ('volume_m3', 'height_m', 'horizontal_aspect_ratio'):
+        ordered = sorted((row for row in known if row.get(metric) is not None),
+                         key=lambda row: (row[metric], row['id']))
+        rankings[metric] = {row['id']: index + 1 for index, row in enumerate(ordered)}
+
+    def attribute_spec(phrase):
+        text = phrase.casefold()
+        if any(word in text for word in ('skinny', 'narrow', 'thin')):
+            return 'horizontal_aspect_ratio', False
+        if any(word in text for word in ('smallest', 'small', 'little')):
+            return 'volume_m3', True
+        if any(word in text for word in ('largest', 'large', 'big')):
+            return 'volume_m3', False
+        if any(word in text for word in ('tallest', 'highest', 'tall', 'high')):
+            return 'height_m', False
+        if any(word in text for word in ('shortest', 'lowest', 'short', 'low')):
+            return 'height_m', True
+        return None, None
+
+    relative_hints = []
+    for phrase in attributes:
+        metric, prefer_min = attribute_spec(phrase)
+        if metric is None:
+            continue
+        ordered = sorted((row for row in known if row.get(metric) is not None),
+                         key=lambda row: (row[metric], row['id']),
+                         reverse=not prefer_min)
+        if not ordered:
+            relative_hints.append({'attribute': phrase, 'metric': metric,
+                                   'known_pool_size': 0, 'candidate_ids': [],
+                                   'selected_ids': [], 'unique_extreme': False,
+                                   'status': 'unknown'})
+            continue
+        best_value = ordered[0][metric]
+        best_ids = [row['id'] for row in ordered
+                    if abs(row[metric] - best_value) <= 1e-9]
+        second_value = ordered[len(best_ids)][metric] if len(ordered) > len(best_ids) else None
+        relative_hints.append({
+            'attribute': phrase, 'metric': metric,
+            'known_pool_size': len(ordered), 'candidate_ids': sorted(row['id'] for row in ordered),
+            'selected_ids': sorted(best_ids), 'unique_extreme': len(best_ids) == 1,
+            'margin_to_next': (float(abs(second_value - best_value))
+                               if second_value is not None else None),
+            'status': 'candidate_relative' if len(best_ids) == 1 else 'tied_extreme',
+            'policy': 'planner may use this relative comparison; no absolute threshold',
+        })
+    constraints = []
+    for phrase in attributes:
+        text = phrase.casefold()
+        if 'smallest' in text or 'largest' in text:
+            metric = 'volume_m3'
+            selected = _extreme_ids(known, metric, min_value='smallest' in text)
+        elif 'tallest' in text or 'highest' in text:
+            metric = 'height_m'
+            selected = _extreme_ids(known, metric, min_value=False)
+        elif 'shortest' in text or 'lowest' in text:
+            metric = 'height_m'
+            selected = _extreme_ids(known, metric, min_value=True)
+        else:
+            continue
+        constraints.append({'attribute': phrase, 'metric': metric,
+                            'selected_ids': sorted(selected),
+                            'candidate_ids': sorted(row['id'] for row in known),
+                            'source': 'instance_point_cloud_aabb'})
+    records = []
+    for obj in candidates:
+        candidate_id = obj['bbox_id']
+        row = by_id[candidate_id]
+        attribute_evidence = []
+        for hint in relative_hints:
+            phrase, metric = hint['attribute'], hint['metric']
+            if metric is None:
+                continue
+            attribute_evidence.append({
+                'attribute': phrase, 'status': 'soft_support', 'metric': metric,
+                'rank': rankings[metric].get(candidate_id),
+                'pool_size': hint['known_pool_size'],
+                'selected_ids': hint['selected_ids'],
+                'unique_extreme': hint['unique_extreme'],
+                'margin_to_next': hint['margin_to_next'],
+                'source': 'instance_point_cloud_aabb',
+            })
+        flags = []
+        for constraint in constraints:
+            if row.get('status') != 'known':
+                flags.append(None)
+                continue
+            flags.append(candidate_id in set(constraint['selected_ids']))
+        if flags:
+            status = _overall_status({'size': {'status': _status(flags)}})
+        elif row.get('status') != 'known':
+            status = 'unknown'
+        else:
+            status = 'not_applicable'
+        records.append({'candidate_id': candidate_id, 'status': status,
+                        'metrics': row, 'attribute_evidence': attribute_evidence,
+                        'exclusion_reason': ('not a point-cloud size extreme'
+                                             if status == 'fail' else None)})
+    return records, constraints, {
+        'attributes': relative_hints,
+        'candidate_count': len(candidates),
+        'known_measurement_count': len(known),
+        'candidate_relative_ids': sorted(set.intersection(
+            *(set(hint['selected_ids']) for hint in relative_hints
+              if hint.get('status') == 'candidate_relative')))
+            if relative_hints and all(hint.get('status') == 'candidate_relative'
+                                      for hint in relative_hints) else [],
+        'policy': 'relative size adjectives are interpreted within the live candidate set; '
+                  'the planner sees uniqueness and margin before deciding whether to stop',
+    }
+
+
+def _extreme_ids(rows, metric, min_value):
+    values = [row[metric] for row in rows if row.get(metric) is not None]
+    if not values:
+        return set()
+    extreme = min(values) if min_value else max(values)
+    return {row['id'] for row in rows
+            if row.get(metric) is not None and abs(row[metric] - extreme) <= 1e-9}
+
+
 def apply_computed_evidence(diagnosis, evidence, dimension, record=True):
     """Apply only definite failures from a computed dimension to the live scope."""
     by_id = {item['candidate_id']: item for item in evidence}
@@ -240,7 +392,8 @@ def render_action(action, objects, xyz, rgb, ids, out, index):
     }
 
 
-def compute_observation(dimension, query, parsed, diagnosis, candidates, geometry_objects):
+def compute_observation(dimension, query, parsed, diagnosis, candidates, geometry_objects,
+                        xyz=None, ids=None):
     geometry = diagnosis.get('geometry', {})
     if dimension == 'viewpoint':
         return {
@@ -274,13 +427,21 @@ def compute_observation(dimension, query, parsed, diagnosis, candidates, geometr
             'policy': 'explicit nearest/farthest rankings; only definite fail is removable',
         }
     if dimension == 'size':
+        scope_ids = set(diagnosis.get('candidate_ids', []))
+        scope = [obj for obj in candidates if obj['bbox_id'] in scope_ids]
+        measurements = point_cloud_measurements(scope, xyz, ids)
+        candidate_evidence, constraints, decision = size_candidate_evidence(
+            parsed, scope, measurements)
         return {
             'tool': 'compute', 'dimension': dimension,
-            'candidate_metrics': geometry.get('candidate_metrics', []),
+            'candidate_metrics': measurements,
+            'candidate_evidence': candidate_evidence,
+            'size_constraints': constraints,
+            'size_decision': decision,
             'reference_metrics': geometry.get('reference_metrics', []),
             'geometry_conditions': build_geometry(query, parsed, geometry_objects),
             'candidate_ids': diagnosis.get('candidate_ids', []),
-            'policy': 'soft AABB size and shape evidence; adjectives are not hard filters',
+            'policy': 'instance point-cloud AABB evidence; only explicit size extremes filter',
         }
     if dimension == 'appearance':
         return {
@@ -353,7 +514,8 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
     """Run one bounded evidence task; candidate changes belong to the controller."""
     dimension = action['dimension']
     before = list(diagnosis.get('candidate_ids', []))
-    details = compute_observation(dimension, query, parsed, diagnosis, candidates, geometry_objects)
+    details = compute_observation(dimension, query, parsed, diagnosis, candidates, geometry_objects,
+                                   xyz, ids)
     result = {
         'tool': 'evidence', 'dimension': dimension, 'task': action['reason'],
         'scope_ids': before, 'candidate_evidence': details.get('candidate_evidence', []),
@@ -450,7 +612,8 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
     backend = react_backend()
     room_center = (xyz.min(0) + xyz.max(0)) / 2
     diagnosis = diagnose(parsed, geometry_objects, candidates, room_center,
-                         trusted_categories=trusted_categories)
+                         trusted_categories=trusted_categories,
+                         apply_size_constraints=False)
     initial_candidates = sorted(obj['bbox_id'] for obj in candidates)
     category_candidates = initial_candidates[:]
     observation = geometry_observation(diagnosis, category_candidates)
@@ -557,6 +720,39 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             allowed = set(remaining) or set(category_candidates)
             valid_id = type(oid) is int and oid in allowed
             resolved = diagnosis.get('status') == 'resolved' and len(remaining) == 1
+            relative_size_ids = []
+            for prior in reversed(history):
+                details = (prior.get('observation') or {}).get('details', {})
+                if details.get('dimension') == 'size':
+                    relative_size_ids = details.get('size_decision', {}).get(
+                        'candidate_relative_ids', [])
+                    break
+            relative_size_resolution = (
+                valid_id and relative_size_ids == [oid] and len(remaining) > 1 and
+                trusted_categories and
+                all(retrieval_category(attribute.get('category', '')) ==
+                    retrieval_category(parsed.get('Target', [''])[0])
+                    for attribute in parsed.get('Attributes', [])) and
+                all(any(word in attribute.get('phrase', '').casefold().split()
+                        for word in SIZE_WORDS)
+                    for attribute in parsed.get('Attributes', [])) and
+                all(item.get('status') == 'known'
+                    for prior in reversed(history)
+                    if (prior.get('observation') or {}).get('details', {}).get('dimension') == 'size'
+                    for item in (prior.get('observation') or {}).get('details', {}).get(
+                        'candidate_metrics', [])) and
+                not [item for item in diagnosis.get('missing', [])
+                     if item != 'category/appearance evidence is uncertain or unreviewed'])
+            if relative_size_resolution:
+                diagnosis['candidate_ids'] = [oid]
+                diagnosis['stable_candidate_ids'] = [oid]
+                diagnosis['status'] = 'resolved'
+                diagnosis.setdefault('active_computed_evidence', []).append({
+                    'dimension': 'size', 'policy': 'planner accepted unique candidate-relative size hint',
+                    'selected_id': oid, 'before': remaining,
+                })
+                remaining = [oid]
+                resolved = True
             if valid_id and (resolved or tool_count >= limit):
                 return finish_result(action, 'budget_final_choice' if tool_count >= limit
                                      else 'model_finish', oid)
@@ -633,11 +829,12 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             if observation['checks']:
                 checks.extend(observation['checks'])
                 diagnosis = diagnose(parsed, geometry_objects, candidates, room_center, checks,
-                                     trusted_categories=trusted_categories)
+                                     trusted_categories=trusted_categories,
+                                     apply_size_constraints=False)
                 for computed in computed_filters:
                     apply_computed_evidence(diagnosis, computed['evidence'], computed['dimension'],
                                             record=False)
-            if dimension in ('position', 'distance'):
+            if dimension in ('position', 'distance', 'size'):
                 candidate_evidence = observation['candidate_evidence']
                 apply_computed_evidence(diagnosis, candidate_evidence, dimension)
                 computed_filters.append({'dimension': dimension, 'evidence': candidate_evidence})

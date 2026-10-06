@@ -46,6 +46,54 @@ def box_measurements(objects):
     return {'measurements':rows,'rankings':rankings}
 
 
+def point_cloud_measurements(objects, xyz, instance_ids):
+    """Measure instance AABBs directly from the prepared scene point cloud.
+
+    Missing instance points are reported as unknown instead of inheriting the
+    table box, because a fabricated measurement would look like evidence.
+    """
+    rows = []
+    if xyz is None or instance_ids is None:
+        point_ids = None
+    else:
+        point_ids = np.asarray(instance_ids)
+        points = np.asarray(xyz)
+        if len(points) != len(point_ids):
+            raise ValueError('scene xyz and instance ids must have equal length')
+    for obj in objects:
+        object_id = obj['bbox_id']
+        object_points = None if point_ids is None else points[point_ids == object_id]
+        row = {'id': object_id, 'point_count': 0,
+               'source': 'instance_point_cloud_aabb', 'status': 'unknown'}
+        if object_points is None or not len(object_points):
+            row['unknown_reason'] = 'no instance points in scene.npz'
+            rows.append(row)
+            continue
+        lower = np.min(object_points, axis=0).astype(float)
+        upper = np.max(object_points, axis=0).astype(float)
+        extent = upper - lower
+        horizontal_short = min(float(extent[0]), float(extent[1]))
+        horizontal_long = max(float(extent[0]), float(extent[1]))
+        row.update({
+            'point_count': int(len(object_points)),
+            'min_xyz': lower.tolist(), 'max_xyz': upper.tolist(),
+            'extent_x_m': float(extent[0]), 'extent_y_m': float(extent[1]),
+            'extent_z_m': float(extent[2]),
+            'volume_m3': float(np.prod(extent)),
+            'footprint_m2': float(extent[0] * extent[1]),
+            'height_m': float(extent[2]),
+            'horizontal_short_extent_m': horizontal_short,
+            'horizontal_long_extent_m': horizontal_long,
+            'horizontal_aspect_ratio': (horizontal_long / horizontal_short
+                                        if horizontal_short > 1e-9 else None),
+            'height_to_horizontal_long_ratio': (float(extent[2]) / horizontal_long
+                                                 if horizontal_long > 1e-9 else None),
+            'status': 'known',
+        })
+        rows.append(row)
+    return rows
+
+
 def build_geometry(query, parsed, objects):
     evidence={'policy':'soft box evidence only; no candidate exclusion or unique reference certification',
               'units':'meters, square meters, cubic meters; world Z points up',

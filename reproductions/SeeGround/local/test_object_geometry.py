@@ -1,6 +1,9 @@
 import copy
 import unittest
-from object_geometry import build_geometry, box_measurements, describe_role
+import numpy as np
+
+from object_geometry import (build_geometry, box_measurements, describe_role,
+                             point_cloud_measurements)
 
 
 def obj(oid, name, x, y, z, w, length, height):
@@ -29,6 +32,21 @@ class ObjectGeometryTests(unittest.TestCase):
         self.assertEqual(result['rankings']['volume_m3']['maximum_ids'],[2])
         self.assertEqual(result['measurements'][1]['bottom_z_m'],0.)
         self.assertEqual(result['measurements'][1]['top_z_m'],3.)
+
+    def test_point_cloud_measurements_use_instance_aabb_and_report_missing(self):
+        xyz = np.asarray([
+            [0., 0., 0.], [1., 2., 3.], [0.5, 1., 1.5],
+            [2., 2., 0.], [4., 3., 1.],
+        ])
+        ids = np.asarray([1, 1, 1, 2, 2])
+        rows = point_cloud_measurements(self.objects[:3], xyz, ids)
+        self.assertEqual(rows[0]['point_count'], 3)
+        self.assertEqual(rows[0]['extent_x_m'], 1.)
+        self.assertEqual(rows[0]['extent_y_m'], 2.)
+        self.assertEqual(rows[0]['extent_z_m'], 3.)
+        self.assertEqual(rows[0]['source'], 'instance_point_cloud_aabb')
+        self.assertEqual(rows[2]['status'], 'unknown')
+        self.assertIn('no instance points', rows[2]['unknown_reason'])
 
     def test_next_to_geometry_keeps_target_reference_pair(self):
         query='lower kitchen cabinet next to the tall kitchen cabinet'

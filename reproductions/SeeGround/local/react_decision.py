@@ -49,7 +49,7 @@ def jev_state(state):
     if isinstance(details, dict):
         compact_details = {key: details[key] for key in
                            ('dimension', 'candidate_ids', 'candidate_evidence', 'policy',
-                            'candidate_metrics', 'attributes', 'visual_needs')
+                           'candidate_metrics', 'attributes', 'visual_needs', 'size_decision')
                            if key in details}
         if 'distance_rankings' in details:
             rankings = details['distance_rankings']

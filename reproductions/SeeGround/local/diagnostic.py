@@ -450,7 +450,8 @@ def _candidate_metrics(objects, category, selected):
     return records
 
 
-def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_categories=False):
+def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_categories=False,
+             apply_size_constraints=True):
     """Unknown category evidence stays eligible; predicates are ANDed per interpretation."""
     rewritten = parsed.get('query_rewrite') if isinstance(parsed, dict) else None
     if isinstance(rewritten, dict):
@@ -520,7 +521,7 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
             geometry['floor_constraint'] = {'floor_z_m': floor_z, 'tolerance_m': 0.15,
                                             'selected_ids': sorted(floor_ids)}
             size_allowed = floor_ids if size_allowed is None else size_allowed & floor_ids
-    if size_allowed is not None:
+    if size_allowed is not None and apply_size_constraints:
         eligible = [o for o in eligible if o['bbox_id'] in size_allowed]
     directions = any(r['relation'] in ('left', 'right', 'front', 'back') for r in parsed['Relations'])
     observer = parsed['Observer']

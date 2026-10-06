@@ -9,6 +9,7 @@ import numpy as np
 from active_diagnostic import (apply_computed_evidence, _check_payload,
                                active_ground, compute_observation,
                                evidence_request, execute_evidence,
+                               size_candidate_evidence,
                                position_candidate_evidence, render_action)
 from diagnostic import diagnose
 
@@ -257,6 +258,73 @@ class ActiveDiagnosticTests(unittest.TestCase):
         self.assertEqual(observation['operation_status'], 'information_only')
         self.assertEqual(observation['candidate_evidence'], [])
         self.assertEqual(observation['coverage']['uninspected_ids'], [1, 2])
+
+    def test_size_uses_point_cloud_and_exposes_dynamic_relative_hint(self):
+        objects = [obj(1, 'cabinet', 0, 0), obj(2, 'cabinet', 2, 0)]
+        measurements = [
+            {'id': 1, 'status': 'known', 'volume_m3': 2., 'height_m': 1.,
+             'horizontal_aspect_ratio': 4.},
+            {'id': 2, 'status': 'known', 'volume_m3': 1., 'height_m': 1.,
+             'horizontal_aspect_ratio': 1.},
+        ]
+        query = parsed()
+        query['Target'] = ['cabinet']
+        query['Attributes'] = [{'category': 'cabinet', 'phrase': 'skinny'}]
+        evidence, constraints, decision = size_candidate_evidence(
+            query, objects, measurements)
+        self.assertEqual(constraints, [])
+        self.assertEqual(decision['attributes'][0]['selected_ids'], [1])
+        self.assertTrue(decision['attributes'][0]['unique_extreme'])
+        self.assertEqual([row['status'] for row in evidence],
+                         ['not_applicable', 'not_applicable'])
+        self.assertEqual(evidence[0]['attribute_evidence'][0]['rank'], 2)
+        self.assertEqual(evidence[1]['attribute_evidence'][0]['rank'], 1)
+
+    def test_size_superlative_can_filter_from_point_cloud_measurements(self):
+        objects = [obj(1, 'cabinet', 0, 0), obj(2, 'cabinet', 2, 0)]
+        measurements = [
+            {'id': 1, 'status': 'known', 'volume_m3': 2., 'height_m': 1.,
+             'horizontal_aspect_ratio': 1.},
+            {'id': 2, 'status': 'known', 'volume_m3': 1., 'height_m': 1.,
+             'horizontal_aspect_ratio': 1.},
+        ]
+        query = parsed()
+        query['Target'] = ['cabinet']
+        query['Attributes'] = [{'category': 'cabinet', 'phrase': 'smallest'}]
+        evidence, constraints, _ = size_candidate_evidence(query, objects, measurements)
+        self.assertEqual(constraints[0]['selected_ids'], [2])
+        self.assertEqual([row['status'] for row in evidence], ['fail', 'pass'])
+
+    def test_unique_relative_size_hint_can_be_verified_on_finish(self):
+        objects = [obj(1, 'cabinet', 0, 0), obj(2, 'cabinet', 2, 0)]
+        query = {
+            'Target': ['cabinet'], 'Anchor': [], 'Relations': [],
+            'Observer': {'origin': {}, 'facing': {}}, 'Viewpoint': '',
+            'Attributes': [{'category': 'cabinet', 'phrase': 'skinny'}],
+            'Unhandled': [], 'diagnostic_missing': [],
+        }
+        xyz = np.asarray([
+            [0., 0., 0.], [4., 1., 1.], [2., .5, .5],
+            [10., 0., 0.], [11., 1., 1.], [10.5, .5, .5],
+        ])
+        ids = np.asarray([1, 1, 1, 2, 2, 2])
+        responses = iter([
+            {'action': 'evidence', 'dimension': 'size', 'reason': 'compare cabinet widths'},
+            {'action': 'finish', 'predicted_id': 1, 'reason': 'cabinet 1 is uniquely skinny'},
+        ])
+        def fake_chat(messages, **kwargs):
+            return {'_content': json.dumps(next(responses)),
+                    '_baseline': {'model': 'mock', 'latency_s': .01},
+                    '_finish_reason': 'stop', 'usage': {}}
+        with tempfile.TemporaryDirectory() as directory, patch(
+                'active_diagnostic.chat', side_effect=fake_chat):
+            trace, calls = {}, []
+            result = active_ground('skinny cabinet', query, objects, objects, objects,
+                                   xyz, np.zeros_like(xyz, dtype=np.uint8), ids,
+                                   Path(directory), calls, trace, 2, True)
+        self.assertEqual(result['predicted_id'], 1)
+        self.assertTrue(result['accepted'])
+        self.assertEqual(result['diagnosis']['candidate_ids'], [1])
 
     def test_internal_verification_receives_only_target_attributes(self):
         objects = [obj(1, 'window', 0, 0), obj(2, 'tv', 2, 0)]
