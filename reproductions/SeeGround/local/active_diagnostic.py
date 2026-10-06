@@ -383,7 +383,6 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         signature = json.dumps({k: v for k, v in action.items() if k != 'reason'}, sort_keys=True)
         if signature in used:
             raise QwenAPIError('this tool action was already executed; choose another observation or finish')
-        used.add(signature)
         entry = {'action': action}
         try:
             name = action.get('action')
@@ -432,6 +431,7 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             trace['diagnosis_after_step'] = diagnosis
             attempts += 1
             continue
+        used.add(signature)
         tool_count += 1
         entry.update(observation=observation,
                      remaining_candidate_ids=diagnosis.get('candidate_ids', []))
