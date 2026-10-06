@@ -304,6 +304,7 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
     history, images, used = [], [], set()
     checks, used_dimensions, computed_filters = [], set(), []
     last_render_focus = []
+    controller_feedback = None
     trace.update(
         policy='category first; model selects the next evidence dimension; no fixed order',
         tool_budget=limit, category_candidates=category_candidates,
@@ -331,8 +332,11 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             'last_render_focus_ids': last_render_focus,
             'tools_remaining': max(0, limit - tool_count),
         }
-        instructions = INSTRUCTIONS + ('\nThe tool budget is exhausted. Return action=finish now.'
-                                       if tool_count >= limit else '')
+        instructions = INSTRUCTIONS
+        if controller_feedback:
+            instructions += '\nController correction: ' + controller_feedback
+        if tool_count >= limit:
+            instructions += '\nThe tool budget is exhausted. Return action=finish now.'
         parts = []
         for path in images:
             parts.extend([{'type': 'text', 'text': f'Inspection {Path(path).name}'}, image_part(path)])
@@ -391,6 +395,11 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 },
                 'remaining_candidate_ids': diagnosis.get('candidate_ids', []),
             })
+            controller_feedback = (
+                'The previous action was a duplicate and acquired no evidence. '
+                'Do not repeat it. Choose one dimension from available_dimensions, '
+                'or render a smaller focus set, or finish if the evidence is sufficient.'
+            )
             attempts += 1
             continue
         entry = {'action': action}
@@ -439,10 +448,15 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                          remaining_candidate_ids=diagnosis.get('candidate_ids', []))
             history.append(entry)
             trace['diagnosis_after_step'] = diagnosis
+            controller_feedback = (
+                'The previous tool request was invalid and acquired no evidence. '
+                'Correct its parameters before retrying; do not repeat the invalid request.'
+            )
             attempts += 1
             continue
         used.add(signature)
         tool_count += 1
+        controller_feedback = None
         entry.update(observation=observation,
                      remaining_candidate_ids=diagnosis.get('candidate_ids', []))
         history.append(entry)

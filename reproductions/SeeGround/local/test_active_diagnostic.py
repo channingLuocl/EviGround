@@ -70,8 +70,12 @@ class ActiveDiagnosticTests(unittest.TestCase):
              '_baseline': {'model': 'mock', 'latency_s': .01},
              '_finish_reason': 'stop', 'usage': {}},
         ])
+        messages_seen = []
+        def fake_chat(messages, **kwargs):
+            messages_seen.append(messages)
+            return next(responses)
         with tempfile.TemporaryDirectory() as directory, patch(
-                'active_diagnostic.chat', side_effect=lambda *args, **kwargs: next(responses)):
+                'active_diagnostic.chat', side_effect=fake_chat):
             trace, calls = {}, []
             result = active_ground(
                 'window', parsed(), objects, objects, objects,
@@ -79,6 +83,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
                 np.array([1, 2]), Path(directory), calls, trace, 2, True)
         self.assertEqual(result['predicted_id'], 1)
         self.assertTrue(trace['steps'][1]['observation']['no_evidence_acquired'])
+        self.assertIn('Controller correction', messages_seen[2][0]['content'])
 
     def test_position_evidence_distinguishes_fail_from_unknown(self):
         diagnosis = {
