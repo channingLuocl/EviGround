@@ -642,3 +642,55 @@ candidate_ids 仍表示在部分解释下未排除的候选，不等于全部具
 查看 `local_outputs/scene0149_00/active_between_01/prediction.json` 中的
 `active_trace.steps`。单题只用于确认模型是否按候选差异选择证据，不能作为准确率结论；
 确认协议后再用 `batch_nr3d.py --mode active_diagnostic` 扩大样本。
+
+### 先跑通循环，再分项优化（2026-10-06）
+
+每轮新增 `evidence_state`，集中展示当前候选、审计状态、缺失证据和视觉复核需求。
+`used_dimensions` 只表示已经查看过，不表示该维度已解决。视觉检查只能作用于最近渲染的
+当前候选，同一动作中不能对一个编号提交多个判定，已排除候选不会由后续视觉检查复活。
+视觉检查与计算操作都记录候选变化；切换到视觉证据后仍保留已有计算过滤。
+
+新增 `stop` 动作：模型认为无法继续获取有效证据时，可说明原因后停止，
+输出 `predicted_id=null`、`bbox_3d=null`、`accepted=false`。尝试次数耗尽或工具预算
+耗尽后仍请求工具，也会保存未解决结果。多候选下的 finish 仍可输出一个未被认证的猜测，
+其 decision_status 为 missing；空候选为 conflict。missing 不表示描述本身必然有歧义。
+批量统计将无预测样本保留在分母中，IoU 按 0 计；API/解析失败仍作为运行错误记录。
+
+无效 finish 编号会反馈给模型修正。`active_trace` 新增 `action_attempts`、
+`action_attempt_budget`、`successful_tools` 和 `rejected_actions`；成功工具数不代表
+每次都有新增信息。总 API 调用与总耗时见 prediction.json 的 api_calls 和 pipeline_latency_s。
+轨迹中的自动 stop 是控制器结束事件，不会额外调用模型。
+
+服务器已有场景与 .env 时，在服务器执行：
+
+```bash
+cd ~/paper
+git pull --ff-only origin qwen-vl-baseline
+cd reproductions/SeeGround
+PYTHONPATH=local .venv/bin/python -m unittest discover -s local -p 'test*.py' -q
+
+ACTIVE_RUN="active_flow_$(date +%Y%m%d_%H%M%S)"
+.venv/bin/python local/real_scene.py \
+  --scene-dir local_outputs/scene0149_00 \
+  --query 'Choose the skinny cabinet between the stove and the wall.' \
+  --mode active_diagnostic --object-table gt --review-limit 8 \
+  --run-name "$ACTIVE_RUN"
+
+.venv/bin/python local/inspect_active_trace.py \
+  "local_outputs/scene0149_00/$ACTIVE_RUN/prediction.json"
+```
+
+查看动作是否针对尚未解决的条件、失败后是否调整、候选排除是否有依据，以及停止原因。
+这个复杂单例不必得到唯一答案才测试其他路径。若服务器已准备官方 Nr3D CSV，可再做 5 条
+开发冒烟测试；顺序抽取的样本不保证覆盖所有证据类型，也不是正式性能评测：
+
+```bash
+.venv/bin/python local/batch_nr3d.py \
+  --csv local_outputs/downloads/nr3d_official.csv \
+  --scene scene0149_00 --count 5 \
+  --mode active_diagnostic --object-table gt --review-limit 8 \
+  --output "local_outputs/active_flow_smoke_$(date +%Y%m%d_%H%M%S)"
+```
+
+后续再补覆盖位置、距离、大小、外观、视角的样本与多证据组合样本；根据运行轨迹确定
+分项优化顺序，不预设视角是唯一瓶颈。GT 物体表属于给定候选条件下的验证。

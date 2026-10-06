@@ -11,6 +11,36 @@ from contextlib import redirect_stdout
 from batch_nr3d import main
 
 class BatchTests(unittest.TestCase):
+    def test_active_stop_is_scored_as_unresolved_not_batch_error(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);scene=root/'local_outputs'/'scene';scene.mkdir(parents=True)
+            objects=[{'bbox_id':1,'target':'window','bbox_3d':[0,0,0,1,1,1]}]
+            for name in ('objects.json','objects_gt.json'):
+                (scene/name).write_text(json.dumps(objects))
+            (scene/'scene.npz').write_bytes(b'fixture')
+            data=root/'queries.csv'
+            data.write_text('scan_id,correct_guess,utterance,target_id,stimulus_id\nscene,True,window,1,fixture\n')
+            output=root/'experiment'
+            def stopped_run(scene_dir,query,out,*args,**kwargs):
+                out.mkdir(parents=True)
+                (out/'prediction.json').write_text(json.dumps({
+                    'query':query,'object_table':'gt','predicted_id':None,'bbox_3d':None,
+                    'response':'insufficient evidence','model':'mock',
+                    'decision_status':'missing','accepted':False,
+                    'diagnosis':{'stable_candidate_ids':[]}}))
+            with patch('sys.argv',['batch_nr3d.py','--csv',str(data),'--scene','scene',
+                                   '--count','1','--output',str(output),
+                                   '--mode','active_diagnostic','--object-table','gt']), \
+                 patch('batch_nr3d.ROOT',root),patch('batch_nr3d.run_query',side_effect=stopped_run), \
+                 redirect_stdout(io.StringIO()):
+                main()
+            result=json.loads((output/'results.json').read_text())
+            self.assertNotIn('error',result['results'][0])
+            self.assertEqual(result['results'][0]['iou_3d'],0.)
+            self.assertEqual(result['summary']['completed'],0)
+            self.assertEqual(result['summary']['accuracy'],0.)
+            self.assertEqual(result['summary']['decision_status_counts']['missing'],1)
+
     def test_gt_batch_binds_selected_table_and_rejects_pred_cache_reuse(self):
         import hashlib
         with tempfile.TemporaryDirectory() as td:

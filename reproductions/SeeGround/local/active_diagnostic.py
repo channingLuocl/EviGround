@@ -33,12 +33,18 @@ Actions (return one JSON object with a short evidence-based reason):
 {"action":"visual_check","checks":[{"id":1,"verdict":"yes|no|uncertain","reason":"visible evidence"}],
  "reason":"..."}
 {"action":"finish","predicted_id":1,"reason":"evidence supporting the choice"}
+{"action":"stop","reason":"which evidence is still missing and why no useful action remains"}
 
 Use at most 6 focus_ids in a render; prefer 2-4 remaining target candidates plus the
 specific reference instances needed for the relation. For visual_check, use only IDs in the most recent rendered focus and use no only when
 the rendered view visibly contradicts the target category or quoted appearance. A view
 can show shape or appearance, but an isolated view cannot prove room position. Camera
 azimuth is a world inspection direction, never the speaker's left/right frame.
+Consult evidence_state for current missing evidence and visual needs. A computed
+appearance/size summary is not a visual check. After rendering, inspect the image
+with visual_check before requesting the same evidence again. Preserve earlier
+constraints when switching dimensions. Used dimensions mean inspected, not solved.
+If no useful action remains, use stop rather than inventing a target or repeating tools.
 '''
 
 
@@ -280,17 +286,29 @@ def _check_payload(action, focus_ids, candidates, parsed):
     target_names = parsed.get('Target', [])
     target_category = retrieval_category(target_names[0]) if target_names else ''
     result = []
+    seen = set()
     for check in checks:
         if (not isinstance(check, dict) or type(check.get('id')) is not int
-                or check['id'] not in allowed
+                or check['id'] not in allowed or check['id'] in seen
                 or check.get('verdict') not in ('yes', 'no', 'uncertain')
                 or not isinstance(check.get('reason'), str)
                 or not check['reason'].strip()):
             raise ValueError('visual_check IDs must be rendered candidates with yes/no/uncertain reasons')
+        seen.add(check['id'])
         result.append({'id': check['id'], 'category': target_category,
                        'verdict': check['verdict'], 'reason': check['reason'],
                        'source': 'active rendered view'})
     return result
+
+
+def evidence_state(diagnosis):
+    """Expose current audit needs without calling inspected dimensions solved."""
+    return {
+        'status': diagnosis.get('status'),
+        'remaining_candidate_ids': list(diagnosis.get('candidate_ids', [])),
+        'missing': list(diagnosis.get('missing', [])),
+        'visual_needs': deepcopy(diagnosis.get('visual_needs', [])),
+    }
 
 
 def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb, ids,
@@ -318,6 +336,35 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
     attempts = 0
     tool_count = 0
     max_attempts = max(limit * 2 + 3, limit + 3)
+    trace.update(action_attempt_budget=max_attempts, action_attempts=0,
+                 successful_tools=0, rejected_actions=0)
+    data = {}
+
+    def finish_result(action, stop_reason, oid=None):
+        remaining = diagnosis.get('candidate_ids', [])
+        status = diagnosis.get('status') if oid is not None else 'missing'
+        if not remaining:
+            status = 'conflict'
+        elif oid is not None and len(remaining) > 1:
+            status = 'missing'
+        history.append({'action': action, 'remaining_candidate_ids': list(remaining),
+                        'evidence_state': evidence_state(diagnosis)})
+        trace.update(stop_reason=stop_reason, final_candidate_ids=list(remaining),
+                     final_checks=checks, final_evidence_state=evidence_state(diagnosis))
+        obj = next((obj for obj in objects if obj['bbox_id'] == oid), None)
+        return {
+            'query': query, 'predicted_id': oid,
+            'bbox_3d': obj['bbox_3d'] if obj else None,
+            'response': data.get('_content', ''), 'usage': data.get('usage'),
+            'model': data.get('_baseline', {}).get('model'),
+            'latency_s': data.get('_baseline', {}).get('latency_s'),
+            'finish_reason': data.get('_finish_reason'), 'images': images,
+            'diagnosis': diagnosis, 'decision_status': status,
+            'accepted': oid is not None and status == 'resolved',
+            'decision_reasons': [action['reason']],
+            'diagnosis_policy': 'active_model_selected_evidence', 'active_trace': trace,
+        }
+
     while attempts < max_attempts:
         remaining = diagnosis.get('candidate_ids') or []
         state = {
@@ -326,6 +373,8 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             'category_candidates': category_candidates,
             'remaining_candidate_ids': remaining,
             'history': history, 'observation': observation,
+            'evidence_state': evidence_state(diagnosis),
+            'action_attempts_remaining': max_attempts - attempts,
             'used_dimensions': sorted(used_dimensions),
             'computed_filters': [item['dimension'] for item in computed_filters],
             'available_dimensions': [d for d in DIMENSIONS if d not in used_dimensions],
@@ -336,7 +385,7 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         if controller_feedback:
             instructions += '\nController correction: ' + controller_feedback
         if tool_count >= limit:
-            instructions += '\nThe tool budget is exhausted. Return action=finish now.'
+            instructions += '\nThe tool budget is exhausted. Return action=finish or action=stop now.'
         parts = []
         for path in images:
             parts.extend([{'type': 'text', 'text': f'Inspection {Path(path).name}'}, image_part(path)])
@@ -344,6 +393,7 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         call = {'stage': 'active_decision', 'step': attempts + 1,
                 'response_format': {'type': 'json_object'}}
         calls.append(call)
+        trace['action_attempts'] += 1
         try:
             data = chat([{'role': 'system', 'content': instructions},
                          {'role': 'user', 'content': parts}], max_tokens=900, json_mode=True)
@@ -358,32 +408,30 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         except (ValueError, OSError) as exc:
             call['error'] = str(exc)
             raise
+        if action.get('action') == 'stop':
+            return finish_result(action, 'model_stop')
         if action.get('action') == 'finish':
             oid = action.get('predicted_id')
             allowed = set(remaining) or set(category_candidates)
-            if type(oid) is not int or oid not in allowed:
-                raise QwenAPIError('active decision selected an ID outside the remaining candidates')
-            history.append({'action': action, 'remaining_candidate_ids': sorted(allowed)})
-            status = diagnosis.get('status')
-            if not remaining:
-                status = 'conflict'
-            obj = next(obj for obj in objects if obj['bbox_id'] == oid)
-            trace['stop_reason'] = 'budget_final_choice' if tool_count >= limit else 'model_finish'
-            trace['final_candidate_ids'] = sorted(remaining)
-            trace['final_checks'] = checks
-            return {
-                'query': query, 'predicted_id': oid, 'bbox_3d': obj['bbox_3d'],
-                'response': data['_content'], 'usage': data.get('usage'),
-                'model': data['_baseline']['model'], 'latency_s': data['_baseline']['latency_s'],
-                'finish_reason': data.get('_finish_reason'), 'images': images,
-                'diagnosis': diagnosis, 'decision_status': status,
-                'accepted': status == 'resolved',
-                'decision_reasons': [action['reason']],
-                'diagnosis_policy': 'active_model_selected_evidence',
-                'active_trace': trace,
-            }
+            if type(oid) is int and oid in allowed:
+                return finish_result(action, 'budget_final_choice' if tool_count >= limit
+                                     else 'model_finish', oid)
+            observation = {'tool': 'finish', 'no_evidence_acquired': True,
+                           'error': 'finish requires an ID from the remaining candidates; use stop if unresolved'}
+            history.append({'action': action, 'observation': observation,
+                            'remaining_candidate_ids': list(remaining)})
+            trace['rejected_actions'] += 1
+            controller_feedback = observation['error']
+            attempts += 1
+            continue
         if tool_count >= limit:
-            raise QwenAPIError('active decision ignored exhausted tool budget')
+            history.append({'action': action, 'observation': {
+                'tool': action.get('action'), 'error': 'tool budget exhausted',
+                'no_evidence_acquired': True}, 'remaining_candidate_ids': list(remaining)})
+            trace['rejected_actions'] += 1
+            return finish_result(
+                {'action': 'stop', 'reason': 'tool budget exhausted without a valid final decision'},
+                'tool_budget_exhausted')
         signature = json.dumps({k: v for k, v in action.items() if k != 'reason'}, sort_keys=True)
         if signature in used:
             history.append({
@@ -400,18 +448,20 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 'Do not repeat it. Choose one dimension from available_dimensions, '
                 'or render a smaller focus set, or finish if the evidence is sufficient.'
             )
+            trace['rejected_actions'] += 1
             attempts += 1
             continue
         entry = {'action': action}
+        before = list(diagnosis.get('candidate_ids', []))
         try:
             name = action.get('action')
             if name == 'compute':
                 dimension = action.get('dimension')
                 if dimension not in DIMENSIONS:
                     raise ValueError('compute needs a supported dimension')
-                used_dimensions.add(dimension)
                 observation = compute_observation(dimension, query, parsed, diagnosis,
                                                   candidates, geometry_objects)
+                used_dimensions.add(dimension)
                 if dimension in ('position', 'distance'):
                     candidate_evidence = observation.get('candidate_evidence', [])
                     update = apply_computed_evidence(diagnosis, candidate_evidence, dimension)
@@ -426,7 +476,9 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             elif name == 'visual_check':
                 if not last_render_focus:
                     raise ValueError('visual_check requires a preceding render action')
-                new_checks = _check_payload(action, last_render_focus, candidates, parsed)
+                new_checks = _check_payload(
+                    action, last_render_focus,
+                    [obj for obj in candidates if obj['bbox_id'] in before], parsed)
                 checks.extend(new_checks)
                 diagnosis = diagnose(parsed, geometry_objects, candidates, room_center, checks,
                                      trusted_categories=trusted_categories)
@@ -435,6 +487,11 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                                             record=False)
                 observation = {
                     'tool': 'visual_check', 'checks': new_checks,
+                    'candidate_update': {
+                        'before': before,
+                        'removed_ids': [oid for oid in before if oid not in diagnosis['candidate_ids']],
+                        'after': list(diagnosis['candidate_ids']),
+                    },
                     'candidate_ids': diagnosis.get('candidate_ids', []),
                     'stable_candidate_ids': diagnosis.get('stable_candidate_ids', []),
                     'status': diagnosis.get('status'),
@@ -452,14 +509,19 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 'The previous tool request was invalid and acquired no evidence. '
                 'Correct its parameters before retrying; do not repeat the invalid request.'
             )
+            trace['rejected_actions'] += 1
             attempts += 1
             continue
         used.add(signature)
         tool_count += 1
+        trace['successful_tools'] = tool_count
         controller_feedback = None
         entry.update(observation=observation,
                      remaining_candidate_ids=diagnosis.get('candidate_ids', []))
+        entry['evidence_state'] = evidence_state(diagnosis)
         history.append(entry)
-        trace['diagnosis_after_step'] = diagnosis
+        trace['diagnosis_after_step'] = deepcopy(diagnosis)
         attempts += 1
-    raise QwenAPIError('active decision exceeded action-attempt budget without a target')
+    return finish_result(
+        {'action': 'stop', 'reason': 'action-attempt budget exhausted without a valid final decision'},
+        'action_attempt_budget_exhausted')

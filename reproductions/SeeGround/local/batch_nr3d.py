@@ -107,7 +107,8 @@ def run_batch(csv_path, scene, rows, available, output, mode='baseline', review_
                               stable_candidate_ids=prediction['diagnosis']['stable_candidate_ids'],
                               diagnosis=prediction['diagnosis'],decision_reasons=prediction.get('decision_reasons',[]))
             gt_obj=gt_objects[row['target_id']]
-            result['iou_3d']=bbox_iou_3d(prediction['bbox_3d'],gt_obj['bbox_3d'])
+            result['iou_3d']=(bbox_iou_3d(prediction['bbox_3d'],gt_obj['bbox_3d'])
+                              if prediction['predicted_id'] is not None else 0.)
             result['correct']=result['predicted_id']==row['target_id']
         except (ValueError,OSError,KeyError,IndexError) as exc:
             result.update(error=str(exc),error_type=type(exc).__name__,correct=False)
