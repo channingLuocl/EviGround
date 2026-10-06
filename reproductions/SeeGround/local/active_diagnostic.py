@@ -1,4 +1,5 @@
 """Model-directed, bounded evidence loop for candidate disambiguation."""
+from copy import deepcopy
 import json
 from pathlib import Path
 
@@ -33,7 +34,8 @@ Actions (return one JSON object with a short evidence-based reason):
  "reason":"..."}
 {"action":"finish","predicted_id":1,"reason":"evidence supporting the choice"}
 
-For visual_check, use only IDs in the most recent rendered focus and use no only when
+Use at most 6 focus_ids in a render; prefer 2-4 remaining target candidates plus the
+specific reference instances needed for the relation. For visual_check, use only IDs in the most recent rendered focus and use no only when
 the rendered view visibly contradicts the target category or quoted appearance. A view
 can show shape or appearance, but an isolated view cannot prove room position. Camera
 azimuth is a world inspection direction, never the speaker's left/right frame.
@@ -57,13 +59,124 @@ def geometry_observation(diagnosis, category_candidates):
     }
 
 
+def _status(flags):
+    """Summarize conditional evidence without treating unknown as failure."""
+    if not flags:
+        return 'not_applicable'
+    if any(flag is True for flag in flags):
+        return 'pass'
+    if any(flag is None for flag in flags):
+        return 'unknown'
+    return 'fail'
+
+
+def _overall_status(groups):
+    statuses = [group['status'] for group in groups.values()
+                if group['status'] != 'not_applicable']
+    if not statuses:
+        return 'not_applicable'
+    if 'fail' in statuses:
+        return 'fail'
+    if 'unknown' in statuses:
+        return 'unknown'
+    return 'pass'
+
+
+def position_candidate_evidence(diagnosis, candidate_ids=None):
+    """Return per-candidate relation status, preserving alternative bindings."""
+    geometry = diagnosis.get('geometry', {})
+    ids = list(candidate_ids if candidate_ids is not None
+               else diagnosis.get('candidate_ids', []))
+    between_flags = {}
+    relation_pairs = geometry.get('relation_pairs', [])
+    for item in geometry.get('between_candidate_evidence', []):
+        target_id = item.get('target_id')
+        if target_id not in ids:
+            continue
+        flags = between_flags.setdefault(target_id, [])
+        flags.extend([True] * len(item.get('passing_reference_pairs', [])))
+        flags.extend([None] * len(item.get('unknown_reference_pairs', [])))
+        flags.extend([False] * len(item.get('failing_reference_pairs', [])))
+    records = []
+    for target_id in ids:
+        groups = {}
+        for pair in relation_pairs:
+            if pair.get('target_id') != target_id:
+                continue
+            relation = pair.get('relation', 'relation')
+            groups.setdefault(relation, []).append(pair.get('passes'))
+        if target_id in between_flags:
+            groups.setdefault('between', []).extend(between_flags[target_id])
+        normalized = {
+            relation: {'status': _status(flags), 'observations': len(flags)}
+            for relation, flags in groups.items()
+        }
+        records_for_id = {
+            'candidate_id': target_id,
+            'status': _overall_status(normalized),
+            'relations': normalized,
+        }
+        records_for_id['exclusion_reason'] = (
+            'all available reference interpretations fail the position predicate'
+            if records_for_id['status'] == 'fail' else None)
+        records.append(records_for_id)
+    return records
+
+
+def distance_candidate_evidence(rankings, candidate_ids):
+    """Summarize explicit nearest/farthest rankings per target candidate."""
+    result = []
+    for candidate_id in candidate_ids:
+        groups = {}
+        for ranking in rankings:
+            relation = ranking.get('relation', 'distance')
+            ordered = {item.get('target_id') for item in ranking.get('ordered_targets', [])}
+            if candidate_id not in ordered:
+                continue
+            groups.setdefault(relation, []).append(
+                candidate_id in set(ranking.get('best_ids', [])))
+        normalized = {relation: {'status': _status(flags), 'observations': len(flags)}
+                      for relation, flags in groups.items()}
+        result.append({'candidate_id': candidate_id,
+                       'status': _overall_status(normalized),
+                       'relations': normalized,
+                       'exclusion_reason': (
+                           'candidate is never best in any explicit distance ranking'
+                           if _overall_status(normalized) == 'fail' else None)})
+    return result
+
+
+def apply_computed_evidence(diagnosis, evidence, dimension, record=True):
+    """Apply only definite failures from a computed dimension to the live scope."""
+    by_id = {item['candidate_id']: item for item in evidence}
+    before = list(diagnosis.get('candidate_ids', []))
+    removed = [oid for oid in before if by_id.get(oid, {}).get('status') == 'fail']
+    remaining = [oid for oid in before if oid not in set(removed)]
+    diagnosis['candidate_ids'] = remaining
+    diagnosis['stable_candidate_ids'] = [oid for oid in diagnosis.get('stable_candidate_ids', [])
+                                         if oid in remaining]
+    if record:
+        diagnosis.setdefault('active_computed_evidence', []).append({
+            'dimension': dimension, 'evidence': evidence, 'removed_ids': removed,
+        })
+    if not remaining:
+        diagnosis['status'] = 'conflict'
+    elif diagnosis.get('missing'):
+        diagnosis['status'] = 'missing'
+    elif len(remaining) == 1:
+        diagnosis['status'] = 'resolved'
+    else:
+        diagnosis['status'] = 'ambiguous'
+    return {'before': before, 'removed_ids': removed, 'after': remaining}
+
+
 def render_action(action, objects, xyz, rgb, ids, out, index):
     known = {obj['bbox_id']: obj for obj in objects}
     focus = action.get('focus_ids')
-    if (not isinstance(focus, list) or not focus or len(focus) > 12
+    if (not isinstance(focus, list) or not focus or len(focus) > 6
             or any(type(oid) is not int or oid not in known for oid in focus)
             or len(set(focus)) != len(focus)):
-        raise ValueError('render needs 1-12 distinct known focus_ids')
+        raise ValueError('render needs 1-6 distinct known focus_ids; include a few candidates and references')
     azimuth, elevation = action.get('azimuth_deg'), action.get('elevation_deg')
     if (type(azimuth) not in (int, float) or not np.isfinite(azimuth)
             or not 0 <= azimuth < 360 or type(elevation) not in (int, float)
@@ -117,20 +230,26 @@ def compute_observation(dimension, query, parsed, diagnosis, candidates, geometr
             'policy': 'only explicit observer/frame evidence is used',
         }
     if dimension == 'position':
+        candidate_evidence = position_candidate_evidence(diagnosis)
         return {
             'tool': 'compute', 'dimension': dimension,
             'relation_pairs': geometry.get('relation_pairs', []),
             'between_candidate_evidence': geometry.get('between_candidate_evidence', []),
             'between_triplets': geometry.get('between_triplets', []),
+            'candidate_evidence': candidate_evidence,
             'candidate_ids': diagnosis.get('candidate_ids', []),
-            'policy': 'AABB relation evidence; unknown pairs remain eligible',
+            'policy': 'candidate-level relation status; only definite fail is removable',
         }
     if dimension == 'distance':
+        rankings = distance_rankings(query, parsed, candidates, geometry_objects)
+        candidate_evidence = distance_candidate_evidence(
+            rankings.get('rankings', []), diagnosis.get('candidate_ids', []))
         return {
             'tool': 'compute', 'dimension': dimension,
-            'distance_rankings': distance_rankings(query, parsed, candidates, geometry_objects),
+            'distance_rankings': rankings,
+            'candidate_evidence': candidate_evidence,
             'candidate_ids': diagnosis.get('candidate_ids', []),
-            'policy': 'only explicit nearest/farthest relations are ranked; no voting',
+            'policy': 'explicit nearest/farthest rankings; only definite fail is removable',
         }
     if dimension == 'size':
         return {
@@ -182,12 +301,12 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
     category_candidates = initial_candidates[:]
     observation = geometry_observation(diagnosis, category_candidates)
     history, images, used = [], [], set()
-    checks, used_dimensions = [], set()
+    checks, used_dimensions, computed_filters = [], set(), []
     last_render_focus = []
     trace.update(
         policy='category first; model selects the next evidence dimension; no fixed order',
         tool_budget=limit, category_candidates=category_candidates,
-        initial_diagnosis=diagnosis, steps=history,
+        initial_diagnosis=deepcopy(diagnosis), steps=history,
     )
     target_table = [{'bbox_id': obj['bbox_id'], 'category': obj['target']}
                     for obj in candidates]
@@ -203,6 +322,7 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             'remaining_candidate_ids': remaining,
             'history': history, 'observation': observation,
             'used_dimensions': sorted(used_dimensions),
+            'computed_filters': [item['dimension'] for item in computed_filters],
             'available_dimensions': [d for d in DIMENSIONS if d not in used_dimensions],
             'last_render_focus_ids': last_render_focus,
             'tools_remaining': max(0, limit - index),
@@ -270,6 +390,13 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 used_dimensions.add(dimension)
                 observation = compute_observation(dimension, query, parsed, diagnosis,
                                                   candidates, geometry_objects)
+                if dimension in ('position', 'distance'):
+                    candidate_evidence = observation.get('candidate_evidence', [])
+                    update = apply_computed_evidence(diagnosis, candidate_evidence, dimension)
+                    computed_filters.append({'dimension': dimension,
+                                             'evidence': candidate_evidence})
+                    observation['candidate_update'] = update
+                    observation['candidate_ids'] = diagnosis.get('candidate_ids', [])
             elif name == 'render':
                 observation = render_action(action, geometry_objects, xyz, rgb, ids, out, index + 1)
                 images.append(observation['image'])
@@ -281,6 +408,9 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 checks.extend(new_checks)
                 diagnosis = diagnose(parsed, geometry_objects, candidates, room_center, checks,
                                      trusted_categories=trusted_categories)
+                for computed in computed_filters:
+                    apply_computed_evidence(diagnosis, computed['evidence'], computed['dimension'],
+                                            record=False)
                 observation = {
                     'tool': 'visual_check', 'checks': new_checks,
                     'candidate_ids': diagnosis.get('candidate_ids', []),

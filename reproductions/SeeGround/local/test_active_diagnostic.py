@@ -1,6 +1,11 @@
 import unittest
+from pathlib import Path
 
-from active_diagnostic import _check_payload, compute_observation
+import numpy as np
+
+from active_diagnostic import (apply_computed_evidence, _check_payload,
+                               compute_observation, position_candidate_evidence,
+                               render_action)
 from diagnostic import diagnose
 
 
@@ -18,6 +23,37 @@ def parsed():
 
 
 class ActiveDiagnosticTests(unittest.TestCase):
+    def test_position_evidence_distinguishes_fail_from_unknown(self):
+        diagnosis = {
+            'candidate_ids': [1, 2, 3], 'stable_candidate_ids': [], 'missing': [],
+            'geometry': {
+                'relation_pairs': [],
+                'between_candidate_evidence': [
+                    {'target_id': 1, 'passing_reference_pairs': [[7, 8]],
+                     'unknown_reference_pairs': [], 'failing_reference_pairs': []},
+                    {'target_id': 2, 'passing_reference_pairs': [],
+                     'unknown_reference_pairs': [], 'failing_reference_pairs': [[7, 8]]},
+                    {'target_id': 3, 'passing_reference_pairs': [],
+                     'unknown_reference_pairs': [[7, 8]], 'failing_reference_pairs': []},
+                ],
+            },
+        }
+        evidence = position_candidate_evidence(diagnosis)
+        self.assertEqual([item['status'] for item in evidence],
+                         ['pass', 'fail', 'unknown'])
+        update = apply_computed_evidence(diagnosis, evidence, 'position')
+        self.assertEqual(update['removed_ids'], [2])
+        self.assertEqual(diagnosis['candidate_ids'], [1, 3])
+
+    def test_render_rejects_overloaded_focus(self):
+        objects = [obj(index, 'window', index, 0) for index in range(1, 8)]
+        with self.assertRaises(ValueError):
+            render_action(
+                {'focus_ids': list(range(1, 8)), 'azimuth_deg': 90,
+                 'elevation_deg': 25, 'context': 'scene'}, objects,
+                np.zeros((1, 3)), np.zeros((1, 3), dtype=np.uint8),
+                np.array([1]), Path('/tmp'), 1)
+
     def test_each_dimension_is_an_explicit_model_selectable_tool(self):
         objects = [obj(1, 'window', 0, 0), obj(2, 'window', 2, 0)]
         diagnosis = {
