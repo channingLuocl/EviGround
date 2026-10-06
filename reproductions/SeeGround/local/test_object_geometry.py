@@ -25,6 +25,12 @@ class ObjectGeometryTests(unittest.TestCase):
         self.assertEqual([d['word'] for d in target['descriptors']],['lower'])
         self.assertEqual([d['word'] for d in reference['descriptors']],['tall'])
 
+    def test_skinny_descriptor_does_not_change_role_category(self):
+        target=describe_role('the skinny cabinet', self.objects)
+        self.assertEqual(target['category'], 'cabinet')
+        self.assertEqual(target['ids'], [1, 2, 3])
+        self.assertEqual([d['word'] for d in target['descriptors']], ['skinny'])
+
     def test_box_size_and_vertical_rankings_are_explicit(self):
         result=box_measurements(self.objects[:3])
         self.assertEqual(result['rankings']['height_m']['maximum_ids'],[2])

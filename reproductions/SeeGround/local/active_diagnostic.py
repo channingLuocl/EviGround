@@ -747,6 +747,9 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 diagnosis['candidate_ids'] = [oid]
                 diagnosis['stable_candidate_ids'] = [oid]
                 diagnosis['status'] = 'resolved'
+                diagnosis['missing'] = [item for item in diagnosis.get('missing', [])
+                                       if item != 'category/appearance evidence is uncertain or unreviewed']
+                diagnosis['visual_needs'] = []
                 diagnosis.setdefault('active_computed_evidence', []).append({
                     'dimension': 'size', 'policy': 'planner accepted unique candidate-relative size hint',
                     'selected_id': oid, 'before': remaining,

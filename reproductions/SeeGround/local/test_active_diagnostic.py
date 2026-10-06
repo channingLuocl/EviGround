@@ -325,6 +325,8 @@ class ActiveDiagnosticTests(unittest.TestCase):
         self.assertEqual(result['predicted_id'], 1)
         self.assertTrue(result['accepted'])
         self.assertEqual(result['diagnosis']['candidate_ids'], [1])
+        self.assertEqual(result['diagnosis']['missing'], [])
+        self.assertEqual(result['diagnosis']['visual_needs'], [])
 
     def test_internal_verification_receives_only_target_attributes(self):
         objects = [obj(1, 'window', 0, 0), obj(2, 'tv', 2, 0)]
