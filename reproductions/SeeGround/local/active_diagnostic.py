@@ -1,6 +1,7 @@
 """Model-directed, bounded evidence loop for candidate disambiguation."""
 from copy import deepcopy
 import json
+import re
 
 import numpy as np
 
@@ -190,6 +191,9 @@ def size_candidate_evidence(parsed, candidates, measurements):
     target_category = retrieval_category(target_names[0]) if target_names else ''
     attributes = [attribute.get('phrase', '') for attribute in parsed.get('Attributes', [])
                   if retrieval_category(attribute.get('category', '')) == target_category]
+    attributes = list(dict.fromkeys(word.casefold() for phrase in attributes
+                      for word in re.findall(r'\b\w+\b', phrase)
+                      if word.casefold() in SIZE_WORDS))
     rows = [by_id[obj['bbox_id']] for obj in candidates if obj['bbox_id'] in by_id]
     known = [row for row in rows if row.get('status') == 'known']
     if not attributes:
@@ -278,7 +282,7 @@ def size_candidate_evidence(parsed, candidates, measurements):
                 'pool_size': hint['known_pool_size'],
                 'selected_ids': hint['selected_ids'],
                 'unique_extreme': hint['unique_extreme'],
-                'margin_to_next': hint['margin_to_next'],
+                'margin_to_next': hint.get('margin_to_next'),
                 'source': 'instance_point_cloud_aabb',
             })
         flags = []
@@ -288,7 +292,8 @@ def size_candidate_evidence(parsed, candidates, measurements):
                 continue
             flags.append(candidate_id in set(constraint['selected_ids']))
         if flags:
-            status = _overall_status({'size': {'status': _status(flags)}})
+            status = ('fail' if False in flags else
+                      'unknown' if None in flags else 'pass')
         elif row.get('status') != 'known':
             status = 'unknown'
         else:
@@ -549,7 +554,10 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
                         'attributes': [attribute for attribute in parsed.get('Attributes', [])
                                        if retrieval_category(attribute['category']) in {
                                            retrieval_category(name) for name in parsed['Target']}],
-                        'candidate_ids': visible_ids, 'render': view}, ensure_ascii=False)}]},
+                        'candidate_ids': visible_ids,
+                        'candidate_measurements': point_cloud_measurements(
+                            [obj for obj in candidates if obj['bbox_id'] in before], xyz, ids),
+                        'render': view}, ensure_ascii=False)}]},
             ], max_tokens=1200, json_mode=True)
             call.update(response=data['_content'], usage=data.get('usage'),
                         model=data['_baseline'].get('model'),
@@ -570,6 +578,23 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
                     'verdict': 'uncertain', 'reason': 'unmarked in image or not verified',
                     'source': 'active rendered view',
                 })
+        scope = [obj for obj in candidates if obj['bbox_id'] in before]
+        _, _, comparison = size_candidate_evidence(
+            parsed, scope, point_cloud_measurements(scope, xyz, ids))
+        hints = comparison.get('attributes', [])
+        complete = comparison.get('known_measurement_count') == len(before)
+        for check in result['checks']:
+            support = [check['id'] in hint.get('selected_ids', []) for hint in hints
+                       if hint.get('unique_extreme')]
+            if complete and support and (
+                    (check['verdict'] == 'no' and any(support)) or
+                    (check['verdict'] == 'yes' and not all(support))):
+                check['visual_verdict'] = check['verdict']
+                check['verdict'] = 'uncertain'
+                check['reason'] = ('Visual verdict conflicts with candidate-relative size evidence; '
+                                   'inspect another view or stop. Visual reason: ' + check['reason'])
+                result['missing'].append('size/appearance conflict for candidate ' + str(check['id']))
+        result['details']['size_comparison'] = comparison
         for check in result['checks']:
             check['image'] = view['image']
         result['candidate_evidence'] = [

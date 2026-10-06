@@ -187,9 +187,11 @@ def repair_missing_attributes(query, parsed, calls):
             'attribute category is not a supplied target/reference:',
             'unquoted or unbound appearance attribute',
         )
+        covered_nouns = {'unsupported relation: ' + a['phrase'].casefold() + ' ' +
+                         a['category'].casefold() for a in corrected['Attributes']}
         corrected['diagnostic_missing']=list(dict.fromkeys(
             [item for item in parsed['diagnostic_missing']
-             if not item.startswith(repairable_prefixes)]
+             if not item.startswith(repairable_prefixes) and item.casefold() not in covered_nouns]
             +corrected['diagnostic_missing']))
         call['remaining_missing']=corrected['diagnostic_missing']
         return corrected

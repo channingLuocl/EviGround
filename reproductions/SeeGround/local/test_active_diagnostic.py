@@ -280,6 +280,53 @@ class ActiveDiagnosticTests(unittest.TestCase):
         self.assertEqual(evidence[0]['attribute_evidence'][0]['rank'], 2)
         self.assertEqual(evidence[1]['attribute_evidence'][0]['rank'], 1)
 
+    def test_compound_size_keeps_both_hints_and_conflicting_visual_candidates(self):
+        objects = [obj(5, 'shelf', 0, 0), obj(13, 'shelf', 2, 0)]
+        query = parsed()
+        query['Target'] = ['shelf']
+        query['Attributes'] = [{'category': 'shelf', 'phrase': 'tall skinny'}]
+        xyz = np.asarray([[0., 0., 0.], [.24, .83, .94],
+                          [2., 0., 0.], [2.45, .70, 1.56]])
+        ids = np.asarray([5, 5, 13, 13])
+        diagnosis = diagnose(query, objects, objects, [0, 0, 0], trusted_categories=True)
+        size = compute_observation('size', 'tall skinny shelf', query, diagnosis,
+                                   objects, objects, xyz, ids)
+        hints = size['size_decision']['attributes']
+        self.assertEqual([(h['attribute'], h['selected_ids']) for h in hints],
+                         [('tall', [13]), ('skinny', [5])])
+        self.assertEqual(size['size_decision']['candidate_relative_ids'], [])
+        response = {'_content': json.dumps({'checks': [
+            {'id': 5, 'verdict': 'yes', 'reason': 'looks tall and thin'},
+            {'id': 13, 'verdict': 'no', 'reason': 'looks blocky'}]}),
+            '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
+        action = evidence_request({'action': 'evidence', 'dimension': 'appearance',
+                                   'reason': 'inspect'}, [5, 13], objects)
+        with patch('active_diagnostic.render_action', return_value={
+                'tool': 'render', 'image': 'mock.png', 'focus_ids': [5, 13]}), patch(
+                'active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'active_diagnostic.chat', return_value=response):
+            observation = execute_evidence(action, 'tall skinny shelf', query, diagnosis,
+                objects, objects, xyz, None, ids, Path('/tmp'), 1, [])
+        self.assertEqual([c['verdict'] for c in observation['checks']], ['uncertain', 'uncertain'])
+        self.assertEqual([c['visual_verdict'] for c in observation['checks']], ['yes', 'no'])
+        after = diagnose(query, objects, objects, [0, 0, 0], observation['checks'],
+                         trusted_categories=True)
+        self.assertEqual(after['candidate_ids'], [5, 13])
+        self.assertNotEqual(after['status'], 'resolved')
+
+    def test_multiple_size_extremes_require_all_constraints(self):
+        query = parsed()
+        query['Target'] = ['cabinet']
+        query['Attributes'] = [{'category': 'cabinet', 'phrase': 'smallest tallest'}]
+        objects = [obj(1, 'cabinet', 0, 0), obj(2, 'cabinet', 2, 0)]
+        measurements = [
+            {'id': 1, 'status': 'known', 'volume_m3': 1., 'height_m': 1.},
+            {'id': 2, 'status': 'known', 'volume_m3': 2., 'height_m': 2.},
+        ]
+        evidence, _, decision = size_candidate_evidence(query, objects, measurements)
+        self.assertEqual([row['status'] for row in evidence], ['fail', 'fail'])
+        self.assertEqual(decision['candidate_relative_ids'], [])
+
     def test_size_superlative_can_filter_from_point_cloud_measurements(self):
         objects = [obj(1, 'cabinet', 0, 0), obj(2, 'cabinet', 2, 0)]
         measurements = [

@@ -37,6 +37,7 @@ relative_anchor means target is on a named reference's side in the observer fram
 side means a signed side of the observer, NOT leftmost/rightmost among peers.
 Use between with anchor_categories for a target located between two named references.
 Represent smallest/largest/tallest/shortest/highest/lowest as target Attributes, not Unhandled.
+Adjective phrases such as tall skinny are Attributes, never Relations. Preserve every modifier.
 Use other+Unhandled for unsupported extremes, object-intrinsic axes, ordinal or unsupported relations.
 Includes/contains a named object is a containment/composition relation, not appearance;
 use other+Unhandled because this relation has no implemented predicate.
@@ -306,6 +307,12 @@ def validate_structure(query, parsed):
         missing.append('vertical condition not represented')
     for match in re.finditer(CONTAINMENT_PATTERN, query, re.I):
         missing.append('unsupported containment condition: ' + match.group().rstrip())
+    # A quoted attribute plus its bound category is a noun phrase, not a relation.
+    covered_nouns = {a['phrase'].casefold() + ' ' + a['category'].casefold()
+                     for a in parsed['Attributes']}
+    missing = [item for item in missing if not (
+        item.startswith('unsupported relation: ') and
+        item[len('unsupported relation: '):].casefold() in covered_nouns)]
     parsed['diagnostic_missing'] = missing
     return parsed
 

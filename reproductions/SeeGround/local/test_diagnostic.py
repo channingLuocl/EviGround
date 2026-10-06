@@ -42,6 +42,17 @@ class DiagnosticTests(unittest.TestCase):
             self.assertIn('unhandled condition: ' + text, checked['diagnostic_missing'])
             self.assertEqual(checked['Attributes'], [])
 
+    def test_attribute_noun_phrase_is_not_an_unsupported_relation(self):
+        for phrase, keep_error in [('tall skinny shelf', False),
+                                   ('shelf beside the door', True)]:
+            checked = validate_structure('choose the tall skinny shelf beside the door', {
+                'Target': ['shelf'], 'Anchor': [], 'Observer': {}, 'Unhandled': [],
+                'Attributes': [{'category': 'shelf', 'phrase': 'tall skinny'}],
+                'Relations': [{'relation': 'other', 'target_category': 'shelf', 'phrase': phrase}],
+            })
+            self.assertEqual('unsupported relation: ' + phrase in checked['diagnostic_missing'],
+                             keep_error)
+
     def test_shape_word_in_relation_quote_does_not_cover_missing_attribute(self):
         query = 'Choose the skinny cabinet between the stove and the wall.'
         relation = {'target_category': 'cabinet', 'anchor_categories': ['stove', 'wall'],
