@@ -141,6 +141,38 @@ class DiagnosticTests(unittest.TestCase):
                 self.assertIn('unsupported containment condition: ' + verb + ' the sink', result['missing'])
                 self.assertEqual(result['candidate_ids'], [1])
 
+    def test_nothing_underneath_cannot_resolve_when_parser_omits_exclusion(self):
+        query = 'the tall white table with nothing underneath'
+        for relations in ([], [{'target_category': 'table', 'anchor_category': 'shelf',
+                               'relation': 'below', 'scope': 'relative_anchor',
+                               'phrase': 'underneath'}]):
+            with self.subTest(relations=relations):
+                data = validate_structure(query, {
+                    'Target': ['table'], 'Anchor': [], 'Relations': relations,
+                    'Observer': {}, 'Attributes': [{'category': 'table', 'phrase': 'tall'},
+                                                  {'category': 'table', 'phrase': 'white'}],
+                    'Unhandled': [],
+                })
+                self.assertIn('negation/exclusion is unsupported', data['diagnostic_missing'])
+                self.assertEqual(data['Relations'], [])
+                objects = [obj(1, 'table', 0, 0)]
+                result = diagnose(data, objects, objects, [0, 0, .5], supported(objects),
+                                  trusted_categories=True)
+                self.assertEqual(result['status'], 'missing')
+                self.assertEqual(result['candidate_ids'], [1])
+
+    def test_omitted_underneath_condition_cannot_resolve_from_appearance(self):
+        query = 'the white table underneath the shelf'
+        data = validate_structure(query, {
+            'Target': ['table'], 'Anchor': [], 'Relations': [], 'Observer': {},
+            'Attributes': [{'category': 'table', 'phrase': 'white'}], 'Unhandled': [],
+        })
+        self.assertIn('vertical condition not represented', data['diagnostic_missing'])
+        objects = [obj(1, 'table', 0, 0)]
+        result = diagnose(data, objects, objects, [0, 0, .5], supported(objects),
+                          trusted_categories=True)
+        self.assertEqual(result['status'], 'missing')
+
     def setUp(self):
         self.objects=[obj(1,'window',-1,1),obj(2,'window',1,1),obj(3,'tv',0,3)]
         self.query='Standing in the middle of the room facing the tv, the window on the right.'

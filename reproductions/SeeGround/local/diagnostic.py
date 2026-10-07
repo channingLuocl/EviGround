@@ -323,7 +323,7 @@ def validate_structure(query, parsed):
     targets = parsed['Target'] if isinstance(parsed['Target'], list) else [parsed['Target']]
     if any(retrieval_category(name) in ('one','correct one','it','object','thing') for name in targets):
         missing.append('target category is an unresolved pronoun or generic noun')
-    if re.search(r"\b(no|not|never|without|except)\b|n['’]t\b", query, re.I):
+    if re.search(r"\b(no|not|nothing|never|without|except)\b|n['’]t\b", query, re.I):
         missing.append('negation/exclusion is unsupported')
         parsed['Relations'] = []
     direction_query = re.sub(r'\bright\s+(?:above|over|below|under|beneath)\b', '', query, flags=re.I)
@@ -336,7 +336,7 @@ def validate_structure(query, parsed):
             missing.append(label + ' condition not represented')
     if re.search(r'\b(corner|leftmost|rightmost|second|third)\b', query, re.I):
         missing.append('corner/ordinal/support/extreme conditions require additional predicates')
-    if re.search(r'\b(above|over|below|under|beneath)\b', query, re.I) and not any(
+    if re.search(r'\b(above|over|below|under|underneath|beneath)\b', query, re.I) and not any(
             r['relation'] in ('above', 'below') for r in parsed['Relations']):
         missing.append('vertical condition not represented')
     for match in re.finditer(CONTAINMENT_PATTERN, query, re.I):
