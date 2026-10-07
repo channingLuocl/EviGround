@@ -1,10 +1,11 @@
+import hashlib
 import json
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from run_size_validation import evaluate, report, run_case
+from run_size_validation import evaluate, report, run_case, verify_source
 
 
 class SizeValidationTests(unittest.TestCase):
@@ -47,6 +48,29 @@ class SizeValidationTests(unittest.TestCase):
             prediction.write_text(json.dumps(data))
             with self.assertRaisesRegex(ValueError, 'provenance mismatch'):
                 evaluate(self.row(), prediction, root / 'console.log')
+
+    def test_source_hash_check_can_use_manifest_when_csv_is_absent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / 'nr3d_official.csv'
+            manifest = {'csv_sha256': 'expected'}
+            self.assertEqual(verify_source(manifest, source), {
+                'path': str(source), 'expected_sha256': 'expected', 'status': 'missing'})
+
+    def test_source_hash_check_rejects_mismatch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / 'nr3d_official.csv'
+            source.write_text('row\n')
+            with self.assertRaisesRegex(ValueError, 'hash does not match'):
+                verify_source(manifest={'csv_sha256': 'wrong'}, source=source)
+
+    def test_source_hash_check_records_matching_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / 'nr3d_official.csv'
+            source.write_text('row\n')
+            expected = hashlib.sha256(source.read_bytes()).hexdigest()
+            self.assertEqual(verify_source({'csv_sha256': expected}, source), {
+                'path': str(source), 'expected_sha256': expected,
+                'actual_sha256': expected, 'status': 'verified'})
 
 
 if __name__ == '__main__':

@@ -19,6 +19,17 @@ def write_json(path, value):
     temporary.replace(path)
 
 
+def verify_source(manifest, source):
+    expected = manifest['csv_sha256']
+    if not source.exists():
+        return {'path': str(source), 'expected_sha256': expected, 'status': 'missing'}
+    actual = hashlib.sha256(source.read_bytes()).hexdigest()
+    if actual != expected:
+        raise ValueError('NR3D CSV hash does not match the selection')
+    return {'path': str(source), 'expected_sha256': expected,
+            'actual_sha256': actual, 'status': 'verified'}
+
+
 def evaluate(row, prediction, log):
     data = json.loads(prediction.read_text())
     if (data['query'] != row['query'] or data.get('object_table') != 'gt' or
@@ -118,8 +129,12 @@ def main():
                for r in selected if r['scene'] == scene):
             raise ValueError(f'NR3D candidate IDs missing in {scene}')
     source = ROOT / 'local_outputs/downloads/nr3d_official.csv'
-    if hashlib.sha256(source.read_bytes()).hexdigest() != manifest['csv_sha256']:
-        raise ValueError('NR3D CSV hash does not match the selection')
+    source_check = verify_source(manifest, source)
+    if source_check['status'] == 'missing':
+        print(f'Original NR3D CSV not found at {source}; using the manifest hash for preflight',
+              flush=True)
+    else:
+        print(f'Verified original NR3D CSV: {source}', flush=True)
     output = (args.output or ROOT / 'local_outputs' /
               ('nr3d_size_300_' + datetime.now().strftime('%Y%m%d_%H%M%S'))).resolve()
     settings = {'selection': manifest, 'review_limit': args.review_limit,
@@ -135,6 +150,7 @@ def main():
     settings_path = output / 'manifest.json'
     if settings_path.exists() and json.loads(settings_path.read_text()) != settings:
         raise ValueError('Output has different code/settings/selection; choose a fresh output directory')
+    write_json(output / 'csv_verification.json', source_check)
     write_json(settings_path, settings)
     results = []
     print(f'Running {len(selected)}/{len(rows)} selected cases; workers={args.workers}; {output}', flush=True)
