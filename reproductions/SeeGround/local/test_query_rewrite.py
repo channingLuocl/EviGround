@@ -4,6 +4,20 @@ from query_rewrite import constraints_as_relations, rewrite_query
 
 
 class QueryRewriteTests(unittest.TestCase):
+    def test_compiles_comparative_size_attributes(self):
+        for word, expected in (('biggest', 'size_max'), ('larger', 'size_max'),
+                               ('smaller', 'size_min'),
+                               ('bigger', 'size_max'), ('taller', 'height_max'),
+                               ('shorter', 'height_min')):
+            with self.subTest(word=word):
+                query = f'the {word} cabinet'
+                result = rewrite_query(query, {
+                    'Target': ['cabinet'], 'Anchor': [], 'Relations': [],
+                    'Attributes': [{'category': 'cabinet', 'phrase': word}],
+                    'Unhandled': [],
+                })
+                self.assertEqual([item['type'] for item in result['constraints']], [expected])
+
     def test_omitted_shape_remains_unresolved_without_invented_binding(self):
         from diagnostic import validate_structure
         query = 'Choose the skinny cabinet between the stove and the wall.'

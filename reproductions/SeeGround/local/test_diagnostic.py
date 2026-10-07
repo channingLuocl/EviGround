@@ -31,6 +31,39 @@ def response(oid, verdict='yes', finish='stop'):
 
 
 class DiagnosticTests(unittest.TestCase):
+    def test_simple_comparative_size_recovery(self):
+        for word, metric in (('biggest', 'volume_m3'), ('larger', 'volume_m3'),
+                             ('smaller', 'volume_m3'),
+                             ('bigger', 'volume_m3'), ('taller', 'height_m'),
+                             ('shorter', 'height_m')):
+            with self.subTest(word=word):
+                query = f'The {word} cabinet.'
+                checked = validate_structure(query, {
+                    'Target': ['cabinet'], 'Anchor': [], 'Relations': [],
+                    'Observer': {}, 'Attributes': [], 'Unhandled': [query],
+                })
+                self.assertEqual(checked['Attributes'],
+                                 [{'category': 'cabinet', 'phrase': word}])
+                self.assertEqual(checked['Unhandled'], [])
+                self.assertNotIn('appearance condition not represented: ' + word,
+                                 checked['diagnostic_missing'])
+
+    def test_compound_comparative_size_stays_unhandled(self):
+        for query in ('Choose the larger red cabinet.',
+                      'The smaller cabinet of the two.',
+                      'The taller cabinet near the door.'):
+            with self.subTest(query=query):
+                checked = validate_structure(query, {
+                    'Target': ['cabinet'], 'Anchor': ['door'] if 'door' in query else [],
+                    'Relations': [], 'Observer': {}, 'Attributes': [],
+                    'Unhandled': [query],
+                })
+                self.assertEqual(checked['Attributes'], [])
+                self.assertEqual(checked['Unhandled'], [query])
+                self.assertIn('appearance condition not represented: ' +
+                              next(word for word in ('larger', 'smaller', 'taller')
+                                   if word in query.lower()), checked['diagnostic_missing'])
+
     def test_size_recovery_preserves_compound_and_negated_conditions(self):
         for text in ('Choose the smallest red cabinet.',
                      'Choose the tallest cabinet near the door.',

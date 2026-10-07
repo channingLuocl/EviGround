@@ -36,7 +36,8 @@ Direction relations use left|right|front|back, plus scope=relative_anchor|side.
 relative_anchor means target is on a named reference's side in the observer frame;
 side means a signed side of the observer, NOT leftmost/rightmost among peers.
 Use between with anchor_categories for a target located between two named references.
-Represent smallest/largest/tallest/shortest/highest/lowest as target Attributes, not Unhandled.
+Represent smallest/largest/biggest/tallest/shortest/highest/lowest and the
+comparatives larger/smaller/bigger/taller/shorter as target Attributes, not Unhandled.
 Adjective phrases such as tall skinny are Attributes, never Relations. Preserve every modifier.
 Use other+Unhandled for unsupported extremes, object-intrinsic axes, ordinal or unsupported relations.
 Includes/contains a named object is a containment/composition relation, not appearance;
@@ -165,9 +166,10 @@ def covered_attribute_request(query, parsed):
     if len(targets) != 1 or parsed.get('Anchor') or parsed.get('Relations'):
         return False
     words = []
-    allowed = set(('small smallest large largest big little skinny narrow wide thin thick '
-                   'tall tallest high highest short shortest low lowest dark light black white '
-                   'red blue green gray grey brown wooden mounted square round').split())
+    allowed = set(('small smallest smaller large largest larger big biggest bigger little '
+                   'skinny narrow wide thin thick tall tallest taller high highest short '
+                   'shortest shorter low lowest dark light black white red blue green gray '
+                   'grey brown wooden mounted square round').split())
     for attribute in parsed.get('Attributes', []):
         if retrieval_category(attribute.get('category', '')) != retrieval_category(targets[0]):
             return False
@@ -190,8 +192,9 @@ def validate_structure(query, parsed):
     targets = [targets] if isinstance(targets, str) else targets
     if len(targets) == 1:
         match = re.fullmatch(
-            r'\s*(?:choose|select|find)\s+the\s+'
-            r'(smallest|largest|tallest|shortest|highest|lowest)\s+'
+            r'\s*(?:(?:choose|select|find|pick|click)\s+|it\s+is\s+)?(?:the\s+)?'
+            r'(smallest|largest|biggest|tallest|shortest|highest|lowest|'
+            r'larger|smaller|bigger|taller|shorter)\s+'
             + re.escape(targets[0]) + r'\s*[.!?]?\s*', query, re.I)
         if (match and not parsed.get('Anchor') and not parsed.get('Relations')
                 and isinstance(parsed.get('Unhandled'), list)
@@ -298,7 +301,10 @@ def validate_structure(query, parsed):
     if len(parsed['Attributes']) != len(attrs):
         missing.append('unquoted or unbound appearance attribute')
     covered = ' '.join(a['phrase'] for a in parsed['Attributes'])
-    for word in re.findall(r'\b(smallest|largest|tallest|shortest|highest|lowest|large|small|big|little|skinny|narrow|wide|thin|thick|dark|light|black|white|red|blue|green|gr[ae]y|brown|wooden|mounted)\b', query, re.I):
+    for word in re.findall(r'\b(smallest|largest|biggest|tallest|shortest|highest|lowest|'
+                           r'larger|smaller|bigger|taller|shorter|large|small|big|little|'
+                           r'skinny|narrow|wide|thin|thick|dark|light|black|white|red|blue|'
+                           r'green|gr[ae]y|brown|wooden|mounted)\b', query, re.I):
         if not re.search(r'\b' + re.escape(word) + r'\b', covered, re.I):
             missing.append('appearance condition not represented: ' + word)
     unhandled = parsed.get('Unhandled')
@@ -495,7 +501,7 @@ def _size_ids(objects, category, phrase):
         return set(), None
     if 'smallest' in text:
         metric, choose = 'volume_m3', min
-    elif 'largest' in text:
+    elif 'largest' in text or 'biggest' in text:
         metric, choose = 'volume_m3', max
     elif 'tallest' in text or 'highest' in text:
         metric, choose = 'height_m', max

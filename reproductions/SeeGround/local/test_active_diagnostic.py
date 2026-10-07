@@ -377,6 +377,22 @@ class ActiveDiagnosticTests(unittest.TestCase):
         self.assertEqual(constraints[0]['selected_ids'], [2])
         self.assertEqual([row['status'] for row in evidence], ['fail', 'pass'])
 
+    def test_comparative_size_uses_candidate_relative_hint(self):
+        objects = [obj(1, 'cabinet', 0, 0), obj(2, 'cabinet', 2, 0)]
+        measurements = [
+            {'id': 1, 'status': 'known', 'volume_m3': 1., 'height_m': 1.,
+             'horizontal_aspect_ratio': 1.},
+            {'id': 2, 'status': 'known', 'volume_m3': 2., 'height_m': 1.,
+             'horizontal_aspect_ratio': 1.},
+        ]
+        query = parsed()
+        query['Target'] = ['cabinet']
+        query['Attributes'] = [{'category': 'cabinet', 'phrase': 'larger'}]
+        evidence, constraints, decision = size_candidate_evidence(query, objects, measurements)
+        self.assertEqual(constraints, [])
+        self.assertEqual(decision['candidate_relative_ids'], [2])
+        self.assertEqual([row['status'] for row in evidence], ['not_applicable', 'not_applicable'])
+
     def test_unique_relative_size_hint_can_be_verified_on_finish(self):
         objects = [obj(1, 'cabinet', 0, 0), obj(2, 'cabinet', 2, 0)]
         query = {
@@ -412,7 +428,8 @@ class ActiveDiagnosticTests(unittest.TestCase):
 
     def test_size_superlative_parser_outputs_and_finish(self):
         for word, selected, accepted in [('smallest', 2, True), ('largest', 1, True),
-                                          ('shortest', 2, True), ('tallest', 1, True),
+                                         ('biggest', 1, True),
+                                         ('shortest', 2, True), ('tallest', 1, True),
                                           ('small red', 2, False),
                                           ('unknown', 1, False), ('tied', 1, False)]:
             with self.subTest(word=word):

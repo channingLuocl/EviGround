@@ -52,10 +52,10 @@ def _attribute_constraint(attribute, query, target_category):
     if category != target_category:
         return None
     for words, kind, metric in (
-        (('smallest',), 'size_min', 'volume_m3'),
-        (('largest',), 'size_max', 'volume_m3'),
-        (('tallest', 'highest'), 'height_max', 'height_m'),
-        (('shortest', 'lowest'), 'height_min', 'height_m'),
+        (('smallest', 'smaller'), 'size_min', 'volume_m3'),
+        (('largest', 'biggest', 'larger', 'bigger'), 'size_max', 'volume_m3'),
+        (('tallest', 'highest', 'taller'), 'height_max', 'height_m'),
+        (('shortest', 'lowest', 'shorter'), 'height_min', 'height_m'),
     ):
         if any(re.search(r'\b' + re.escape(word) + r'\b', text) for word in words):
             return {'type': kind, 'target': 'target', 'reference': None,

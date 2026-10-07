@@ -15,9 +15,10 @@ from run import render
 
 DIMENSIONS = ('viewpoint', 'position', 'distance', 'appearance', 'size')
 SIZE_WORDS = {
-    'small', 'smallest', 'large', 'largest', 'big', 'little',
-    'skinny', 'narrow', 'thin', 'tall', 'tallest', 'high', 'highest',
-    'short', 'shortest', 'low', 'lowest',
+    'small', 'smallest', 'smaller', 'large', 'largest', 'larger', 'big',
+    'biggest', 'bigger', 'little', 'skinny', 'narrow', 'thin', 'tall',
+    'tallest', 'taller', 'high', 'highest', 'short', 'shortest', 'shorter',
+    'low', 'lowest',
 }
 EVIDENCE_CAPABILITIES = {
     'position': 'Existing geometry audit; only definite relation failures exclude candidates.',
@@ -252,7 +253,7 @@ def size_candidate_evidence(parsed, candidates, measurements):
     constraints = []
     for phrase in attributes:
         text = phrase.casefold()
-        if 'smallest' in text or 'largest' in text:
+        if 'smallest' in text or 'largest' in text or 'biggest' in text:
             metric = 'volume_m3'
             selected = _extreme_ids(known, metric, min_value='smallest' in text)
         elif 'tallest' in text or 'highest' in text:

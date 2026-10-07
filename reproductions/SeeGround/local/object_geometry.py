@@ -6,7 +6,9 @@ from pathlib import Path
 import numpy as np
 from evidence import canonical_category, match_retrieval_categories
 
-DESCRIPTORS=r'\b(smallest|largest|tallest|shortest|lowest|highest|lower|upper|tall|short|small|large|skinny|narrow|thin|wide|thick)\b'
+DESCRIPTORS=(r'\b(smallest|largest|biggest|tallest|shortest|lowest|highest|'
+             r'larger|smaller|bigger|taller|shorter|lower|upper|tall|short|'
+             r'small|large|skinny|narrow|thin|wide|thick)\b')
 CONNECTORS=r'next to|beside|near|by|above|below|under|beneath|away from|nearest(?: to)?|closest to|farthest from|furthest(?: away)? from'
 METRICS=('volume_m3','footprint_m2','height_m','center_z_m','bottom_z_m','top_z_m')
 
@@ -16,8 +18,9 @@ def category_matches(name, objects):
     normalized=canonical_category(name)
     # Descriptors belong to the linguistic role, not to the ScanNet category.
     normalized=' '.join(word for word in normalized.split()
-                        if word not in {'smallest','largest','tallest','shortest','lowest','highest',
-                                        'lower','upper','tall','short','small','large',
+                        if word not in {'smallest','largest','biggest','tallest','shortest','lowest','highest',
+                                        'larger','smaller','bigger','taller','shorter','lower','upper',
+                                        'tall','short','small','large',
                                         'skinny','narrow','thin','wide','thick'})
     if normalized=='kitchen cabinet':normalized='cabinet'
     return match_retrieval_categories([normalized],objects)
