@@ -217,6 +217,68 @@ class DiagnosticTests(unittest.TestCase):
         data=parsed('the large window',[])
         self.assertIn('appearance condition not represented: large',data['diagnostic_missing'])
 
+    def test_near_records_aabb_gap_without_filtering_or_center_ranking(self):
+        objects = [obj(1, 'window', 1, 0), obj(2, 'window', 3, 0), obj(3, 'tv', 0, 0)]
+        # The larger target reaches the anchor despite its more distant center.
+        objects[1]['bbox_3d'][3] = 5.6
+        relation = {'target_category': 'window', 'anchor_category': 'tv',
+                    'relation': 'near', 'phrase': 'near the tv'}
+        data = parsed('window near the tv', [relation])
+        result = diagnose(data, objects, objects[:2], [0, 0, .5], supported(objects))
+        pairs = {pair['target_id']: pair for pair in result['geometry']['proximity_pairs']}
+        self.assertAlmostEqual(pairs[1]['aabb_gap_m'], .6)
+        self.assertAlmostEqual(pairs[2]['aabb_gap_m'], 0.)
+        self.assertLess(pairs[1]['center_distance_m'], pairs[2]['center_distance_m'])
+        self.assertEqual(pairs[2]['relative_rank'], 1)
+        self.assertEqual(pairs[1]['relative_rank'], 2)
+        self.assertTrue(all(pair['passes'] is None for pair in pairs.values()))
+        self.assertEqual(result['candidate_ids'], [1, 2])
+        self.assertEqual(result['status'], 'missing')
+        self.assertIn('near has no calibrated predicate; distances are evidence only', result['missing'])
+
+    def test_near_gap_ties_do_not_gain_an_id_based_preference(self):
+        objects = [obj(8, 'window', -.1, 0), obj(2, 'window', .2, 0), obj(3, 'tv', 0, 0)]
+        relation = {'target_category': 'window', 'anchor_category': 'tv',
+                    'relation': 'near', 'phrase': 'near the tv'}
+        result = diagnose(parsed('window near the tv', [relation]), objects, objects[:2],
+                          [0, 0, .5], supported(objects))
+        pairs = result['geometry']['proximity_pairs']
+        self.assertEqual([pair['relative_rank'] for pair in pairs], [1, 1])
+        self.assertEqual([pair['best_ids'] for pair in pairs], [[2, 8], [2, 8]])
+        self.assertEqual([pair['relative_percentile'] for pair in pairs], [0., 0.])
+        self.assertEqual(result['candidate_ids'], [2, 8])
+        self.assertTrue(all('zero gap does not prove contact' in pair['policy'] for pair in pairs))
+
+    def test_near_multiple_references_keep_independent_candidate_rankings(self):
+        objects = [obj(1, 'window', -1, 0), obj(2, 'window', 1, 0),
+                   obj(3, 'tv', -1, 0), obj(4, 'tv', 1, 0)]
+        relation = {'target_category': 'window', 'anchor_category': 'tv',
+                    'relation': 'near', 'phrase': 'near the tv'}
+        result = diagnose(parsed('window near the tv', [relation]), objects, objects[:2],
+                          [0, 0, .5], supported(objects))
+        pairs = result['geometry']['proximity_pairs']
+        self.assertEqual(len(pairs), 4)
+        self.assertEqual({pair['anchor_id']: pair['best_ids'] for pair in pairs},
+                         {3: [1], 4: [2]})
+        self.assertTrue(all(pair['candidate_count'] == 2 for pair in pairs))
+        self.assertEqual(result['candidate_ids'], [1, 2])
+        for hypothesis in result['hypotheses']:
+            self.assertEqual({pair['anchor_id'] for pair in hypothesis['measurements']},
+                             {hypothesis['references']['tv']})
+
+    def test_near_aabb_gap_includes_vertical_separation(self):
+        objects = [obj(1, 'window', 0, 0), obj(2, 'tv', 0, 0)]
+        objects[1]['bbox_3d'][2] = 2.5
+        relation = {'target_category': 'window', 'anchor_category': 'tv',
+                    'relation': 'near', 'phrase': 'near the tv'}
+        result = diagnose(parsed('window near the tv', [relation]), objects, objects[:1],
+                          [0, 0, .5], supported(objects))
+        pair = result['geometry']['proximity_pairs'][0]
+        self.assertEqual(pair['horizontal_aabb_gap_m'], 0.)
+        self.assertEqual(pair['aabb_gap_m'], 1.)
+        self.assertEqual(result['candidate_ids'], [1])
+        self.assertEqual(result['status'], 'missing')
+
     def test_no_facing_category_cannot_resolve_direction(self):
         checks=supported(self.objects[:2])+[{'id':3,'category':'tv','verdict':'no'}]
         self.assertEqual(self.diagnosis(checks=checks)['status'],'missing')

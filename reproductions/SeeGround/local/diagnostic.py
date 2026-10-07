@@ -398,6 +398,7 @@ def _pair_geometry(target, anchor):
     b = np.asarray(anchor['bbox_3d'], dtype=float)
     a_min, a_max = a[:3] - a[3:] / 2., a[:3] + a[3:] / 2.
     b_min, b_max = b[:3] - b[3:] / 2., b[:3] + b[3:] / 2.
+    aabb_gap_xyz = np.maximum(np.abs(a[:3] - b[:3]) - (a[3:] + b[3:]) / 2., 0.)
     horizontal_gap_xy = np.maximum(np.abs(a[:2] - b[:2]) - (a[3:5] + b[3:5]) / 2., 0.)
     horizontal_overlap = np.maximum(np.minimum(a_max[:2], b_max[:2]) - np.maximum(a_min[:2], b_min[:2]), 0.)
     vertical_overlap = max(0., min(a_max[2], b_max[2]) - max(a_min[2], b_min[2]))
@@ -405,10 +406,47 @@ def _pair_geometry(target, anchor):
             'center_z_delta_m': float(a[2] - b[2]),
             'target_bottom_minus_anchor_top_m': float(a_min[2] - b_max[2]),
             'anchor_bottom_minus_target_top_m': float(b_min[2] - a_max[2]),
+            'aabb_gap_m': float(np.linalg.norm(aabb_gap_xyz)),
+            'horizontal_aabb_gap_m': float(np.linalg.norm(horizontal_gap_xy)),
             'horizontal_gap_m': float(np.linalg.norm(horizontal_gap_xy)),
             'horizontal_overlap_m2': float(horizontal_overlap[0] * horizontal_overlap[1]),
             'vertical_overlap_m': float(vertical_overlap),
             'center_distance_m': float(np.linalg.norm(a[:3] - b[:3]))}
+
+
+def _proximity_records(targets, anchor):
+    """Return candidate-relative AABB-gap evidence for one near reference.
+
+    Proximity has no calibrated scene-wide threshold, so this helper only ranks
+    the live target candidates for the bound anchor.  The records are evidence
+    for review; callers must not use ``relative_rank`` as a hard predicate.
+    """
+    records = [_pair_geometry(target, anchor) for target in targets
+               if target['bbox_id'] != anchor['bbox_id']]
+    records.sort(key=lambda item: (item['aabb_gap_m'], item['target_id']))
+    candidate_count = len(records)
+    best_gap = records[0]['aabb_gap_m'] if records else None
+    best_ids = ([item['target_id'] for item in records
+                 if abs(item['aabb_gap_m'] - best_gap) <= 1e-6]
+                if best_gap is not None else [])
+    for record in records:
+        # Equal gaps keep equal ranks: overlapping AABBs cannot distinguish
+        # contact, adjacency or physical shape, even if centers differ.
+        rank = 1 + sum(item['aabb_gap_m'] < record['aabb_gap_m'] - 1e-6
+                       for item in records)
+        record.update({
+            'relation': 'near',
+            'passes': None,
+            'soft_metric': 'aabb_gap_m',
+            'relative_rank': rank,
+            'candidate_count': candidate_count,
+            'best_ids': best_ids,
+            'relative_percentile': (float(rank - 1) / float(candidate_count - 1)
+                                    if candidate_count > 1 else 0.0),
+            'policy': 'candidate-relative AABB evidence; near is not nearest; '
+                      'no calibrated threshold or exclusion; zero gap does not prove contact',
+        })
+    return records
 
 
 def _between_geometry(target, anchor_a, anchor_b):
@@ -565,7 +603,7 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
     by_id = {o['bbox_id']:o for o in objects}
     geometry = {
         'size_constraints': [], 'floor_constraint': None, 'relation_pairs': [],
-        'between_triplets': [],
+        'between_triplets': [], 'proximity_pairs': [],
         'vertical_policy': {
             'horizontal_overlap_required': False,
             'horizontal_gap_max_m': HORIZONTAL_ALIGNMENT_GAP_M,
@@ -657,6 +695,17 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
         metric for name, matches in references.items()
         for metric in _candidate_metrics(objects, name, matches)
     ]
+    proximity_by_pair = {}
+    for index, relation in enumerate(parsed['Relations']):
+        if (relation['relation'] != 'near' or
+                retrieval_category(relation.get('target_category', '')) != category):
+            continue
+        name = retrieval_category(relation.get('anchor_category', ''))
+        for anchor in references.get(name, []):
+            for pair in _proximity_records(eligible, anchor):
+                pair.update({'phrase': relation.get('phrase', ''), 'anchor_category': name})
+                geometry['proximity_pairs'].append(pair)
+                proximity_by_pair[(index, pair['target_id'], pair['anchor_id'])] = pair
     anchor_names = parsed.get('Anchor', [])
     if isinstance(anchor_names, str):
         anchor_names = [anchor_names]
@@ -685,7 +734,7 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
         for target in eligible:
             oid = target['bbox_id']
             passed = True
-            for relation in parsed['Relations']:
+            for index, relation in enumerate(parsed['Relations']):
                 if retrieval_category(relation.get('target_category', '')) != category:
                     continue
                 kind = relation['relation']
@@ -712,6 +761,14 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                         missing.append(between['reason'])
                     else:
                         passed = passed and between['passes']
+                elif kind == 'near' and anchor:
+                    # Keep proximity as candidate-relative evidence only.  A
+                    # scene-wide threshold is not calibrated, so this branch
+                    # deliberately leaves ``passed`` unchanged and preserves
+                    # the existing missing/uncertainty policy.
+                    proximity = proximity_by_pair.get((index, oid, anchor['bbox_id']))
+                    if proximity is not None:
+                        measured.append(proximity)
                 elif kind in ('nearest', 'farthest') and anchor:
                     distances = [(o['bbox_id'], float(np.linalg.norm(np.asarray(o['bbox_3d'][:3])-anchor['bbox_3d'][:3])))
                                  for o in eligible if o['bbox_id'] != anchor['bbox_id']]
