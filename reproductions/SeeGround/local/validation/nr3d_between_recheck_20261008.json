@@ -1,0 +1,21 @@
+{
+  "purpose": "Targeted real recheck after preserving unknown between evidence when a reference category is unbound.",
+  "source": "local_outputs/downloads/nr3d_official.csv",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "selection": "Only the affected original row 19179. Missing printer/desk bindings must preserve target candidates as unknown, without inventing copier/table equivalence.",
+  "evaluation_only_fields": ["target_id", "stimulus_id", "stimulus_candidate_ids"],
+  "runtime_input": "Original query plus the full prepared scene and annotated object table; target and stimulus IDs are evaluation only.",
+  "rows": [
+    {
+      "module": "position",
+      "csv_row": 19179,
+      "scene": "scene0704_00",
+      "query": "The trashcan in between printer and wooden desk",
+      "target_id": 8,
+      "stimulus_id": "scene0704_00-trash_can-3-8-9-18",
+      "stimulus_candidate_ids": [8, 9, 18],
+      "subtype": "between_unbound_reference_recall",
+      "acceptance_focus": "Record pass/fail/unknown for each target; unbound reference roles retain unknown candidates and keep the final gate missing."
+    }
+  ]
+}

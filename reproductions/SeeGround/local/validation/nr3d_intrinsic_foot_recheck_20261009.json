@@ -1,0 +1,28 @@
+{
+  "purpose": "Focused real bed-foot intrinsic orientation refusal recheck",
+  "source": "local_outputs/downloads/nr3d_official.csv",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "csv_row_convention": "1-based physical CSV line including header",
+  "selection": "Affected original boundary row 12870 only; preserve intrinsic foot orientation as independent unsupported condition; no object-center substitute.",
+  "evaluation_only_fields": [
+    "target_id",
+    "stimulus_id",
+    "stimulus_candidate_ids"
+  ],
+  "runtime_input": "Original query plus full prepared scene with annotated categories/boxes; no target or stimulus IDs in worker input",
+  "rows": [
+    {
+      "module": "viewpoint",
+      "csv_row": 12870,
+      "scene": "scene0697_00",
+      "query": "Facing the foot of the bed, the dresser in the lower right corner.",
+      "target_id": 11,
+      "stimulus_id": "scene0697_00-dresser-2-11-10",
+      "stimulus_candidate_ids": [
+        11,
+        10
+      ],
+      "acceptance_focus": "Facing the foot of the bed requires intrinsic orientation; preserve exact phrase and explicit unsupported/unknown boundary"
+    }
+  ]
+}

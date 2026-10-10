@@ -1,0 +1,34 @@
+{
+  "purpose": "Targeted positive real checks for ordinary and mixed-category finite between relations.",
+  "source": "local_outputs/downloads/nr3d_official.csv",
+  "source_url": "https://drive.google.com/file/d/1qswKclq4BlnHSGMSgzLmUu8iqdUXD8ZC/view",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "selection": "Two additional original NR3D utterances selected from explicit finite between semantics and scene geometry before real inference. Zero-API geometric screening found one passing target/reference assignment for each. This is a targeted capability check, not a held-out accuracy sample.",
+  "evaluation_only_fields": ["target_id", "stimulus_id", "stimulus_candidate_ids"],
+  "runtime_input": "Original query plus the full prepared scene and annotated object table; target and stimulus IDs are evaluation only.",
+  "prepared_scenes": ["scene0030_00", "scene0222_00"],
+  "rows": [
+    {
+      "module": "position",
+      "csv_row": 2661,
+      "scene": "scene0030_00",
+      "query": "The shorter bookcase between the two taller bookcases.",
+      "target_id": 68,
+      "stimulus_id": "scene0030_00-bookshelf-5-68-17-18-19-20",
+      "stimulus_candidate_ids": [68, 17, 18, 19, 20],
+      "subtype": "between_same_category_comparative_references_positive_geometry",
+      "acceptance_focus": "Bind the two taller bookcases as distinct references, keep shorter as a target attribute, record pass/fail/unknown for legal assignments, and accept only if the parser, geometry, and final gate jointly support the unique passing bookcase."
+    },
+    {
+      "module": "position",
+      "csv_row": 4640,
+      "scene": "scene0222_00",
+      "query": "The blue can that is between a gray can and the bunk beds.",
+      "target_id": 16,
+      "stimulus_id": "scene0222_00-trash_can-3-16-17-34",
+      "stimulus_candidate_ids": [16, 17, 34],
+      "subtype": "between_mixed_category_reference_positive_geometry",
+      "acceptance_focus": "Bind the gray can and bunk beds as distinct references, keep blue as a target attribute, record pass/fail/unknown for legal assignments, and accept only if the target has the unique supported between interpretation."
+    }
+  ]
+}

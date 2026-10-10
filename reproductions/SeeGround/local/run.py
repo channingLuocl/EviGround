@@ -45,7 +45,7 @@ def project(xyz, eye, at, size):
     return uv, z
 
 
-def render(xyz, rgb, output, eye=None, at=None, ids=None, size=800):
+def render(xyz, rgb, output, eye=None, at=None, ids=None, size=800, point_radius=0):
     lo, hi = xyz.min(0), xyz.max(0)
     center = (lo + hi) / 2
     span = max(float(np.max(hi - lo)), 1.)
@@ -59,13 +59,24 @@ def render(xyz, rgb, output, eye=None, at=None, ids=None, size=800):
     if not len(idx):
         raise ValueError('当前视角没有可见点')
     pix = uv[idx].astype(int)
+    if point_radius:
+        # Small depth-tested point disks preserve measured colors without
+        # reconstructing textures or filling gaps between distant samples.
+        offsets = np.asarray([(x, y) for x in range(-point_radius, point_radius + 1)
+                              for y in range(-point_radius, point_radius + 1)
+                              if x*x + y*y <= point_radius*point_radius])
+        pix = (pix[:, None, :] + offsets).reshape(-1, 2)
+        idx = np.repeat(idx, len(offsets))
+        inside = ((pix[:, 0] >= 0) & (pix[:, 0] < size) &
+                  (pix[:, 1] >= 0) & (pix[:, 1] < size))
+        pix, idx = pix[inside], idx[inside]
     flat = pix[:, 1] * size + pix[:, 0]
     # Each pixel keeps the nearest point, so hidden points cannot own a label.
     order = np.argsort(depth[idx], kind='stable')
     _, first = np.unique(flat[order], return_index=True)
     visible = idx[order[first]]
     image = np.full((size, size, 3), 245, dtype=np.uint8)
-    p = uv[visible].astype(int)
+    p = pix[order[first]]
     image[p[:, 1], p[:, 0]] = rgb[visible]
     im = Image.fromarray(image)
     drawn = []
@@ -75,8 +86,7 @@ def render(xyz, rgb, output, eye=None, at=None, ids=None, size=800):
         for oid in sorted(set(ids[visible])):
             if oid < 0:
                 continue
-            candidates = visible[ids[visible] == oid]
-            positions = uv[candidates]
+            positions = p[ids[visible] == oid]
             # Choose a visible surface pixel near the centroid, not a centroid in empty space.
             point = positions[np.argmin(np.sum((positions - positions.mean(0)) ** 2, axis=1))]
             x, y = map(int, point)
@@ -91,7 +101,11 @@ def render(xyz, rgb, output, eye=None, at=None, ids=None, size=800):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     im.save(output)
+    instance_pixels = ({str(int(oid)): int(np.sum(ids[visible] == oid))
+                        for oid in sorted(set(ids[visible])) if oid >= 0}
+                       if ids is not None else {})
     return {'points':len(xyz),'visible_pixels':len(visible),'marked_ids':drawn,
+            'point_radius_px':point_radius, 'visible_instance_pixels':instance_pixels,
             'eye':np.asarray(eye).tolist(),'at':np.asarray(at).tolist()}
 
 

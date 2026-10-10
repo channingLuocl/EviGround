@@ -79,7 +79,7 @@ def parse_query(query, mode='baseline', calls=None):
                 '"Attributes":[{"category":"category","phrase":"exact appearance/size quote"}],"Unhandled":[]}. '
                 'Return Target and Anchor as arrays, Relations as an array, and Viewpoint as a string. '
                 'Each relation has target_category, anchor_category, relation, scope and phrase. '
-                'relation is nearest|farthest|near|left|right|front|back|above|below|between|other. '
+                'relation is nearest|farthest|near|left|right|front|back|above|below|underneath|between|other. '
                 'For between, provide anchor_categories with exactly two named references. '
                 'scope is side|relative_anchor|relative_anchors; use an empty scope for distance relations. '
                 'Use nearest/farthest only for explicit distance superlatives, never proximity or motion. '
@@ -125,7 +125,8 @@ def parse_query(query, mode='baseline', calls=None):
     if mode in ('ranked_geometry','category_review','diagnostic'):
         obj=validate_distance_relations(query,obj)
     if mode=='diagnostic':
-        from diagnostic import recover_between_relations, recover_distance_relations, validate_structure
+        from diagnostic import (recover_between_relations, recover_distance_relations,
+                                refresh_condition_records, validate_structure)
         obj=recover_distance_relations(query,obj)
         obj=recover_between_relations(query,obj)
         obj=validate_structure(query,obj)
@@ -135,15 +136,18 @@ def parse_query(query, mode='baseline', calls=None):
         obj['query_rewrite'] = rewrite_query(query, obj)
         if data.get('_finish_reason')=='length':
             obj['diagnostic_missing'].append('query parser response truncated')
+            refresh_condition_records(query,obj)
     return obj
 
 
 def repair_missing_attributes(query, parsed, calls):
     """Request omitted attribute bindings once, keeping other parsed fields fixed."""
-    from diagnostic import quoted, validate_structure, covered_attribute_request
+    from diagnostic import (quoted, refresh_condition_records, validate_structure,
+                            covered_attribute_request)
     from evidence import retrieval_category
     missing=[item for item in parsed['diagnostic_missing']
-             if item.startswith('appearance condition not represented:')]
+             if item.startswith(('appearance condition not represented:',
+                                 'appearance condition role not represented:'))]
     if not missing:
         return parsed
     categories=[]
@@ -152,8 +156,9 @@ def repair_missing_attributes(query, parsed, calls):
         categories.extend(name for name in names if name not in categories)
     messages=[{'role':'system','content':
         'Recover only omitted appearance/size attributes from the supplied description. '
-        'Return JSON {"Attributes":[{"category":"category","phrase":"exact quote"}]}. '
+        'Return JSON {"Attributes":[{"category":"category","role":"target|reference","phrase":"exact quote"}]}. '
         'Bind each attribute to one supplied category only when the description supports it. '
+        'Bind to the noun actually modified, distinguishing target and reference even for the same category. '
         'Keep phrases as exact quotes. If a binding is unclear, omit it. '
         'Do not reinterpret skinny/small/large as a superlative or numeric threshold. '
         'Preserve larger/smaller/bigger/taller/shorter as relative size attributes when '
@@ -186,6 +191,8 @@ def repair_missing_attributes(query, parsed, calls):
         corrected=validate_structure(query,{**parsed,'Attributes':combined})
         repairable_prefixes = (
             'appearance condition not represented:',
+            'appearance condition role not represented:',
+            'attribute target/reference role is ambiguous:',
             'attribute category is not a supplied target/reference:',
             'unquoted or unbound appearance attribute',
         )
@@ -193,10 +200,14 @@ def repair_missing_attributes(query, parsed, calls):
                          a['category'].casefold() for a in corrected['Attributes']}
         if covered_attribute_request(query, corrected):
             covered_nouns.add('unhandled condition: ' + query.casefold())
+        covered_nouns.update('unhandled condition: ' + phrase.casefold()
+                             for phrase in parsed.get('Unhandled', [])
+                             if phrase not in corrected.get('Unhandled', []))
         corrected['diagnostic_missing']=list(dict.fromkeys(
             [item for item in parsed['diagnostic_missing']
              if not item.startswith(repairable_prefixes) and item.casefold() not in covered_nouns]
             +corrected['diagnostic_missing']))
+        refresh_condition_records(query,corrected)
         call['remaining_missing']=corrected['diagnostic_missing']
         return corrected
     except ValueError as exc:

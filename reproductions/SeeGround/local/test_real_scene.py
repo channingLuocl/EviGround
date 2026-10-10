@@ -36,6 +36,16 @@ class RealSceneTests(unittest.TestCase):
         self.assertEqual(diagnosis['visual_needs'][0]['id'],1)
         self.assertEqual(diagnosis['status'],'missing')
 
+    def test_truncated_parse_adds_missing_condition_record(self):
+        answer={'Target':['cabinet'],'Anchor':[],'Relations':[],
+                'Observer':{},'Attributes':[],'Unhandled':[]}
+        with patch('real_scene.chat',return_value=reply(json.dumps(answer),finish='length')):
+            result=parse_query('cabinet',mode='diagnostic')
+        self.assertIn('query parser response truncated',result['diagnostic_missing'])
+        self.assertTrue(any(item.get('reason') == 'query parser response truncated' and
+                            item['evidence_status'] == 'missing'
+                            for item in result['condition_records']))
+
     def test_active_parser_repairs_modifier_used_as_attribute_category(self):
         answer={'Target':['cabinet'],'Anchor':[],'Relations':[],
                 'Observer':{},'Attributes':[{'category':'skinny','phrase':'skinny'}],
@@ -103,6 +113,52 @@ class RealSceneTests(unittest.TestCase):
             result=parse_query('skinny cabinet beside the stove',mode='active_diagnostic')
         self.assertIn('unsupported relation: beside the stove',result['diagnostic_missing'])
         self.assertNotIn('appearance condition not represented: skinny',result['diagnostic_missing'])
+        self.assertTrue(any(item['condition_type'] == 'relation' and
+                            item['source_quote'] == 'beside the stove' and
+                            item['evidence_status'] == 'missing'
+                            for item in result['condition_records']))
+
+    def test_repaired_modifier_category_clears_stale_role_gap(self):
+        answer = {'Target': ['cart'], 'Anchor': [], 'Relations': [],
+                  'Observer': {'origin': {'kind': 'unspecified'}, 'facing': {}},
+                  'Attributes': [{'category': 'blue', 'phrase': 'blue'}], 'Unhandled': []}
+        with patch('real_scene.chat', side_effect=[reply(json.dumps(answer)),
+                reply(json.dumps({'Attributes': [{'category': 'cart', 'phrase': 'blue'}]}))]):
+            result = parse_query('choose the blue cart.', mode='active_diagnostic')
+        self.assertEqual(result['diagnostic_missing'], [])
+        self.assertFalse(any(record['evidence_status'] == 'missing'
+                             for record in result['condition_records']))
+
+    def test_repeated_attribute_repairs_missing_reference_role_once(self):
+        answer = {'Target': ['cabinet'], 'Anchor': ['shelf'],
+                  'Relations': [{'target_category': 'cabinet', 'anchor_category': 'shelf',
+                                 'relation': 'above', 'phrase': 'above the red shelf'}],
+                  'Observer': {}, 'Unhandled': [],
+                  'Attributes': [{'category': 'cabinet', 'role': 'target', 'phrase': 'red'}]}
+        with patch('real_scene.chat', side_effect=[reply(json.dumps(answer)),
+                reply(json.dumps({'Attributes': [{'category': 'shelf', 'role': 'reference',
+                                                   'phrase': 'red'}]}))]) as api:
+            result = parse_query('the red cabinet above the red shelf', mode='active_diagnostic')
+        self.assertEqual(api.call_count, 2)
+        self.assertEqual(result['diagnostic_missing'], [])
+        self.assertEqual({attribute['role'] for attribute in result['Attributes']},
+                         {'target', 'reference'})
+
+    def test_full_category_comparative_repair_clears_stale_unhandled_condition(self):
+        query = 'The smaller of the cabinets.'
+        answer = {'Target': ['cabinet'], 'Anchor': [], 'Relations': [],
+                  'Observer': {'origin': {'kind': 'unspecified'}, 'facing': {}},
+                  'Attributes': [{'category': 'smaller', 'phrase': 'smaller'}], 'Unhandled': [query]}
+        with patch('real_scene.chat', side_effect=[reply(json.dumps(answer)),
+                reply(json.dumps({'Attributes': [{'category': 'cabinet', 'phrase': 'smaller'}]}))]) as api:
+            result = parse_query(query, mode='active_diagnostic')
+        self.assertEqual(result['Unhandled'], [])
+        self.assertEqual(result['diagnostic_missing'], [])
+        self.assertEqual(api.call_count, 2)
+        self.assertEqual(result['Attributes'][0]['phrase'], 'smaller')
+        self.assertNotIn('geometry_attribute', result['Attributes'][0])
+        self.assertEqual(result['Attributes'][0]['comparison_scope'], 'full_category')
+        self.assertEqual(result['query_rewrite']['unresolved'], [])
 
     def test_diagnostic_query_is_separate_from_instructions_and_schema_has_scope(self):
         query='This trash can is next to a large black television.'
@@ -131,7 +187,7 @@ class RealSceneTests(unittest.TestCase):
 
     def test_active_evidence_integrates_render_verification_and_saved_trace(self):
         parsed={'Target':['water cooler'],'Anchor':[],'Relations':[],
-                'Observer':{},'Attributes':[{'category':'water cooler','phrase':'large'}],
+                'Observer':{},'Attributes':[{'category':'water cooler','phrase':'white'}],
                 'Unhandled':[]}
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'active'
@@ -140,12 +196,12 @@ class RealSceneTests(unittest.TestCase):
                  patch('active_diagnostic.chat',side_effect=[
                      reply(json.dumps({'action':'evidence','dimension':'appearance',
                                        'context':'isolated','reason':'check quoted appearance'})),
-                     reply(json.dumps({'checks':[{'id':1,'verdict':'yes',
-                                                   'reason':'visible cooler', 'attribute_checks':[{'attribute':'large','verdict':'yes','reason':'large body visible'}]}]})),
+                     reply(json.dumps({'checks':[{'id':1,'verdict':'yes','visibility':'visible',
+                                                   'reason':'visible cooler', 'attribute_checks':[{'attribute':'white','verdict':'yes','visibility':'visible','reason':'white body visible'}]}]})),
                      reply(json.dumps({'action':'finish','predicted_id':1,
                                        'reason':'appearance verified for the only candidate'})),
                  ]) as active:
-                result=run_query(root,'large water cooler',out,mode='active_diagnostic',
+                result=run_query(root,'white water cooler',out,mode='active_diagnostic',
                                  object_table='gt',review_limit=2)
             record=json.loads((out/'run.json').read_text())
             saved=json.loads((out/'prediction.json').read_text())
@@ -167,11 +223,13 @@ class RealSceneTests(unittest.TestCase):
             self.assertTrue(Path(evidence['images'][0]).exists())
             content=active.call_args_list[1].args[0][1]['content']
             self.assertTrue(content[0]['image_url']['url'].startswith('data:image/png;base64,'))
-            self.assertEqual(json.loads(content[1]['text'])['attributes'],parsed['Attributes'])
+            requirement=json.loads(content[1]['text'])['review_requirements'][0]
+            self.assertEqual((requirement['id'],requirement['category'],requirement['role'],
+                              requirement['attributes']),(1,'water cooler','target',['white']))
 
     def test_jev_plans_from_text_and_only_qwen_verifies_actual_render(self):
         parsed={'Target':['water cooler'],'Anchor':[],'Relations':[],
-                'Observer':{},'Attributes':[{'category':'water cooler','phrase':'large'}],
+                'Observer':{},'Attributes':[{'category':'water cooler','phrase':'white'}],
                 'Unhandled':[]}
         decisions=iter(['appearance_1_isolated_90','finish','1'])
         def jev_reply(url, **kwargs):
@@ -195,8 +253,8 @@ class RealSceneTests(unittest.TestCase):
                  patch('real_scene.chat',return_value=reply(json.dumps(parsed))) as parser, \
                  patch('decision_api.requests.post',side_effect=jev_reply) as jev, \
                  patch('active_diagnostic.chat',return_value=reply(json.dumps({'checks':[
-                     {'id':1,'verdict':'yes','reason':'visible cooler', 'attribute_checks':[{'attribute':'large','verdict':'yes','reason':'large body visible'}]}]}))) as visual:
-                result=run_query(root,'large water cooler',out,mode='active_diagnostic',
+                     {'id':1,'verdict':'yes','visibility':'visible','reason':'visible cooler', 'attribute_checks':[{'attribute':'white','verdict':'yes','visibility':'visible','reason':'white body visible'}]}]}))) as visual:
+                result=run_query(root,'white water cooler',out,mode='active_diagnostic',
                                  object_table='gt',review_limit=2)
             self.assertTrue(result['accepted'])
             self.assertEqual(result['model'],'jev-fixture')

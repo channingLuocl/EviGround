@@ -1,0 +1,23 @@
+{
+  "purpose": "Targeted positive real recheck for an explicitly bound finite between relation.",
+  "source": "local_outputs/downloads/nr3d_official.csv",
+  "source_url": "https://drive.google.com/file/d/1qswKclq4BlnHSGMSgzLmUu8iqdUXD8ZC/view",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "selection": "One additional original NR3D utterance selected from its explicit between semantics and scene geometry before real inference. The utterance identifies a box among the other two boxes; zero-API geometric screening found one passing target/reference assignment. This is a targeted capability check, not a held-out accuracy sample.",
+  "evaluation_only_fields": ["target_id", "stimulus_id", "stimulus_candidate_ids"],
+  "runtime_input": "Original query plus the full prepared scene and annotated object table; target and stimulus IDs are evaluation only.",
+  "prepared_scenes": ["scene0565_00"],
+  "rows": [
+    {
+      "module": "position",
+      "csv_row": 41012,
+      "scene": "scene0565_00",
+      "query": "It's the box that's between the other two boxes",
+      "target_id": 6,
+      "stimulus_id": "scene0565_00-box-3-6-7-8",
+      "stimulus_candidate_ids": [6, 7, 8],
+      "subtype": "between_explicit_two_references_positive_geometry",
+      "acceptance_focus": "Bind two distinct box references without using target or stimulus IDs, record pass/fail/unknown for each legal assignment, and accept only if the actual parser, geometry, and final gate jointly support the unique passing box."
+    }
+  ]
+}

@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 import numpy as np
+from PIL import Image
 import run
 from qwen_api import QwenAPIError, parse_predicted_id
 
@@ -14,6 +15,29 @@ class LocalChecks(unittest.TestCase):
             xyz=np.array([[0.,0.,0.],[0.,1.,0.]])
             meta=run.render(xyz,np.array([[255,0,0],[0,0,255]],dtype=np.uint8),Path(td)/'x.png',eye=[0,-3,0],at=[0,0,0],ids=np.array([1,2]))
             self.assertEqual(meta['marked_ids'],[1])
+    def test_point_disks_keep_nearest_color_and_instance_at_each_pixel(self):
+        with tempfile.TemporaryDirectory() as td:
+            output=Path(td)/'disks.png'
+            xyz=np.array([[0.,0.,0.],[0.,1.,0.]])
+            colors=np.array([[10,150,30],[0,0,255]],dtype=np.uint8)
+            meta=run.render(xyz,colors,output,eye=[0,-3,0],at=[0,0,0],
+                            ids=np.array([1,2]),size=100,point_radius=2)
+            self.assertEqual(meta['marked_ids'],[1])
+            self.assertEqual(meta['visible_instance_pixels'],{'1':13})
+            self.assertEqual(meta['visible_pixels'],13)
+            run.render(xyz,colors,output,eye=[0,-3,0],at=[0,0,0],
+                       size=100,point_radius=2)
+            pixels=np.asarray(Image.open(output))
+            self.assertEqual(int(np.sum(np.all(pixels==colors[0],axis=2))),13)
+            self.assertFalse(np.any(np.all(pixels==colors[1],axis=2)))
+    def test_point_disks_clip_to_frame_edges(self):
+        with tempfile.TemporaryDirectory() as td:
+            xyz=np.array([[0.,0.,0.]])
+            with patch('run.project',return_value=(np.array([[0.,0.]]),np.array([1.]))):
+                meta=run.render(xyz,np.array([[20,30,40]],dtype=np.uint8),Path(td)/'edge.png',
+                                ids=np.array([3]),size=100,point_radius=2)
+            self.assertEqual(meta['visible_pixels'],6)
+            self.assertEqual(meta['visible_instance_pixels'],{'3':6})
     def test_duplicate_ids_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td)/'o.json'

@@ -1,0 +1,21 @@
+{
+  "purpose": "Recheck the real facing-chair-backs trace after preserving the intrinsic orientation condition.",
+  "source": "local_outputs/downloads/nr3d_official.csv",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "selection": "Only the affected original NR3D utterance; no target or stimulus IDs enter inference. Preserve the unsupported intrinsic facing condition even when observer origin is also missing.",
+  "evaluation_only_fields": ["target_id", "stimulus_id", "stimulus_candidate_ids"],
+  "runtime_input": "Original query plus full prepared scene and annotated object table; target and stimulus IDs are evaluation only.",
+  "rows": [
+    {
+      "module": "viewpoint",
+      "csv_row": 29759,
+      "scene": "scene0343_00",
+      "query": "Facing the back of the chairs, the chair on the left.",
+      "target_id": 17,
+      "stimulus_id": "scene0343_00-chair-2-17-18",
+      "stimulus_candidate_ids": [17, 18],
+      "subtype": "intrinsic_facing_and_missing_origin",
+      "acceptance_focus": "Record chair-back orientation as an independent missing condition; plural facing must not imply a known intrinsic orientation or invent an observer origin."
+    }
+  ]
+}

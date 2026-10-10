@@ -1,0 +1,30 @@
+{
+  "purpose": "Focused real recheck of curtains singular/plural binding after raw parser produced curtains",
+  "source": "local_outputs/downloads/nr3d_official.csv",
+  "source_url": "https://drive.google.com/file/d/1qswKclq4BlnHSGMSgzLmUu8iqdUXD8ZC/view",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "csv_row_convention": "1-based physical line including header",
+  "selection": "Three original simple color descriptions selected using semantic simplicity and instance-bound point-cloud views before inference. Local views are independently framed tiles from original colored points. 8411 is an affected existing row; 1020 and 6990 are new. 18505 stays in the earlier investigative manifest/output as a qualified-property and unhandled-clause case, not a successful simple-color sample. Development capability check, not held out.",
+  "evaluation_only_fields": [
+    "target_id",
+    "stimulus_id",
+    "stimulus_candidate_ids"
+  ],
+  "runtime_input": "Original query, full prepared scene, annotated category table; no evaluation IDs in inference",
+  "rows": [
+    {
+      "module": "appearance",
+      "csv_row": 6990,
+      "scene": "scene0256_00",
+      "query": "the curtains are white",
+      "target_id": 9,
+      "stimulus_id": "scene0256_00-curtain-2-9-7",
+      "stimulus_candidate_ids": [
+        9,
+        7
+      ],
+      "subtype": "simple_visible_color",
+      "acceptance_focus": "Record white separately from category, check full curtain category pool, and accept only if every legal condition is satisfied."
+    }
+  ]
+}

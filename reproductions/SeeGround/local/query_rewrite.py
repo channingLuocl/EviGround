@@ -2,6 +2,7 @@
 import re
 
 from evidence import canonical_category, retrieval_category
+from size_semantics import SIZE_WORDS, category_pattern, size_specs
 
 
 RELATION_TYPES = {
@@ -17,8 +18,11 @@ RELATION_TYPES = {
     'between': 'between',
 }
 VERTICAL_WORDS = {'over': 'above', 'above': 'above', 'below': 'below',
-                  'under': 'below', 'beneath': 'below'}
+                  'under': 'below', 'underneath': 'below', 'beneath': 'below'}
 CONTAINMENT_PATTERN = r'\b(?:includes?|including|contains?|containing)\b[^.!?;]*'
+DISTANCE_METADATA_KEYS = ('distance_metric', 'metric', 'distance_scope',
+                          'target_id', 'target_instance_id', 'anchor_id',
+                          'anchor_instance_id', 'tie_tolerance_m')
 
 
 def _category(value):
@@ -41,6 +45,73 @@ def _quote(query, phrase):
     return isinstance(phrase, str) and bool(phrase.strip()) and phrase.casefold() in query.casefold()
 
 
+def intrinsic_facing_condition(query, category):
+    """Retain a quoted object side without inferring its physical orientation."""
+    category = _category(category)
+    if not category:
+        return None
+    pattern = (r'\b(?:facing|looking\s+(?:at|towards?))\s+(?:the\s+)?'
+               r'(?P<part>front|backs?|head|foot)\s+of\s+(?:the\s+)?'
+               r'(?P<objects>' + re.escape(category) + r's?)\b')
+    match = re.search(pattern, query, re.I)
+    if not match:
+        return None
+    return {'phrase': match.group(), 'category': category,
+            'part': 'back' if match['part'].casefold().startswith('back') else match['part'].casefold(),
+            'group': match['objects'].casefold() != category.casefold()}
+
+
+def full_category_size_comparison(query, parsed):
+    """Recover a complete size request with its original word and quoted scope."""
+    targets = parsed.get('Target', [])
+    targets = [targets] if isinstance(targets, str) else targets
+    if (not isinstance(targets, list) or len(targets) != 1
+            or not isinstance(targets[0], str) or not targets[0].strip()
+            or parsed.get('Relations')):
+        return None
+    observer = parsed.get('Observer', {})
+    if isinstance(observer, dict):
+        origin = observer.get('origin', {})
+        facing = observer.get('facing', {})
+        explicit_origin = (isinstance(origin, dict) and (
+            origin.get('kind') in ('room_center', 'category') or
+            _quote(query, origin.get('phrase', ''))))
+        explicit_facing = (isinstance(facing, dict) and (
+            facing.get('category') or _quote(query, facing.get('phrase', ''))))
+        if explicit_origin or explicit_facing:
+            return None
+    category = canonical_category(targets[0])
+    words = '|'.join(sorted(SIZE_WORDS, key=len, reverse=True))
+    noun = category_pattern(category)
+    match = re.fullmatch(r'\s*(?:(?:choose|select|find|pick|click)\s+|it\s+is\s+)?'
+                         r'(?:the\s+)?(?P<word>' + words + r')\s+'
+                         r'(?:(?P<scope>of\s+the\s+(?P<two>two\s+)?)?'
+                         r'(?P<category>' + noun + r')|'
+                         r'(?P<paired_category>' + noun + r')\s+of\s+the\s+(?P<end_two>two))'
+                         r'\s*[.!?]?\s*', query, re.I)
+    if (not match or category != _category(targets[0]) or
+            (match['scope'] and not match['two'] and match['category'].casefold() == category)):
+        return None
+    anchors = parsed.get('Anchor', [])
+    anchors = [anchors] if isinstance(anchors, str) else anchors
+    attributes = parsed.get('Attributes', [])
+    if (not isinstance(attributes, list) or any(
+            not isinstance(attribute, dict) or attribute.get('role') not in (None, 'target') or
+            _category(attribute.get('category', '')) != category or
+            not _quote(query, attribute.get('phrase', ''))
+            for attribute in attributes)):
+        return None
+    if anchors and (not isinstance(anchors, list) or
+                    any(not isinstance(name, str) or not re.fullmatch(noun, canonical_category(name))
+                        for name in anchors) or parsed.get('Viewpoint') or
+                    any(attribute.get('role') == 'reference' for attribute in attributes)):
+        return None
+    pair = bool(match['two'] or match['end_two'])
+    return {'category': targets[0], 'role': 'target', 'phrase': match['word'],
+            'comparison_scope': 'explicit_pair' if pair else 'full_category',
+            'scope_phrase': query.strip(), **({'required_member_count': 2} if pair else {})}
+
+
 def _attribute_constraint(attribute, query, target_category):
     phrase = attribute.get('phrase', '') if isinstance(attribute, dict) else ''
     category = _category(attribute.get('category', '')) if isinstance(attribute, dict) else ''
@@ -49,17 +120,24 @@ def _attribute_constraint(attribute, query, target_category):
     if re.search(CONTAINMENT_PATTERN, phrase, re.I):
         return None
     text = phrase.casefold()
-    if category != target_category:
+    if category != target_category or attribute.get('role') == 'reference':
         return None
-    for words, kind, metric in (
-        (('smallest', 'smaller'), 'size_min', 'volume_m3'),
-        (('largest', 'biggest', 'larger', 'bigger'), 'size_max', 'volume_m3'),
-        (('tallest', 'highest', 'taller'), 'height_max', 'height_m'),
-        (('shortest', 'lowest', 'shorter'), 'height_min', 'height_m'),
-    ):
-        if any(re.search(r'\b' + re.escape(word) + r'\b', text) for word in words):
-            return {'type': kind, 'target': 'target', 'reference': None,
-                    'metric': metric, 'phrase': phrase, 'confidence': 'lexical'}
+    specs = size_specs(phrase, category, query=query, role='target')
+    if specs:
+        spec = specs[0]
+        prefix = ('height' if spec['metric'] == 'height_m' else
+                  'length' if spec['metric'] == 'horizontal_oriented_long_extent_m' else 'size')
+        kind = prefix + '_' + spec['direction']
+        if spec['interpretation'] == 'descriptive_attribute':
+            kind = 'size_descriptive_attribute'
+        return {'type': kind, 'target': 'target', 'reference': None,
+                'metric': spec['metric'], 'phrase': phrase, 'confidence': 'lexical',
+                'value': phrase,
+                'remaining_attribute_phrase': re.sub(r'\b(?:' + '|'.join(
+                    re.escape(item['word']) for item in specs) + r')\b', '', phrase, flags=re.I).strip(),
+                'size_conditions': specs,
+                **{key: attribute[key] for key in
+                   ('comparison_scope', 'scope_phrase', 'required_member_count') if key in attribute}}
     if re.search(r'\b(on the floor|on floor|on the ground|grounded)\b', text):
         return {'type': 'bottom_z_near_floor', 'target': 'target', 'reference': None,
                 'metric': 'bottom_z_m', 'phrase': phrase, 'confidence': 'lexical'}
@@ -95,25 +173,43 @@ def rewrite_query(query, parsed):
     for value in raw_references or []:
         add_reference(value)
     observer = parsed.get('Observer') if isinstance(parsed.get('Observer'), dict) else {}
-    for role, entry in (('observer_origin', observer.get('origin', {})),
-                        ('observer_facing', observer.get('facing', {}))):
-        if isinstance(entry, dict) and entry.get('category'):
+    origin = observer.get('origin', {})
+    facing = observer.get('facing', {})
+    origin = origin if isinstance(origin, dict) else {}
+    facing = facing if isinstance(facing, dict) else {}
+    intrinsic_facing = intrinsic_facing_condition(query, facing.get('category', ''))
+    if intrinsic_facing:
+        facing = {**facing, 'phrase': intrinsic_facing['phrase'],
+                  'group': intrinsic_facing['group'], 'reference_frame': 'intrinsic',
+                  'orientation_part': intrinsic_facing['part']}
+    for role, entry in (('observer_origin', origin), ('observer_facing', facing)):
+        if entry.get('category'):
             add_reference(entry['category'], role, entry.get('phrase', ''))
 
     constraints = []
     unresolved = []
+    if intrinsic_facing:
+        unresolved.append({'phrase': intrinsic_facing['phrase'],
+                           'reason': 'object-intrinsic facing orientation is unavailable; object orientation is not inferred'})
     for relation in parsed.get('Relations', []) or []:
         if not isinstance(relation, dict):
             unresolved.append({'phrase': '', 'reason': 'invalid relation object'})
             continue
         relation_type = relation.get('relation')
+        relation_type = VERTICAL_WORDS.get(relation_type, relation_type)
         phrase = relation.get('phrase', '')
         target = _category(relation.get('target_category', ''))
         raw_references = (relation.get('anchor_categories', []) if relation_type == 'between'
                           else [relation.get('anchor_category', '')])
         references_for_relation = [_category(value) for value in raw_references]
+        directional = relation_type in ('left', 'right', 'front', 'back')
+        if directional and relation.get('reference_frame', 'observer') != 'observer':
+            unresolved.append({'phrase': phrase,
+                               'reason': 'directional reference frame is unavailable; object orientation is not inferred'})
+            continue
+        side_direction = directional and relation.get('scope') == 'side'
         if (relation_type not in RELATION_TYPES or not target or
-                any(not reference for reference in references_for_relation) or
+                (any(not reference for reference in references_for_relation) and not side_direction) or
                 not _quote(query, phrase) or
                 (relation_type == 'between' and len(references_for_relation) != 2)):
             unresolved.append({'phrase': phrase, 'reason': 'relation is incomplete or unquoted'})
@@ -123,6 +219,14 @@ def rewrite_query(query, parsed):
         constraint = {'type': RELATION_TYPES[relation_type], 'target': target,
                       'scope': relation.get('scope', ''),
                       'phrase': phrase, 'confidence': 'lexical'}
+        if directional:
+            constraint['reference_frame'] = relation.get('reference_frame', 'observer')
+        # Keep an explicitly requested distance definition auditable.  A
+        # missing metric intentionally remains the center-distance default in
+        # the evidence layer; rewrite never invents one.
+        if relation_type in ('nearest', 'farthest', 'near'):
+            constraint.update({key: relation[key] for key in DISTANCE_METADATA_KEYS
+                               if key in relation})
         if relation_type == 'between':
             constraint.update({'references': references_for_relation,
                                'raw_reference_categories': [_raw_category(value) for value in raw_references],
@@ -134,6 +238,8 @@ def rewrite_query(query, parsed):
         constraints.append(constraint)
 
     for attribute in parsed.get('Attributes', []) or []:
+        if isinstance(attribute, dict) and attribute.get('role') == 'reference':
+            continue
         compiled = _attribute_constraint(attribute, query, target_category)
         if compiled:
             constraints.append(compiled)
@@ -169,6 +275,9 @@ def rewrite_query(query, parsed):
         elif diagnostic.startswith('appearance condition not represented: '):
             phrase = diagnostic[len('appearance condition not represented: '):]
             reason = 'appearance condition omitted from Attributes; role not inferred'
+        elif diagnostic.startswith('immediate proximity has no calibrated predicate: '):
+            phrase = diagnostic[len('immediate proximity has no calibrated predicate: '):]
+            reason = 'immediate proximity has no calibrated predicate'
         else:
             continue
         if _quote(query, phrase) and not any(item['phrase'] == phrase for item in unresolved):
@@ -186,6 +295,12 @@ def rewrite_query(query, parsed):
         'references': references,
         'constraints': constraints,
         'unresolved': unresolved,
+        'language_reference': {
+            'type': 'observer',
+            'origin': dict(origin),
+            'facing': dict(facing),
+            'capture_camera_independent': True,
+        },
         'policy': 'deterministic lexical normalization; no target ID selection',
     }
 
@@ -206,9 +321,16 @@ def constraints_as_relations(rewritten):
                            'anchor_categories': references, 'relation': relation,
                            'scope': constraint.get('scope', ''),
                            'phrase': constraint.get('phrase', '')})
-        elif constraint.get('reference'):
-            result.append({'target_category': constraint.get('target', ''),
-                           'anchor_category': constraint.get('reference', ''),
-                           'relation': relation, 'scope': constraint.get('scope', ''),
-                           'phrase': constraint.get('phrase', '')})
+        elif (constraint.get('reference') or
+              (relation in ('left', 'right', 'front', 'back') and constraint.get('scope') == 'side')):
+            relation_record = {'target_category': constraint.get('target', ''),
+                               'anchor_category': constraint.get('reference', ''),
+                               'relation': relation, 'scope': constraint.get('scope', ''),
+                               'phrase': constraint.get('phrase', '')}
+            if relation in ('left', 'right', 'front', 'back'):
+                relation_record['reference_frame'] = constraint.get('reference_frame', 'observer')
+            if relation in ('nearest', 'farthest', 'near'):
+                relation_record.update({key: constraint[key] for key in DISTANCE_METADATA_KEYS
+                                        if key in constraint})
+            result.append(relation_record)
     return result

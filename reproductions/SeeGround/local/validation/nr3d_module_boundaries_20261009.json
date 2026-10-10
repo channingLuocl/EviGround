@@ -1,0 +1,96 @@
+{
+  "purpose": "Targeted size/distance/viewpoint boundary checks after appearance improvements",
+  "source": "local_outputs/downloads/nr3d_official.csv",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "csv_row_convention": "1-based physical CSV line including header",
+  "selection": "Original utterances selected from explicit boundary semantics and zero-API full-scene geometry before model calls. Development checks, not holdout accuracy. Tie rows selected for ambiguity; evaluation IDs do not constrain inference.",
+  "evaluation_only_fields": [
+    "target_id",
+    "stimulus_id",
+    "stimulus_candidate_ids"
+  ],
+  "runtime_input": "Original query plus full prepared scene with annotated categories/boxes; no target or stimulus IDs in worker input",
+  "rows": [
+    {
+      "module": "size",
+      "csv_row": 35184,
+      "scene": "scene0704_00",
+      "query": "The largest of the cabinets.",
+      "target_id": 5,
+      "stimulus_id": "scene0704_00-cabinets-3-5-14-15",
+      "stimulus_candidate_ids": [
+        5,
+        14,
+        15
+      ],
+      "acceptance_focus": "Explicit all-category largest comparison; verify comparison pool and actual size execution before acceptance"
+    },
+    {
+      "module": "size",
+      "csv_row": 10111,
+      "scene": "scene0697_00",
+      "query": "the shorter of the two dresser",
+      "target_id": 11,
+      "stimulus_id": "scene0697_00-dresser-2-11-10",
+      "stimulus_candidate_ids": [
+        11,
+        10
+      ],
+      "acceptance_focus": "Named of-the-two comparison stays unknown until the instance set is bound; no global category substitution"
+    },
+    {
+      "module": "distance",
+      "csv_row": 9431,
+      "scene": "scene0616_00",
+      "query": "The trash can closest to the chair.",
+      "target_id": 0,
+      "stimulus_id": "scene0616_00-trash_can-2-0-1",
+      "stimulus_candidate_ids": [
+        0,
+        1
+      ],
+      "acceptance_focus": "0.005883m center-distance tie to one chair plus multiple-reference interpretations must preserve ambiguity and not force a winner"
+    },
+    {
+      "module": "distance",
+      "csv_row": 7786,
+      "scene": "scene0565_00",
+      "query": "The box closest to the door.",
+      "target_id": 7,
+      "stimulus_id": "scene0565_00-box-3-7-6-8",
+      "stimulus_candidate_ids": [
+        7,
+        6,
+        8
+      ],
+      "acceptance_focus": "Two doors imply different nearest boxes; each anchor ranking independent and no mean-anchor origin"
+    },
+    {
+      "module": "viewpoint",
+      "csv_row": 12870,
+      "scene": "scene0697_00",
+      "query": "Facing the foot of the bed, the dresser in the lower right corner.",
+      "target_id": 11,
+      "stimulus_id": "scene0697_00-dresser-2-11-10",
+      "stimulus_candidate_ids": [
+        11,
+        10
+      ],
+      "acceptance_focus": "Facing the foot of the bed requires intrinsic orientation; preserve exact phrase and explicit unsupported/unknown boundary"
+    },
+    {
+      "module": "viewpoint",
+      "csv_row": 10943,
+      "scene": "scene0030_00",
+      "query": "When standing in the middle of the room facing the windows the correct one is on the right.",
+      "target_id": 27,
+      "stimulus_id": "scene0030_00-window-3-27-26-58",
+      "stimulus_candidate_ids": [
+        27,
+        26,
+        58
+      ],
+      "acceptance_focus": "Explicit middle-room origin and facing window group; all legal language frames must jointly support target"
+    }
+  ]
+}

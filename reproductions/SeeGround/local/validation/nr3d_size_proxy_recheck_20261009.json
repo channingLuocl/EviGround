@@ -1,0 +1,105 @@
+{
+  "purpose": "Live unqualified size proxy ambiguity regression with category/scope and positive controls",
+  "source": "local_outputs/downloads/nr3d_official.csv",
+  "source_url": "https://drive.google.com/file/d/1qswKclq4BlnHSGMSgzLmUu8iqdUXD8ZC/view",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "csv_row_convention": "1-based physical line including header",
+  "selection": "Newly exposed wrong accept 34177 plus the four previous repair/control rows; diagnostic rechecks only, no corrected300 score.",
+  "evaluation_only_fields": [
+    "target_id",
+    "stimulus_id",
+    "stimulus_candidate_ids"
+  ],
+  "runtime_input": "Original query, full prepared scene, annotated category table; no evaluation IDs in inference",
+  "rows": [
+    {
+      "csv_row": 1546,
+      "scene": "scene0086_00",
+      "query": "The smallest bathroom stall",
+      "target_id": 28,
+      "instance_type": "bathroom stall",
+      "stimulus_id": "scene0086_00-bathroom_stall-2-28-1",
+      "stimulus_candidate_ids": [
+        28,
+        1
+      ],
+      "stage": "simple_superlative",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely",
+      "module": "size",
+      "acceptance_focus": "Preserve full category recall and separately verify part/whole head binding and heterogeneous comparison scope; no stimulus pool supplied to inference."
+    },
+    {
+      "csv_row": 38718,
+      "scene": "scene0187_00",
+      "query": "The smallest of the tables.",
+      "target_id": 6,
+      "instance_type": "table",
+      "stimulus_id": "scene0187_00-table-3-6-7-8",
+      "stimulus_candidate_ids": [
+        6,
+        7,
+        8
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely",
+      "module": "size",
+      "acceptance_focus": "Preserve full category recall and separately verify part/whole head binding and heterogeneous comparison scope; no stimulus pool supplied to inference."
+    },
+    {
+      "module": "size",
+      "csv_row": 35184,
+      "scene": "scene0704_00",
+      "query": "The largest of the cabinets.",
+      "target_id": 5,
+      "stimulus_id": "scene0704_00-cabinets-3-5-14-15",
+      "stimulus_candidate_ids": [
+        5,
+        14,
+        15
+      ],
+      "acceptance_focus": "Explicit all-category largest comparison; verify comparison pool and actual size execution before acceptance"
+    },
+    {
+      "module": "size",
+      "csv_row": 39014,
+      "scene": "scene0357_00",
+      "query": "The smaller of the cabinets.",
+      "target_id": 15,
+      "stimulus_id": "scene0357_00-cabinet-2-15-13",
+      "stimulus_candidate_ids": [
+        15,
+        13
+      ],
+      "subtype": "explicit_category_comparison",
+      "acceptance_focus": "Preserve the of-the-cabinets comparison scope and distinguish comparative evidence from a bare small adjective."
+    },
+    {
+      "csv_row": 34177,
+      "scene": "scene0671_00",
+      "query": "The book that is smallest.",
+      "target_id": 9,
+      "instance_type": "book",
+      "stimulus_id": "scene0671_00-book-2-9-21",
+      "stimulus_candidate_ids": [
+        9,
+        21
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely",
+      "module": "size",
+      "acceptance_focus": "Unqualified smallest: conflicting volume/footprint extremes must remain unknown; never pick the metric from evaluation target."
+    }
+  ]
+}

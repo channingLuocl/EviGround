@@ -1,0 +1,32 @@
+{
+  "purpose": "Targeted position recheck for trusted category evidence and finite-reference between boundary handling.",
+  "source": "local_outputs/downloads/nr3d_official.csv",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "selection": "Recheck only the two real traces affected by the position fixes. Runtime receives the original query and full prepared scene; target IDs and stimulus IDs are evaluation-only.",
+  "evaluation_only_fields": ["target_id", "stimulus_id", "stimulus_candidate_ids"],
+  "runtime_input": "Original query plus full prepared scene and annotated object table; target and stimulus IDs are evaluation only.",
+  "rows": [
+    {
+      "module": "position",
+      "csv_row": 3311,
+      "scene": "scene0704_00",
+      "query": "The picture above the photocopier",
+      "target_id": 25,
+      "stimulus_id": "scene0704_00-picture-4-25-10-11-22",
+      "stimulus_candidate_ids": [25, 10, 11, 22],
+      "subtype": "above_with_trusted_category",
+      "acceptance_focus": "The four position predicates all pass; a low-detail category-only visual check must not downgrade trusted GT categories or create a false unique acceptance."
+    },
+    {
+      "module": "position",
+      "csv_row": 23137,
+      "scene": "scene0704_00",
+      "query": "The trash can in between the large copier and table",
+      "target_id": 8,
+      "stimulus_id": "scene0704_00-trash_can-3-8-9-18",
+      "stimulus_candidate_ids": [8, 9, 18],
+      "subtype": "between_finite_literal_references",
+      "acceptance_focus": "Bind two distinct finite copier/table references, evaluate between without crashing on boundary unknowns, and keep large bound to the copier with independent evidence."
+    }
+  ]
+}

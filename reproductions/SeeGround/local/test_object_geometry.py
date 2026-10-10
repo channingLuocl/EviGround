@@ -54,6 +54,18 @@ class ObjectGeometryTests(unittest.TestCase):
         self.assertEqual(rows[2]['status'], 'unknown')
         self.assertIn('no instance points', rows[2]['unknown_reason'])
 
+    def test_point_cloud_measurements_mark_sparse_instances_limited(self):
+        xyz = np.asarray([[0., 0., 0.], [1., 1., 1.]])
+        ids = np.asarray([1, 1])
+        row = point_cloud_measurements(self.objects[:1], xyz, ids)[0]
+        self.assertEqual(row['source'], 'instance_point_cloud_aabb')
+        self.assertEqual(row['measurement_reliability'], 'usable')
+        xyz = np.asarray([[0., 0., 0.]])
+        ids = np.asarray([1])
+        row = point_cloud_measurements(self.objects[:1], xyz, ids)[0]
+        self.assertEqual(row['measurement_reliability'], 'limited')
+        self.assertIn('fewer than two', row['reliability_reason'])
+
     def test_next_to_geometry_keeps_target_reference_pair(self):
         query='lower kitchen cabinet next to the tall kitchen cabinet'
         parsed={'Target':['kitchen cabinet'],'Anchor':['kitchen cabinet']}

@@ -1,0 +1,490 @@
+{
+  "status": "PREDECLARED_BEFORE_NEW_API_RESULTS",
+  "purpose": "Relative-size same-version mixed acceptance: 9 required whole-query positives, 13 required rejections, and 4 condition/regression diagnostics.",
+  "selection": "Manually inspected development cases and old controls/boundaries, overlapping the fixed300; not an independent holdout.",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "csv_row_convention": "1-based physical CSV line including header",
+  "evaluation_only_fields": [
+    "target_id",
+    "stimulus_id",
+    "stimulus_candidate_ids"
+  ],
+  "runtime_input_policy": "Use unchanged query and full prepared scene/category table; evaluation-only fields never constrain inference or comparison scopes.",
+  "gate_artifact": "local_outputs/relative_size_20261010_audit/mixed_gate_predeclared_20261010.json",
+  "rows": [
+    {
+      "csv_row": 10134,
+      "scene": "scene0077_00",
+      "query": "Standing in the middle of the room facing both doors, it's the door on the right",
+      "target_id": 20,
+      "instance_type": "door",
+      "stimulus_id": "scene0077_00-door-2-20-9",
+      "stimulus_candidate_ids": [
+        20,
+        9
+      ],
+      "modules": [
+        "viewpoint",
+        "position"
+      ],
+      "gate_group": "required_correct_accept",
+      "acceptance_focus": "旧正向：显式房间中点与面向两门的语言框架、右侧条件共同成立。"
+    },
+    {
+      "csv_row": 35184,
+      "scene": "scene0704_00",
+      "query": "The largest of the cabinets.",
+      "target_id": 5,
+      "instance_type": "cabinets",
+      "stimulus_id": "scene0704_00-cabinets-3-5-14-15",
+      "stimulus_candidate_ids": [
+        5,
+        14,
+        15
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_correct_accept",
+      "acceptance_focus": "旧大小正向：largest 在完整冻结 cabinets 集合中执行，不能借其他条件缩池。"
+    },
+    {
+      "csv_row": 39014,
+      "scene": "scene0357_00",
+      "query": "The smaller of the cabinets.",
+      "target_id": 15,
+      "instance_type": "cabinet",
+      "stimulus_id": "scene0357_00-cabinet-2-15-13",
+      "stimulus_candidate_ids": [
+        15,
+        13
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_correct_accept",
+      "acceptance_focus": "旧大小正向：smaller of the cabinets 保留明确类别比较范围，采用完整集合证据。"
+    },
+    {
+      "csv_row": 8411,
+      "scene": "scene0343_00",
+      "query": "choose the blue cart.",
+      "target_id": 7,
+      "instance_type": "cart",
+      "stimulus_id": "scene0343_00-cart-3-7-8-9",
+      "stimulus_candidate_ids": [
+        7,
+        8,
+        9
+      ],
+      "modules": [
+        "appearance"
+      ],
+      "gate_group": "required_correct_accept",
+      "acceptance_focus": "旧颜色正向：完整 cart 池的逐实例 blue pass/fail 明确，整句正确接受。"
+    },
+    {
+      "csv_row": 1020,
+      "scene": "scene0565_00",
+      "query": "the green coloured chair",
+      "target_id": 24,
+      "instance_type": "chair",
+      "stimulus_id": "scene0565_00-chair-4-24-0-1-25",
+      "stimulus_candidate_ids": [
+        24,
+        0,
+        1,
+        25
+      ],
+      "modules": [
+        "appearance"
+      ],
+      "gate_group": "required_correct_accept",
+      "acceptance_focus": "旧颜色正向：完整 chair 池的逐实例 green pass/fail 明确，整句正确接受。"
+    },
+    {
+      "csv_row": 11862,
+      "scene": "scene0338_00",
+      "query": "small box",
+      "target_id": 21,
+      "instance_type": "box",
+      "stimulus_id": "scene0338_00-box-5-21-0-18-19-20",
+      "stimulus_candidate_ids": [
+        21,
+        0,
+        18,
+        19,
+        20
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_size_unknown_reject",
+      "acceptance_focus": "普通 small 保留原词；五箱整体大小代理排序冲突须 unknown，不按 GT 选择度量。"
+    },
+    {
+      "csv_row": 36136,
+      "scene": "scene0193_00",
+      "query": "click the small door",
+      "target_id": 13,
+      "instance_type": "door",
+      "stimulus_id": "scene0193_00-door-2-13-2",
+      "stimulus_candidate_ids": [
+        13,
+        2
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_correct_accept",
+      "acceptance_focus": "新正向：普通 small 两门比较采用可靠门面面积与更严格差距；click 为命令词，原句保持不变。"
+    },
+    {
+      "csv_row": 24396,
+      "scene": "scene0689_00",
+      "query": "the smaller window",
+      "target_id": 17,
+      "instance_type": "window",
+      "stimulus_id": "scene0689_00-window-2-17-0",
+      "stimulus_candidate_ids": [
+        17,
+        0
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_correct_accept",
+      "acceptance_focus": "新正向：smaller 两个完整窗实例组用可靠窗面面积比较，须整句正确接受。"
+    },
+    {
+      "csv_row": 4497,
+      "scene": "scene0598_00",
+      "query": "The larger window.",
+      "target_id": 20,
+      "instance_type": "window",
+      "stimulus_id": "scene0598_00-window-2-20-18",
+      "stimulus_candidate_ids": [
+        20,
+        18
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_correct_accept",
+      "acceptance_focus": "新正向：larger 两窗面面积比较方向为 max，须整句正确接受。"
+    },
+    {
+      "csv_row": 18088,
+      "scene": "scene0685_00",
+      "query": "Find the large green trash can.",
+      "target_id": 0,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0685_00-trash_can-2-0-7",
+      "stimulus_candidate_ids": [
+        0,
+        7
+      ],
+      "modules": [
+        "size",
+        "appearance"
+      ],
+      "gate_group": "clause_or_regression_diagnostic",
+      "acceptance_focus": "条件诊断：large 在冻结完整垃圾桶池单独取得 pass；green 与整句结果分别报告，未预先声明颜色稳定。"
+    },
+    {
+      "csv_row": 10431,
+      "scene": "scene0084_00",
+      "query": "choose the bigger trash can.",
+      "target_id": 10,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0084_00-trash_can-3-10-25-26",
+      "stimulus_candidate_ids": [
+        10,
+        25,
+        26
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_size_unknown_reject",
+      "acceptance_focus": "三个垃圾桶裸 bigger 的明显极值解释已声明，但当前定向体积/占地代理冲突须 unknown；不补入水槽下条件。"
+    },
+    {
+      "csv_row": 29522,
+      "scene": "scene0535_00",
+      "query": "The taller of the desks.",
+      "target_id": 11,
+      "instance_type": "desk",
+      "stimulus_id": "scene0535_00-desk-2-11-10",
+      "stimulus_candidate_ids": [
+        11,
+        10
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_size_unknown_reject",
+      "acceptance_focus": "taller 用竖向高度；近并列及结构完整性风险须 unknown，不用中心海拔或桌上物体。"
+    },
+    {
+      "csv_row": 17218,
+      "scene": "scene0565_00",
+      "query": "tall shelf behind the statue",
+      "target_id": 35,
+      "instance_type": "shelf",
+      "stimulus_id": "scene0565_00-shelf-2-35-36",
+      "stimulus_candidate_ids": [
+        35,
+        36
+      ],
+      "modules": [
+        "size",
+        "position",
+        "viewpoint"
+      ],
+      "gate_group": "required_size_unknown_reject",
+      "acceptance_focus": "描述性 tall 尚无可靠判据须 unknown，不转 tallest；behind 缺语言参照框架时也保持 unknown。"
+    },
+    {
+      "csv_row": 37559,
+      "scene": "scene0064_00",
+      "query": "The shorter bookshelf.",
+      "target_id": 0,
+      "instance_type": "bookshelf",
+      "stimulus_id": "scene0064_00-bookshelf-2-0-10",
+      "stimulus_candidate_ids": [
+        0,
+        10
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_size_unknown_reject",
+      "acceptance_focus": "shorter 用竖向高度；当前扫描下部完整性风险须 unknown，不能按 GT 换成横向长度。"
+    },
+    {
+      "csv_row": 3071,
+      "scene": "scene0030_00",
+      "query": "The short bookshelf in between the two tall bookshelves",
+      "target_id": 68,
+      "instance_type": "bookshelf",
+      "stimulus_id": "scene0030_00-bookshelf-5-68-17-18-19-20",
+      "stimulus_candidate_ids": [
+        68,
+        17,
+        18,
+        19,
+        20
+      ],
+      "modules": [
+        "size",
+        "position"
+      ],
+      "gate_group": "clause_or_regression_diagnostic",
+      "acceptance_focus": "联合条件诊断：short 目标与两个不同 tall 参照同一假设验证相对高度和 between；未绑定解析须明确 unknown 并报告未执行缺口。"
+    },
+    {
+      "csv_row": 22982,
+      "scene": "scene0064_00",
+      "query": "The longer bookshelf",
+      "target_id": 0,
+      "instance_type": "bookshelf",
+      "stimulus_id": "scene0064_00-bookshelf-2-0-10",
+      "stimulus_candidate_ids": [
+        0,
+        10
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_correct_accept",
+      "acceptance_focus": "新正向及独立维度对照：官方原句 longer，用旋转稳定横向定向尺寸；不替换 shorter 样例。"
+    },
+    {
+      "csv_row": 9431,
+      "scene": "scene0616_00",
+      "query": "The trash can closest to the chair.",
+      "target_id": 0,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0616_00-trash_can-2-0-1",
+      "stimulus_candidate_ids": [
+        0,
+        1
+      ],
+      "modules": [
+        "distance"
+      ],
+      "gate_group": "required_boundary_reject",
+      "acceptance_focus": "未知边界：距离近并列或多个椅参照假设不允许强制唯一。"
+    },
+    {
+      "csv_row": 7786,
+      "scene": "scene0565_00",
+      "query": "The box closest to the door.",
+      "target_id": 7,
+      "instance_type": "box",
+      "stimulus_id": "scene0565_00-box-3-7-6-8",
+      "stimulus_candidate_ids": [
+        7,
+        6,
+        8
+      ],
+      "modules": [
+        "distance"
+      ],
+      "gate_group": "required_boundary_reject",
+      "acceptance_focus": "未知边界：不同 door 参照产生不同最近 box，不得任选参照。"
+    },
+    {
+      "csv_row": 12870,
+      "scene": "scene0697_00",
+      "query": "Facing the foot of the bed, the dresser in the lower right corner.",
+      "target_id": 11,
+      "instance_type": "dresser",
+      "stimulus_id": "scene0697_00-dresser-2-11-10",
+      "stimulus_candidate_ids": [
+        11,
+        10
+      ],
+      "modules": [
+        "viewpoint",
+        "position"
+      ],
+      "gate_group": "required_boundary_reject",
+      "acceptance_focus": "未知边界：床脚固有朝向、corner 与缺站位未支持，不得借截图方向接受。"
+    },
+    {
+      "csv_row": 34177,
+      "scene": "scene0671_00",
+      "query": "The book that is smallest.",
+      "target_id": 9,
+      "instance_type": "book",
+      "stimulus_id": "scene0671_00-book-2-9-21",
+      "stimulus_candidate_ids": [
+        9,
+        21
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_boundary_reject",
+      "acceptance_focus": "未知边界：书本 volume/footprint 冲突保护保留，不借门窗面度量绕过。"
+    },
+    {
+      "csv_row": 38718,
+      "scene": "scene0187_00",
+      "query": "The smallest of the tables.",
+      "target_id": 6,
+      "instance_type": "table",
+      "stimulus_id": "scene0187_00-table-3-6-7-8",
+      "stimulus_candidate_ids": [
+        6,
+        7,
+        8
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "required_boundary_reject",
+      "acceptance_focus": "原错误接受回归：未绑定类别子集不能用 stimulus/GT 缩池，必须拒绝。"
+    },
+    {
+      "csv_row": 27111,
+      "scene": "scene0187_00",
+      "query": "the tall white table with nothing underneath",
+      "target_id": 6,
+      "instance_type": "table",
+      "stimulus_id": "scene0187_00-table-3-6-7-8",
+      "stimulus_candidate_ids": [
+        6,
+        7,
+        8
+      ],
+      "modules": [
+        "size",
+        "position",
+        "appearance"
+      ],
+      "gate_group": "required_boundary_reject",
+      "acceptance_focus": "未知边界与候选保留：tall 描述与 nothing underneath 未完成，不能按独立缩放视觉误排正确候选。",
+      "require_evaluation_target_retained": true
+    },
+    {
+      "csv_row": 12397,
+      "scene": "scene0251_00",
+      "query": "The trash can that is in between another trash can and a smaller trash can with a blue bag.",
+      "target_id": 10,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0251_00-trash_can-5-10-8-9-11-12",
+      "stimulus_candidate_ids": [
+        10,
+        8,
+        9,
+        11,
+        12
+      ],
+      "modules": [
+        "size",
+        "position",
+        "appearance"
+      ],
+      "gate_group": "required_boundary_reject",
+      "acceptance_focus": "未知边界与候选保留：smaller 与 blue bag 绑定参照；未完成参照证据不得施加于目标。",
+      "require_evaluation_target_retained": true
+    },
+    {
+      "csv_row": 24581,
+      "scene": "scene0578_00",
+      "query": "the smallest window above the door",
+      "target_id": 13,
+      "instance_type": "window",
+      "stimulus_id": "scene0578_00-window-3-13-9-19",
+      "stimulus_candidate_ids": [
+        13,
+        9,
+        19
+      ],
+      "modules": [
+        "size",
+        "position"
+      ],
+      "gate_group": "required_boundary_reject",
+      "acceptance_focus": "未知边界与候选保留：above 重叠几何未知，大小独立执行，正确候选不得被误排。",
+      "require_evaluation_target_retained": true
+    },
+    {
+      "csv_row": 1546,
+      "scene": "scene0086_00",
+      "query": "The smallest bathroom stall",
+      "target_id": 28,
+      "instance_type": "bathroom stall",
+      "stimulus_id": "scene0086_00-bathroom_stall-2-28-1",
+      "stimulus_candidate_ids": [
+        28,
+        1
+      ],
+      "modules": [
+        "size"
+      ],
+      "gate_group": "clause_or_regression_diagnostic",
+      "acceptance_focus": "原错误接受诊断：完整 bathroom-stall 类别池，正确接受或明确拒绝均可，错误接受禁止。"
+    },
+    {
+      "csv_row": 13268,
+      "scene": "scene0338_00",
+      "query": "The green recycling bin",
+      "target_id": 6,
+      "instance_type": "recycling bin",
+      "stimulus_id": "scene0338_00-recycling_bin-2-6-1",
+      "stimulus_candidate_ids": [
+        6,
+        1
+      ],
+      "modules": [
+        "appearance"
+      ],
+      "gate_group": "clause_or_regression_diagnostic",
+      "acceptance_focus": "颜色诊断：历史逐实例 green 回包混淆，正确接受或未知均可；不是首轮两个错误接受之一。"
+    }
+  ]
+}

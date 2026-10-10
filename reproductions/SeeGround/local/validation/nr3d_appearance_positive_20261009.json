@@ -1,0 +1,61 @@
+{
+  "purpose": "Focused visible-appearance capability check after correcting sparse one-pixel inspection rendering",
+  "source": "local_outputs/downloads/nr3d_official.csv",
+  "source_url": "https://drive.google.com/file/d/1qswKclq4BlnHSGMSgzLmUu8iqdUXD8ZC/view",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "csv_row_convention": "1-based physical line including header",
+  "selection": "Three original utterances chosen before API inference from simple color semantics and point-cloud views; 8411 is an affected existing row, other rows are new. Target geometry/IDs used for evaluation only; not held-out accuracy.",
+  "evaluation_only_fields": [
+    "target_id",
+    "stimulus_id",
+    "stimulus_candidate_ids"
+  ],
+  "runtime_input": "Original query, full prepared scene, annotated category table; no evaluation IDs in inference",
+  "rows": [
+    {
+      "module": "appearance",
+      "csv_row": 1020,
+      "scene": "scene0565_00",
+      "query": "the green coloured chair",
+      "target_id": 24,
+      "stimulus_id": "scene0565_00-chair-4-24-0-1-25",
+      "stimulus_candidate_ids": [
+        24,
+        0,
+        1,
+        25
+      ],
+      "subtype": "simple_visible_color",
+      "acceptance_focus": "Real parser plus full category candidate pool; each appearance property must have explicit visible pass/fail or conservative unknown, and all query conditions must pass before acceptance."
+    },
+    {
+      "module": "appearance",
+      "csv_row": 8411,
+      "scene": "scene0343_00",
+      "query": "choose the blue cart.",
+      "target_id": 7,
+      "stimulus_id": "scene0343_00-cart-3-7-8-9",
+      "stimulus_candidate_ids": [
+        7,
+        8,
+        9
+      ],
+      "subtype": "simple_visible_color",
+      "acceptance_focus": "Real parser plus full category candidate pool; each appearance property must have explicit visible pass/fail or conservative unknown, and all query conditions must pass before acceptance."
+    },
+    {
+      "module": "appearance",
+      "csv_row": 18505,
+      "scene": "scene0648_00",
+      "query": "The correct bed has a purple blanket.",
+      "target_id": 14,
+      "stimulus_id": "scene0648_00-bed-2-14-15",
+      "stimulus_candidate_ids": [
+        14,
+        15
+      ],
+      "subtype": "simple_visible_color",
+      "acceptance_focus": "Real parser plus full category candidate pool; each appearance property must have explicit visible pass/fail or conservative unknown, and all query conditions must pass before acceptance."
+    }
+  ]
+}

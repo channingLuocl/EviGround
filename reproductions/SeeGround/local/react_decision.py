@@ -22,8 +22,22 @@ def validate_react_config():
 def text_state(value):
     """Keep structured observations; image pixels and file paths stay in the trace."""
     if isinstance(value, dict):
+        if value.get('joint_size_diagnosis') is not None:
+            # All assignment proofs stay in the local trace. The planner uses
+            # surviving candidate proofs and the controller's joint verdict.
+            joint = value['joint_size_diagnosis']
+            value = {key: item for key, item in value.items()
+                     if key not in ('joint_size_diagnosis', 'size_constraints', 'size_decision')}
+            value['joint_size_summary'] = {
+                'status': joint['status'], 'missing': joint['missing'],
+                'candidate_ids': joint['candidate_ids'],
+                'stable_candidate_ids': joint['stable_candidate_ids'],
+                'hypotheses': [{'references': h['references'], 'candidate_ids': h['candidate_ids']}
+                               for h in joint['hypotheses']],
+                'pending_size_conditions': joint['pending_size_conditions'],
+            }
         return {key: text_state(item) for key, item in value.items()
-                if key not in ('image', 'images', 'image_url', 'call')}
+                if key not in ('image', 'images', 'image_url', 'call', 'internal_steps')}
     if isinstance(value, list):
         return [text_state(item) for item in value]
     return value
@@ -49,7 +63,8 @@ def jev_state(state):
     if isinstance(details, dict):
         compact_details = {key: details[key] for key in
                            ('dimension', 'candidate_ids', 'candidate_evidence', 'policy',
-                           'candidate_metrics', 'attributes', 'visual_needs', 'size_decision')
+                           'candidate_metrics', 'attributes', 'visual_needs', 'size_decision',
+                           'joint_size_summary')
                            if key in details}
         if 'distance_rankings' in details:
             rankings = details['distance_rankings']
@@ -107,6 +122,33 @@ def evidence_tasks(state):
                     'azimuth_deg': azimuth, 'elevation_deg': 25, 'context': context,
                     'reason': f'Inspect target appearance for {group} in {context} at {azimuth} degrees',
                 }
+    if state['tools_remaining'] > 0:
+        # Import at execution time: the active controller also imports this module.
+        from active_diagnostic import evidence_request
+        known_ids = set(remaining) | set(state.get('category_candidates', []))
+        for table in ('target_table', 'reference_table'):
+            known_ids.update(row['bbox_id'] for row in state.get(table, [])
+                             if isinstance(row, dict) and 'bbox_id' in row)
+        objects = [{'bbox_id': oid} for oid in known_ids]
+        signatures = {json.dumps({key: value for key, value in task.items() if key != 'reason'},
+                                 sort_keys=True) for task in tasks.values()}
+        for index, suggestion in enumerate((state.get('observation') or {}).get('next_evidence', []), 1):
+            if (not isinstance(suggestion, dict)
+                    or suggestion.get('dimension') not in state['available_dimensions']
+                    or not isinstance(suggestion.get('reason'), str) or not suggestion['reason'].strip()):
+                continue
+            try:
+                request = evidence_request(suggestion, remaining, objects)
+            except ValueError:
+                continue
+            signature = json.dumps({key: value for key, value in request.items() if key != 'reason'},
+                                   sort_keys=True)
+            if signature in signatures:
+                continue
+            if len(tasks) >= 253:  # Reserve the finish and stop options in the JEV Choice.
+                break
+            tasks[f'suggested_evidence_{index}'] = request
+            signatures.add(signature)
     if state['tools_remaining'] <= 0:
         tasks = {}
     tasks['finish'] = {'action': 'finish', 'reason': 'Request a final target choice from supplied evidence'}

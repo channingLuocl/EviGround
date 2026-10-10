@@ -93,6 +93,19 @@ class QueryRewriteTests(unittest.TestCase):
         self.assertEqual(constraints_as_relations(result)[0]['relation'], 'above')
         self.assertNotIn('near', [c['type'] for c in result['constraints']])
 
+    def test_normalizes_underneath_relation_to_below(self):
+        query = 'the table underneath the shelf'
+        parsed = {
+            'Target': ['table'], 'Anchor': ['shelf'],
+            'Relations': [{'target_category': 'table', 'anchor_category': 'shelf',
+                           'relation': 'underneath', 'scope': 'relative_anchor',
+                           'phrase': 'underneath the shelf'}],
+            'Attributes': [], 'Unhandled': [], 'Observer': {},
+        }
+        result = rewrite_query(query, parsed)
+        self.assertEqual(result['constraints'][0]['type'], 'below')
+        self.assertEqual(constraints_as_relations(result)[0]['relation'], 'below')
+
     def test_compiles_size_and_floor_as_explicit_geometry_constraints(self):
         query = 'the smallest cabinet on the floor right of the stove'
         parsed = {
@@ -122,6 +135,36 @@ class QueryRewriteTests(unittest.TestCase):
         self.assertEqual(result['unresolved'][0]['phrase'], 'between the stove and wall')
         self.assertIn('wall', [item['category'] for item in result['references']])
 
+    def test_distance_metric_is_preserved_through_rewrite(self):
+        query = 'the chair nearest the table'
+        parsed = {
+            'Target': ['chair'], 'Anchor': ['table'],
+            'Relations': [{'target_category': 'chair', 'anchor_category': 'table',
+                           'relation': 'nearest', 'distance_metric': 'horizontal_gap',
+                           'scope': '', 'phrase': 'nearest the table'}],
+            'Attributes': [], 'Unhandled': [], 'Observer': {},
+        }
+        rewritten = rewrite_query(query, parsed)
+        self.assertEqual(rewritten['constraints'][0]['distance_metric'], 'horizontal_gap')
+        restored = constraints_as_relations(rewritten)[0]
+        self.assertEqual(restored['distance_metric'], 'horizontal_gap')
+
+    def test_distance_bindings_tolerance_and_metric_alias_round_trip(self):
+        query = 'the chair nearest the table'
+        metadata = {'metric': 'horizontal', 'distance_scope': 'horizontal',
+                    'target_instance_id': 2, 'anchor_id': 10,
+                    'tie_tolerance_m': .02}
+        relation = {'target_category': 'chair', 'anchor_category': 'table',
+                    'relation': 'nearest', 'phrase': 'nearest the table',
+                    **metadata}
+        rewritten = rewrite_query(query, {
+            'Target': ['chair'], 'Anchor': ['table'], 'Relations': [relation],
+            'Attributes': [], 'Unhandled': [], 'Observer': {},
+        })
+        restored = constraints_as_relations(rewritten)[0]
+        for key, value in metadata.items():
+            self.assertEqual(restored[key], value)
+
     def test_rejected_relation_is_retained_as_unresolved(self):
         query = 'cabinet between the stove and the wall'
         result = rewrite_query(query, {
@@ -130,6 +173,74 @@ class QueryRewriteTests(unittest.TestCase):
             'diagnostic_missing': ['unsupported relation: between the stove and the wall'],
         })
         self.assertEqual(result['unresolved'][0]['phrase'], 'between the stove and the wall')
+
+    def test_malformed_observer_fields_are_safe_and_explicitly_empty(self):
+        result = rewrite_query('choose a chair', {
+            'Target': ['chair'], 'Anchor': [], 'Relations': [], 'Attributes': [],
+            'Observer': {'origin': None, 'facing': 'not-a-frame'},
+        })
+        self.assertEqual(result['language_reference']['origin'], {})
+        self.assertEqual(result['language_reference']['facing'], {})
+
+    def test_intrinsic_direction_is_unresolved_in_raw_rewrite(self):
+        query = 'the window in front of the chair'
+        result = rewrite_query(query, {
+            'Target': ['window'], 'Anchor': ['chair'],
+            'Relations': [{'target_category': 'window', 'anchor_category': 'chair',
+                           'relation': 'front', 'scope': 'relative_anchor',
+                           'reference_frame': 'intrinsic',
+                           'phrase': 'in front of the chair'}],
+            'Attributes': [], 'Observer': {},
+        })
+        self.assertEqual(result['constraints'], [])
+        self.assertEqual(result['unresolved'][0]['phrase'], 'in front of the chair')
+        self.assertIn('orientation is not inferred', result['unresolved'][0]['reason'])
+
+    def test_facing_chair_backs_keeps_group_and_unresolved_orientation(self):
+        query = 'Facing the back of the chairs, the chair on the left.'
+        result = rewrite_query(query, {
+            'Target': ['chair'], 'Anchor': [],
+            'Relations': [{'target_category': 'chair', 'anchor_category': '',
+                           'relation': 'left', 'scope': 'side', 'phrase': 'the chair on the left'}],
+            'Attributes': [], 'Observer': {'facing': {
+                'category': 'chair', 'group': False, 'phrase': 'Facing the back of the chairs'}},
+        })
+        self.assertEqual(result['unresolved'][0]['phrase'], 'Facing the back of the chairs')
+        self.assertIn('orientation is not inferred', result['unresolved'][0]['reason'])
+        facing = result['language_reference']['facing']
+        self.assertTrue(facing['group'])
+        self.assertEqual(facing['reference_frame'], 'intrinsic')
+        self.assertEqual(facing['orientation_part'], 'back')
+        self.assertEqual(result['constraints'][0]['scope'], 'side')
+
+    def test_side_direction_without_anchor_roundtrips(self):
+        query = 'the window on the right'
+        result = rewrite_query(query, {
+            'Target': ['window'], 'Anchor': [],
+            'Relations': [{'target_category': 'window', 'anchor_category': '',
+                           'relation': 'right', 'scope': 'side',
+                           'phrase': 'on the right'}],
+            'Attributes': [], 'Observer': {},
+        })
+        self.assertEqual(result['constraints'][0]['scope'], 'side')
+        restored = constraints_as_relations(result)[0]
+        self.assertEqual(restored['anchor_category'], '')
+        self.assertEqual(restored['reference_frame'], 'observer')
+
+    def test_facing_bed_head_and_foot_preserve_intrinsic_part(self):
+        for part in ('head', 'foot'):
+            with self.subTest(part=part):
+                quote = f'Facing the {part} of the bed'
+                result = rewrite_query(quote + ', the dresser on the right.', {
+                    'Target': ['dresser'], 'Anchor': ['bed'], 'Relations': [],
+                    'Attributes': [], 'Observer': {'facing': {
+                        'category': 'bed', 'phrase': 'Facing the bed', 'group': False}},
+                })
+                facing = result['language_reference']['facing']
+                self.assertEqual(facing['phrase'], quote)
+                self.assertEqual(facing['orientation_part'], part)
+                self.assertEqual(facing['reference_frame'], 'intrinsic')
+                self.assertEqual(result['unresolved'][0]['phrase'], quote)
 
 
 if __name__ == '__main__':

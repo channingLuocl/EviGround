@@ -1,0 +1,72 @@
+{
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "purpose": "Three exposed candidate-loss diagnostic rechecks after failed16 recovery",
+  "selection": "Diagnostic development and control rechecks using original source rows; overlaps with fixed300, not independent holdout. No evaluation target IDs supplied to inference.",
+  "rows": [
+    {
+      "csv_row": 12397,
+      "scene": "scene0251_00",
+      "query": "The trash can that is in between another trash can and a smaller trash can with a blue bag.",
+      "target_id": 10,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0251_00-trash_can-5-10-8-9-11-12",
+      "stimulus_candidate_ids": [
+        10,
+        8,
+        9,
+        11,
+        12
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely",
+      "module": "size",
+      "acceptance_focus": "Reference smaller/blue-bag attributes must never be imposed on target; same-category reference-slot ambiguity must remain explicit and unsupported conditions block acceptance."
+    },
+    {
+      "csv_row": 24581,
+      "scene": "scene0578_00",
+      "query": "the smallest window above the door",
+      "target_id": 13,
+      "instance_type": "window",
+      "stimulus_id": "scene0578_00-window-3-13-9-19",
+      "stimulus_candidate_ids": [
+        13,
+        9,
+        19
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely",
+      "module": "size",
+      "acceptance_focus": "Vertical AABB overlap alone must not refute ordinary above when centers support upward ordering; unresolved overlapping geometry stays unknown, size scope is separately checked."
+    },
+    {
+      "csv_row": 27111,
+      "scene": "scene0187_00",
+      "query": "the tall white table with nothing underneath",
+      "target_id": 6,
+      "instance_type": "table",
+      "stimulus_id": "scene0187_00-table-3-6-7-8",
+      "stimulus_candidate_ids": [
+        6,
+        7,
+        8
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "tall"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely",
+      "module": "size",
+      "acceptance_focus": "Isolated independently scaled views cannot refute tall by cross-tile size; negative compound appearance cannot borrow unsupported nothing-underneath. Independent white checks remain separate."
+    }
+  ]
+}

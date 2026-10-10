@@ -1,0 +1,80 @@
+{
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "purpose": "Blue-door isolated-instance repair recheck with previous color positive and unknown controls",
+  "selection": "Five fixed original source rows chosen before fresh live inference; development controls, no holdout claims.",
+  "rows": [
+    {
+      "module": "appearance",
+      "csv_row": 18112,
+      "scene": "scene0046_00",
+      "query": "It is the blue door.",
+      "target_id": 21,
+      "stimulus_id": "scene0046_00-door-2-21-26",
+      "stimulus_candidate_ids": [
+        21,
+        26
+      ],
+      "subtype": "simple_visible_color",
+      "acceptance_focus": "Verify per-instance crop source, all literal/full attributes and visible color; each candidate assessed independently; low-detail/contradictory evidence stays unknown. No evaluation IDs in inference."
+    },
+    {
+      "module": "appearance",
+      "csv_row": 8411,
+      "scene": "scene0343_00",
+      "query": "choose the blue cart.",
+      "target_id": 7,
+      "stimulus_id": "scene0343_00-cart-3-7-8-9",
+      "stimulus_candidate_ids": [
+        7,
+        8,
+        9
+      ],
+      "subtype": "simple_visible_color",
+      "acceptance_focus": "Verify per-instance crop source, all literal/full attributes and visible color; each candidate assessed independently; low-detail/contradictory evidence stays unknown. No evaluation IDs in inference."
+    },
+    {
+      "module": "appearance",
+      "csv_row": 1020,
+      "scene": "scene0565_00",
+      "query": "the green coloured chair",
+      "target_id": 24,
+      "stimulus_id": "scene0565_00-chair-4-24-0-1-25",
+      "stimulus_candidate_ids": [
+        24,
+        0,
+        1,
+        25
+      ],
+      "subtype": "simple_visible_color",
+      "acceptance_focus": "Verify per-instance crop source, all literal/full attributes and visible color; each candidate assessed independently; low-detail/contradictory evidence stays unknown. No evaluation IDs in inference."
+    },
+    {
+      "module": "appearance",
+      "csv_row": 6990,
+      "scene": "scene0256_00",
+      "query": "the curtains are white",
+      "target_id": 9,
+      "stimulus_id": "scene0256_00-curtain-2-9-7",
+      "stimulus_candidate_ids": [
+        9,
+        7
+      ],
+      "subtype": "simple_visible_color",
+      "acceptance_focus": "Verify per-instance crop source, all literal/full attributes and visible color; each candidate assessed independently; low-detail/contradictory evidence stays unknown. No evaluation IDs in inference."
+    },
+    {
+      "module": "appearance",
+      "csv_row": 13268,
+      "scene": "scene0338_00",
+      "query": "The green recycling bin",
+      "target_id": 6,
+      "stimulus_id": "scene0338_00-recycling_bin-2-6-1",
+      "stimulus_candidate_ids": [
+        6,
+        1
+      ],
+      "subtype": "simple_visible_color",
+      "acceptance_focus": "Verify per-instance crop source, all literal/full attributes and visible color; each candidate assessed independently; low-detail/contradictory evidence stays unknown. No evaluation IDs in inference."
+    }
+  ]
+}
