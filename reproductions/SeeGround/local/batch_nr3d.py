@@ -35,18 +35,27 @@ def summarize(results):
             'mean_iou':sum(ious)/len(results) if ious else None,
             'mean_latency_s':sum(latencies)/len(latencies) if latencies else None,
             'mean_pipeline_latency_s':sum(pipeline)/len(pipeline) if pipeline else None}
+    answered = [r for r in results if r.get('predicted_id') is not None]
+    stats.update(
+        run_succeeded=sum(not r.get('error') for r in results),
+        answer_coverage=len(answered)/len(results) if results else None,
+        answered_accuracy=sum(r.get('correct') is True for r in answered)/len(answered) if answered else None,
+        singleton_fallback_count=sum(r.get('prediction_source') == 'singleton_fallback' for r in results))
     if any('decision_status' in r for r in results):
         stats['decision_status_counts']={status:sum(r.get('decision_status')==status for r in results)
                                          for status in ('resolved','missing','ambiguous','conflict')}
         accepted=[r for r in results if r.get('accepted') is True]
         stats['accepted_count']=len(accepted)
+        stats['accepted_coverage']=len(accepted)/len(results) if results else None
         stats['accepted_accuracy']=sum(r.get('correct') is True for r in accepted)/len(accepted) if accepted else None
     return stats
 
 def experiment_settings(scene_dir, mode, review_limit=6, object_table='pred'):
+    from qwen_api import api_provider, api_config_summary
     code_dir=Path(__file__).resolve().parent
     selected_path=object_table_path(scene_dir,object_table)
     settings={'mode':mode,'object_table':object_table,'objects_file':selected_path.name,
+            'api_config':api_config_summary(),
             'review_limit':review_limit if mode in ('category_review','diagnostic','active_diagnostic') else None,
             'model':os.getenv('SEEGROUND_MODEL','').strip(),
             'base_url':os.getenv('SEEGROUND_BASE_URL','').strip().rstrip('/'),
@@ -55,6 +64,10 @@ def experiment_settings(scene_dir, mode, review_limit=6, object_table='pred'):
             'scene_sha256':{name:hashlib.sha256((scene_dir/name).read_bytes()).hexdigest() for name in
                             ['scene.npz','objects_gt.json']}}
     if mode in ('diagnostic','active_diagnostic'):
+        from query_syntax import syntax_settings
+        settings['query_syntax'] = syntax_settings()
+        for name in ('query_syntax.py', 'query_rewrite.py', 'size_semantics.py'):
+            settings['code_sha256'][name] = hashlib.sha256((code_dir/name).read_bytes()).hexdigest()
         from rgb_review import input_hashes
         settings['rgb_sha256']=input_hashes(scene_dir,load_objects(selected_path))
         structural_path=scene_dir/'scene_instances.json'
@@ -63,7 +76,7 @@ def experiment_settings(scene_dir, mode, review_limit=6, object_table='pred'):
     if mode=='active_diagnostic':
         from decision_api import JEV_URL, jev_model
         from react_decision import react_backend
-        settings.update(decision_backend=react_backend(),planner_input='text_only',visual_backend='qwen')
+        settings.update(decision_backend=react_backend(),planner_input='text_only',visual_backend=api_provider())
         if settings['decision_backend']=='jev':
             settings.update(jev_model=jev_model(),jev_url=JEV_URL)
         for name in ('react_decision.py','decision_api.py'):
@@ -107,6 +120,7 @@ def run_batch(csv_path, scene, rows, available, output, mode='baseline', review_
             if prediction['query']!=row['query']:raise ValueError('缓存查询不一致')
             if prediction.get('object_table')!=object_table:raise ValueError('缓存物体表来源不一致')
             result.update(predicted_id=prediction['predicted_id'],response=prediction['response'],model=prediction['model'],
+                          prediction_source=prediction.get('prediction_source'),
                           latency_s=prediction.get('latency_s'),pipeline_latency_s=prediction.get('pipeline_latency_s'),
                           api_calls=prediction.get('api_calls'),call_usage=prediction.get('call_usage'),
                           finish_reason=prediction.get('finish_reason'),images=prediction.get('images',[]))

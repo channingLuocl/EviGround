@@ -173,7 +173,11 @@ class RealSceneTests(unittest.TestCase):
         self.assertNotIn('the correct one facing the windows',messages[0]['content'])
         self.assertIn('scope',messages[0]['content'])
         self.assertIn('"Target":["category"]',messages[0]['content'])
-        self.assertEqual(json.loads(messages[1]['content']),{'description':query})
+        payload=json.loads(messages[1]['content'])
+        self.assertEqual(payload['description'],query)
+        if 'syntax_hints' in payload:
+            self.assertEqual(payload['syntax_hints']['backend'],'spacy')
+            self.assertTrue(payload['syntax_hints']['dependencies'])
         self.assertTrue(api.call_args.kwargs['json_mode'])
 
     def scene(self, root):
@@ -292,6 +296,77 @@ class RealSceneTests(unittest.TestCase):
             self.assertEqual(record['error_stage'],'react_configuration')
             self.assertEqual(record['calls'],[])
             self.assertFalse((out/'prediction.json').exists())
+
+    def test_http_400_failure_is_saved_and_never_writes_prediction(self):
+        diagnostic = {
+            'failure_kind': 'http_4xx', 'http_status': 400,
+            'response_body': '{"error":"invalid request"}',
+            'request_id': 'req-400', 'model': 'qwen-test',
+            'request_summary': {'endpoint': 'https://example.invalid/v1/chat/completions',
+                                'model': 'qwen-test', 'message_count': 1,
+                                'contains_images': False},
+        }
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.scene(root); out = root / 'http400'
+            with patch('real_scene.chat', side_effect=QwenAPIError(
+                    'Qwen API 返回 HTTP 400', diagnostic=diagnostic)):
+                with self.assertRaises(QwenAPIError):
+                    run_query(root, 'water cooler', out, mode='geometry')
+            record = json.loads((out / 'run.json').read_text())
+            self.assertEqual(record['error_stage'], 'parse_query')
+            self.assertEqual(record['error_diagnostic']['failure_kind'], 'http_4xx')
+            self.assertEqual(record['error_diagnostic']['http_status'], 400)
+            self.assertEqual(record['error_diagnostic']['request_id'], 'req-400')
+            self.assertFalse((out / 'prediction.json').exists())
+            self.assertEqual(len(record['calls']), 1)
+            self.assertEqual(record['calls'][0]['api_diagnostic']['http_status'], 400)
+
+    def test_active_visual_http_400_stops_partial_trace_without_retry_or_prediction(self):
+        parsed={'Target':['water cooler'],'Anchor':[],'Relations':[],
+                'Observer':{},'Attributes':[{'category':'water cooler','phrase':'white'}],
+                'Unhandled':[]}
+        diagnostic={'failure_kind':'http_4xx','http_status':400,
+                    'response_body':'invalid image request','request_id':'visual-400',
+                    'model':'qwen-test','request_summary':{'contains_images':True},
+                    'stage':'http_response'}
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.scene(root);out=root/'visual400'
+            (root/'objects_gt.json').write_text((root/'objects.json').read_text())
+            with patch('real_scene.chat',return_value=reply(json.dumps(parsed))), \
+                 patch('active_diagnostic.chat',side_effect=[
+                    reply(json.dumps({'action':'evidence','dimension':'appearance',
+                                      'reason':'check white surface'})),
+                    QwenAPIError('Qwen API 返回 HTTP 400',diagnostic=diagnostic),
+                 ]) as api:
+                with self.assertRaises(QwenAPIError):
+                    run_query(root,'white water cooler',out,mode='active_diagnostic',object_table='gt')
+            self.assertEqual(api.call_count,2)
+            record=json.loads((out/'run.json').read_text())
+            self.assertEqual(record['error_stage'],'active_evidence_visual_check')
+            self.assertEqual(record['error_diagnostic']['client_stage'],'http_response')
+            self.assertEqual(record['active_diagnostic']['diagnosis_after_step']['candidate_ids'],[1])
+            self.assertFalse((out/'prediction.json').exists())
+
+    def test_failed_run_redacts_partial_call_response_and_exception_text(self):
+        parsed = {'Target': ['water cooler'], 'Anchor': [], 'Relations': [],
+                  'Observer': {}, 'Attributes': [], 'Unhandled': [],
+                  'echo': {'api_key': 'configured-secret', 'base64': 'QUJDRA=='}}
+        diagnostic = {'failure_kind': 'http_4xx', 'http_status': 400,
+                      'response_body': 'invalid request', 'request_id': 'partial-400',
+                      'model': 'mock', 'request_summary': {'contains_images': False}}
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.scene(root); out = root / 'partial400'
+            with patch.dict('os.environ', {'SEEGROUND_API_KEY': 'configured-secret'}), \
+                 patch('real_scene.chat', return_value=reply(json.dumps(parsed))), \
+                 patch('active_diagnostic.chat', side_effect=QwenAPIError(
+                     'HTTP 400 Bearer configured-secret', diagnostic=diagnostic)):
+                with self.assertRaises(QwenAPIError):
+                    run_query(root, 'water cooler', out, mode='active_diagnostic')
+                saved = (out / 'run.json').read_text()
+            self.assertNotIn('configured-secret', saved)
+            self.assertNotIn('QUJDRA==', saved)
+            self.assertIn('partial-400', saved)
+            self.assertFalse((out / 'prediction.json').exists())
 
     def test_geometry_does_not_replace_missing_anchor_with_target(self):
         with tempfile.TemporaryDirectory() as td:

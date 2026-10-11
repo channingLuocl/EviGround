@@ -10,7 +10,7 @@ from pathlib import Path
 from appearance_evidence import required_visual_attributes
 from batch_nr3d import summarize
 from diagnostic import viewpoint_evidence
-from qwen_api import _settings
+from qwen_api import _settings, api_provider, api_config_summary
 from react_decision import validate_react_config
 from run import ROOT
 from run_size_validation import run_case, verify_source, write_json
@@ -31,6 +31,7 @@ def digest(path):
 
 
 def preflight(manifest, scene_root, review_limit):
+    from query_syntax import syntax_settings
     rows = manifest['rows']
     if not rows or len({row['csv_row'] for row in rows}) != len(rows):
         raise ValueError('Sample CSV rows must be nonempty and unique')
@@ -57,12 +58,15 @@ def preflight(manifest, scene_root, review_limit):
         structural = directory / 'scene_instances.json'
         hashes[scene]['scene_instances.json'] = (digest(structural)
                                                   if structural.is_file() else None)
-    models = {'decision_backend': backend, 'visual_backend': 'qwen',
-              'qwen_model': model, 'qwen_base_url': base}
+    provider = api_provider()
+    models = {'decision_backend': backend, 'visual_backend': provider,
+              provider + '_model': model, provider + '_base_url': base,
+              'api_config': api_config_summary()}
     if backend == 'jev':
         from decision_api import JEV_URL, jev_model
         models.update(jev_model=jev_model(), jev_url=JEV_URL)
     return {'selection': manifest, 'review_limit': review_limit,
+            'query_syntax': syntax_settings(),
             'mode': 'active_diagnostic', 'object_table': 'gt',
             'query_target_id_supplied_to_model': False,
             'gt_categories_supplied_to_model': True,
@@ -222,7 +226,7 @@ def main():
     parser.add_argument('--manifest', type=Path, default=ROOT / 'local/validation/nr3d_module_acceptance_25.json')
     parser.add_argument('--scene-root', type=Path, default=ROOT / 'local_outputs')
     parser.add_argument('--output', type=Path)
-    parser.add_argument('--workers', type=int, default=2)
+    parser.add_argument('--workers', type=int, default=10)
     parser.add_argument('--review-limit', type=int, default=6)
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--retry-errors', action='store_true')
@@ -262,7 +266,7 @@ def main():
             result = future.result()
             saved[result['csv_row']] = result
             report(output, list(saved.values()), manifest['rows'])
-            print(json.dumps({key: result.get(key) for key in ('csv_row', 'module', 'scene',
+            print(json.dumps({key: result.get(key) for key in ('csv_row', 'module', 'scene', 'prediction_source',
                 'predicted_id', 'target_id', 'accepted', 'decision_status', 'final_missing', 'error')},
                 ensure_ascii=False), flush=True)
     print(json.dumps(report(output, list(saved.values()), manifest['rows']), ensure_ascii=False, indent=2))

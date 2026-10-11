@@ -164,9 +164,28 @@ class DecisionTests(unittest.TestCase):
              patch('decision_api.requests.post',return_value=Mock(ok=False,status_code=400,
                                                                    json=lambda:body)):
             with self.assertRaises(DecisionAPIError) as error:decide('jev',state,questions)
-        self.assertIn('invalid question criteria',str(error.exception))
+        self.assertEqual(error.exception.diagnostic['failure_kind'],'http_4xx')
+        self.assertEqual(error.exception.diagnostic['http_status'],400)
+        self.assertIn('invalid question criteria',str(error.exception.diagnostic['response_body']))
         self.assertEqual(error.exception.response_data,{'status_code':400,'body':body})
         self.assertNotIn('secret-fixture',str(error.exception))
+
+    def test_jev_400_is_redacted_and_not_retried(self):
+        run,objects=fixture();state,questions=build_input(run,objects)
+        body={'error':'invalid criteria','Authorization':'Bearer secret-fixture',
+              'image_url':'data:image/png;base64,QUJDRA=='}
+        with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}), \
+             patch('decision_api.requests.post',return_value=Mock(ok=False,status_code=400,
+                   json=lambda:body,headers={'x-request-id':'jev-400'})) as post:
+            with self.assertRaises(DecisionAPIError) as error:
+                decide('jev',state,questions)
+        self.assertEqual(post.call_count,1)
+        diagnostic=error.exception.diagnostic
+        self.assertEqual(diagnostic['request_id'],'jev-400')
+        self.assertEqual(diagnostic['failure_kind'],'http_4xx')
+        saved=json.dumps(diagnostic)
+        self.assertNotIn('secret-fixture',saved)
+        self.assertNotIn('QUJDRA==',saved)
 
     def test_jev_rejects_non_finite_state_before_network(self):
         state={'bad':float('nan')};questions={'q':{'type':'choice','instructions':'pick',

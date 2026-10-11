@@ -83,12 +83,14 @@ def full_category_size_comparison(query, parsed):
     category = canonical_category(targets[0])
     words = '|'.join(sorted(SIZE_WORDS, key=len, reverse=True))
     noun = category_pattern(category)
+    syntax_enabled = parsed.get('query_syntax', {}).get('backend') == 'spacy'
+    scene_scope = r'(?P<scene_scope>\s+in\s+the\s+room)?' if syntax_enabled else ''
     match = re.fullmatch(r'\s*(?:(?:choose|select|find|pick|click)\s+|it\s+is\s+)?'
                          r'(?:the\s+)?(?P<word>' + words + r')\s+'
                          r'(?:(?P<scope>of\s+the\s+(?P<two>two\s+)?)?'
                          r'(?P<category>' + noun + r')|'
                          r'(?P<paired_category>' + noun + r')\s+of\s+the\s+(?P<end_two>two))'
-                         r'\s*[.!?]?\s*', query, re.I)
+                         + scene_scope + r'\s*[.!?]?\s*', query, re.I)
     if (not match or category != _category(targets[0]) or
             (match['scope'] and not match['two'] and match['category'].casefold() == category)):
         return None
@@ -109,7 +111,13 @@ def full_category_size_comparison(query, parsed):
     pair = bool(match['two'] or match['end_two'])
     return {'category': targets[0], 'role': 'target', 'phrase': match['word'],
             'comparison_scope': 'explicit_pair' if pair else 'full_category',
-            'scope_phrase': query.strip(), **({'required_member_count': 2} if pair else {})}
+            'scope_phrase': query.strip(), **({'required_member_count': 2} if pair else {}),
+            **({'source_phrase': query.strip(),
+                'source_span': [len(query) - len(query.lstrip()), len(query.rstrip())],
+                'scene_scope': 'supplied_scene' if match.groupdict().get('scene_scope') else None,
+                **({'scene_scope_assumption': 'in the room refers to the supplied NR3D scene'}
+                   if match.groupdict().get('scene_scope') else {})}
+               if syntax_enabled else {})}
 
 
 def _attribute_constraint(attribute, query, target_category):
@@ -242,6 +250,11 @@ def rewrite_query(query, parsed):
             continue
         compiled = _attribute_constraint(attribute, query, target_category)
         if compiled:
+            if compiled.get('size_conditions') and parsed.get('query_syntax', {}).get('backend') == 'spacy':
+                from diagnostic import size_conditions
+                words = {spec['word'] for spec in compiled['size_conditions']}
+                compiled['size_conditions'] = [spec for spec in size_conditions(parsed, target_category)
+                                               if spec['word'] in words]
             constraints.append(compiled)
         elif (isinstance(attribute, dict) and _quote(query, attribute.get('phrase'))
               and re.search(CONTAINMENT_PATTERN, attribute['phrase'], re.I)):
@@ -295,6 +308,8 @@ def rewrite_query(query, parsed):
         'references': references,
         'constraints': constraints,
         'unresolved': unresolved,
+        'query_syntax': parsed.get('query_syntax'),
+        'condition_coverage': parsed.get('condition_coverage', []),
         'language_reference': {
             'type': 'observer',
             'origin': dict(origin),

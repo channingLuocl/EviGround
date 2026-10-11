@@ -110,6 +110,10 @@ def review_need(need, crops, calls):
         result.update(reason='RGB review failed; no conclusion', error=str(exc))
         if not calls or calls[-1].get('stage') != 'rgb_review' or calls[-1].get('object_id') != oid:
             calls.append({'stage':'rgb_review','object_id':oid,'error':str(exc)})
+        if isinstance(exc, QwenAPIError) and getattr(exc, 'diagnostic', None):
+            calls[-1]['api_diagnostic'] = dict(exc.diagnostic)
+            calls[-1]['failure_kind'] = exc.diagnostic.get('failure_kind', 'response_parse')
+            raise
     return result
 
 

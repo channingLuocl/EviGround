@@ -1,5 +1,7 @@
 # SeeGround 本地 API 试运行（Mac）
 
+v3 的实现说明、离线验收结果及 `--workers 10` 命令见 [README_V3.md](README_V3.md)。
+
 原工作环境已建立独立 `.venv`（不随仓库上传），无需 CUDA、PyTorch3D 或本地大模型。原论文代码保持原样，新增 `local/` 提供 CPU 点云预览和图片＋物体表到 API 的最小定位入口。
 
 ## 当前验证状态

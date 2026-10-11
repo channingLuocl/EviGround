@@ -653,7 +653,8 @@ class DiagnosticTests(unittest.TestCase):
         windows = [obj(1, 'window', -1., 0.), obj(2, 'window', 1., 0.)]
         result = diagnose(data, windows, windows, [0., 0., .5], supported(windows),
                           trusted_categories=True)
-        self.assertEqual(result['candidate_ids'], [])
+        self.assertEqual(result['candidate_ids'], [1, 2])
+        self.assertTrue(all(not row['removal_allowed'] for row in result['candidate_removal_audit']))
         self.assertEqual(result['status'], 'missing')
         self.assertIn('requires one bound target category', result['missing'])
 
@@ -811,6 +812,8 @@ class DiagnosticTests(unittest.TestCase):
                     'relation': 'nearest', 'phrase': 'nearest the tv',
                     'metric': 'horizontal', 'anchor_id': 4, 'tie_tolerance_m': .02}
         data = parsed(query, [relation])
+        data['_verified_reference_bindings'] = {
+            'tv': {'id': 4, 'status': 'bound', 'source': 'synthetic verified instance identity'}}
         data['query_rewrite'] = rewrite_query(query, data)
         result = diagnose(data, targets + anchors, targets, [0, 0, .5],
                           supported(targets + anchors))
@@ -1279,7 +1282,9 @@ class DiagnosticTests(unittest.TestCase):
         data=validate_structure(query, raw)
         result=diagnose(data, objects, objects[:1], [0,0,.5], supported(objects),
                         trusted_categories=True)
-        self.assertEqual(result['candidate_ids'], [])
+        self.assertEqual(result['candidate_ids'], [1])
+        self.assertEqual(result['status'], 'missing')
+        self.assertTrue(all(not row['removal_allowed'] for row in result['candidate_removal_audit']))
         self.assertIn('between reference instances are not distinctly bound: table',
                       result['missing'])
 

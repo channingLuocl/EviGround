@@ -31,6 +31,7 @@ def cabinet(oid, width):
 
 def measurement(obj):
     return {'id': obj['bbox_id'], 'status': 'known',
+            'source': 'synthetic complete oriented cabinet measurements',
             'measurement_reliability': 'usable',
             'volume_m3': obj['bbox_3d'][3], 'height_m': 1.,
             'oriented_volume_m3': obj['bbox_3d'][3],

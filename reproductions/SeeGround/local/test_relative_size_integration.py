@@ -121,7 +121,8 @@ class RelativeSizeIntegrationTests(unittest.TestCase):
         self.assertEqual([e['status'] for e in observation['candidate_evidence']], ['unknown'])
         self.assertEqual(applied['candidate_ids'], [10])
         self.assertTrue(applied['pending_size_conditions'])
-        self.assertIn('descriptive tall', observation['size_constraints'][0]['reason'])
+        self.assertEqual(observation['size_constraints'][0]['scope_status'], 'unknown')
+        self.assertIn('not fully bound', observation['size_constraints'][0]['reason'])
         xyz, ids = cloud_for(objects)
         for limit in (0, 2):
             with self.subTest(limit=limit):

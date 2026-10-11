@@ -37,6 +37,7 @@ def evaluate(row, prediction, log):
         raise ValueError(f'Prediction provenance mismatch: {prediction}')
     trace = data.get('active_trace', {})
     return {**row, 'predicted_id': data.get('predicted_id'),
+            'prediction_source': data.get('prediction_source'),
             'correct': data.get('predicted_id') == row['target_id'],
             'accepted': data.get('accepted'), 'decision_status': data.get('decision_status'),
             'missing': trace.get('final_evidence_state', {}).get('missing', []),
@@ -96,7 +97,7 @@ def main():
                         default=ROOT / 'local/validation/nr3d_size_300.json')
     parser.add_argument('--scene-root', type=Path, default=ROOT / 'local_outputs')
     parser.add_argument('--output', type=Path)
-    parser.add_argument('--workers', type=int, default=4)
+    parser.add_argument('--workers', type=int, default=10)
     parser.add_argument('--review-limit', type=int, default=3)
     parser.add_argument('--limit', type=int, help='Run the first N; omit to resume the whole selection')
     parser.add_argument('--retry-errors', action='store_true', help='Retry cached failed API/process runs')
@@ -129,6 +130,8 @@ def main():
                for r in selected if r['scene'] == scene):
             raise ValueError(f'NR3D candidate IDs missing in {scene}')
     source = ROOT / 'local_outputs/downloads/nr3d_official.csv'
+    from qwen_api import api_config_summary
+    from query_syntax import syntax_settings
     source_check = verify_source(manifest, source)
     if source_check['status'] == 'missing':
         print(f'Original NR3D CSV not found at {source}; using the manifest hash for preflight',
@@ -138,6 +141,8 @@ def main():
     output = (args.output or ROOT / 'local_outputs' /
               ('nr3d_size_300_' + datetime.now().strftime('%Y%m%d_%H%M%S'))).resolve()
     settings = {'selection': manifest, 'review_limit': args.review_limit,
+        'query_syntax': syntax_settings(),
+        'api_config': api_config_summary(),
         'scene_root': str(args.scene_root.resolve()), 'object_table': 'gt',
         'mode': 'active_diagnostic',
         'models': {key: os.getenv(key, '') for key in (
@@ -163,7 +168,7 @@ def main():
             results.append(result)
             report(output, results, len(rows))
             print(json.dumps({key: result.get(key) for key in (
-                'csv_row', 'scene', 'predicted_id', 'target_id', 'correct', 'accepted',
+                'csv_row', 'scene', 'predicted_id', 'prediction_source', 'target_id', 'correct', 'accepted',
                 'decision_status', 'missing', 'error')}, ensure_ascii=False), flush=True)
     print(json.dumps(report(output, results, len(rows)), ensure_ascii=False, indent=2))
     print(f'Results: {output / "results.json"}')

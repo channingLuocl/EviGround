@@ -59,5 +59,9 @@ def check_categories(names, candidates, xyz, rgb, ids, out, calls):
             check.update(verdict='uncertain', reason='review failed; no category conclusion', error=str(exc))
             if not calls or calls[-1].get('object_id') != oid:
                 calls.append({'stage':'category_review','object_id':oid,'error':str(exc)})
+            if getattr(exc, 'diagnostic', None):
+                calls[-1]['api_diagnostic'] = dict(exc.diagnostic)
+                calls[-1]['failure_kind'] = exc.diagnostic.get('failure_kind', 'response_parse')
+                raise
         result['checks'].append(check)
     return result

@@ -3,17 +3,20 @@ import json
 import os
 
 from decision_api import DecisionAPIError, decide, jev_model
+from qwen_api import api_provider
 
 
 def react_backend():
     backend = os.getenv('SEEGROUND_REACT_BACKEND', 'jev').strip()
-    if backend not in ('jev', 'qwen'):
-        raise ValueError('SEEGROUND_REACT_BACKEND must be jev or qwen')
+    if backend not in ('jev', 'qwen', 'openai'):
+        raise ValueError('SEEGROUND_REACT_BACKEND must be jev, qwen or openai')
     return backend
 
 
 def validate_react_config():
     backend = react_backend()
+    if backend in ('qwen', 'openai') and backend != api_provider():
+        raise ValueError('SEEGROUND_REACT_BACKEND must match SEEGROUND_API_PROVIDER')
     if backend == 'jev' and (not os.getenv('TYPESAFE_API_KEY', '').strip() or not jev_model()):
         raise ValueError('JEV ReAct requires TYPESAFE_API_KEY and SEEGROUND_JEV_MODEL; no Qwen fallback')
     return backend
@@ -177,6 +180,8 @@ def jev_action(state, instructions, call, calls):
         result = decide('jev', request_state, questions)
     except DecisionAPIError as exc:
         call['error_response'] = exc.response_data
+        if exc.diagnostic:
+            call['api_diagnostic'] = dict(exc.diagnostic)
         raise
     call.update(model=result['model'], answers=result['answers'], usage=result.get('usage'),
                 latency_s=result['latency_s'], validation_warnings=result['validation_warnings'])
@@ -202,6 +207,8 @@ def jev_action(state, instructions, call, calls):
             target_call['error'] = str(exc)
             if isinstance(exc, DecisionAPIError):
                 target_call['error_response'] = exc.response_data
+                if exc.diagnostic:
+                    target_call['api_diagnostic'] = dict(exc.diagnostic)
             raise
         target_call.update(model=target['model'], answers=target['answers'], usage=target.get('usage'),
                            latency_s=target['latency_s'], validation_warnings=target['validation_warnings'])

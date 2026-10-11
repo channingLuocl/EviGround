@@ -1577,7 +1577,8 @@ class ActiveDiagnosticTests(unittest.TestCase):
                 query, parsed_query, objects, objects, objects[:2], xyz,
                 np.zeros_like(xyz, dtype=np.uint8), ids, Path(directory), [], {}, 2, True)
         self.assertFalse(result['accepted'])
-        self.assertIsNone(result['predicted_id'])
+        self.assertEqual(result['predicted_id'], 2)
+        self.assertEqual(result['prediction_source'], 'singleton_fallback')
         self.assertEqual(result['decision_status'], 'missing')
         self.assertEqual(result['active_trace']['final_candidate_ids'], [2])
         self.assertEqual([h['candidate_ids'] for h in result['diagnosis']['hypotheses']],
@@ -1590,7 +1591,12 @@ class ActiveDiagnosticTests(unittest.TestCase):
             'hypotheses': [{'candidate_ids': [1]}, {'candidate_ids': [2]}],
         }
         apply_computed_evidence(diagnosis, [
-            {'candidate_id': 1, 'status': 'fail'},
+            {'candidate_id': 1, 'status': 'fail',
+             'source_quote': 'the larger window', 'target_role': 'target',
+             'role_binding_status': 'bound', 'comparison_scope_ids': [1, 2],
+             'comparison_scope_status': 'bound',
+             'measurement_source': 'synthetic reliable window face measurements',
+             'explicit_fail_criterion': 'candidate 1 face area is below the larger-window threshold'},
             {'candidate_id': 2, 'status': 'pass'},
         ], 'size')
         self.assertEqual(diagnosis['candidate_ids'], [2])
@@ -1598,6 +1604,54 @@ class ActiveDiagnosticTests(unittest.TestCase):
         self.assertEqual(diagnosis['status'], 'ambiguous')
         self.assertEqual([item['candidate_ids'] for item in diagnosis['hypotheses']],
                          [[], [2]])
+        audit = diagnosis['active_computed_evidence'][0]['candidate_removal_audit'][0]
+        self.assertTrue(audit['removal_allowed'])
+        self.assertEqual(audit['comparison_scope_ids'], [1, 2])
+
+    def test_unknown_computed_update_cannot_drop_gate_preserved_candidate(self):
+        diagnosis = {
+            'candidate_ids': [1, 2], 'stable_candidate_ids': [1], 'missing': [],
+            # Candidate 2 was retained by the initial removal gate because its
+            # relation hypothesis was incomplete.  The next operation has no
+            # new fail proof and cannot erase it by recomputing this union.
+            'hypotheses': [{'candidate_ids': [1]}],
+        }
+        update = apply_computed_evidence(diagnosis, [
+            {'candidate_id': 1, 'status': 'unknown'},
+            {'candidate_id': 2, 'status': 'unknown'},
+        ], 'position')
+        self.assertEqual(update['removed_ids'], [])
+        self.assertEqual(update['after'], [1, 2])
+        self.assertEqual(diagnosis['candidate_ids'], [1, 2])
+        audit = diagnosis['active_computed_evidence'][0]['candidate_removal_audit']
+        self.assertTrue(all(not item['removal_allowed'] for item in audit))
+
+    def test_unreviewed_reference_cannot_be_removed_by_position_or_distance_refresh(self):
+        objects = [obj(1, 'window', 0, 0, 2), obj(2, 'window', 4, 0, -.5),
+                   obj(7, 'table', 0, 0)]
+        for dimension, relation, quote in (
+                ('position', 'above', 'above the red table'),
+                ('distance', 'nearest', 'nearest the red table')):
+            with self.subTest(dimension=dimension):
+                query = 'the window ' + quote
+                parsed_query = validate_structure(query, {
+                    **parsed(), 'Anchor': ['table'],
+                    'Relations': [{'target_category': 'window', 'anchor_category': 'table',
+                                   'relation': relation, 'phrase': quote}],
+                    'Attributes': [{'category': 'table', 'role': 'reference', 'phrase': 'red'}],
+                })
+                diagnosis = diagnose(parsed_query, objects, objects[:2], [0, 0, 0],
+                                     trusted_categories=True)
+                self.assertEqual(diagnosis['candidate_ids'], [1, 2])
+                self.assertTrue(any(need['role'] == 'reference'
+                                    for need in diagnosis['visual_needs']))
+                observation = compute_observation(dimension, query, parsed_query, diagnosis,
+                                                  objects[:2], objects)
+                evidence = observation['candidate_evidence']
+                self.assertTrue(all(item['status'] == 'unknown' for item in evidence))
+                update = apply_computed_evidence(diagnosis, evidence, dimension)
+                self.assertEqual(update['removed_ids'], [])
+                self.assertEqual(update['after'], [1, 2])
 
     def test_unbound_between_references_preserve_candidates_after_position(self):
         objects = [obj(8, 'trash can', 0, 0), obj(9, 'trash can', 1, 0),
@@ -1676,7 +1730,14 @@ class ActiveDiagnosticTests(unittest.TestCase):
     def test_visual_evidence_preserves_computed_exclusions(self):
         def compute(*args):
             return {'tool': 'compute', 'dimension': 'position', 'candidate_evidence': [
-                {'candidate_id': 1, 'status': 'fail'}, {'candidate_id': 2, 'status': 'pass'}]}
+                {'candidate_id': 1, 'status': 'fail',
+                 'source_quote': 'window above the table', 'target_role': 'target',
+                 'reference_role': 'reference', 'role_binding_status': 'bound',
+                 'comparison_scope_ids': [1, 7],
+                 'comparison_scope_status': 'bound',
+                 'measurement_source': 'synthetic annotated-box relation geometry',
+                 'explicit_fail_criterion': 'candidate 1 bottom is below the bound table top'},
+                {'candidate_id': 2, 'status': 'pass'}]}
         result, _ = self.run_actions([
             {'action': 'evidence', 'dimension': 'position', 'reason': 'check relation'},
             {'action': 'evidence', 'dimension': 'appearance', 'reason': 'check appearance'},
@@ -1758,11 +1819,14 @@ class ActiveDiagnosticTests(unittest.TestCase):
             'geometry': {
                 'relation_pairs': [],
                 'between_candidate_evidence': [
-                    {'target_id': 1, 'relation_index': 0, 'passing_reference_pairs': [[7, 8]],
+                    {'target_id': 1, 'relation_index': 0, 'phrase': 'between the two tables',
+                     'passing_reference_pairs': [[7, 8]],
                      'unknown_reference_pairs': [], 'failing_reference_pairs': []},
-                    {'target_id': 2, 'relation_index': 0, 'passing_reference_pairs': [],
+                    {'target_id': 2, 'relation_index': 0, 'phrase': 'between the two tables',
+                     'passing_reference_pairs': [],
                      'unknown_reference_pairs': [], 'failing_reference_pairs': [[7, 8]]},
-                    {'target_id': 3, 'relation_index': 0, 'passing_reference_pairs': [],
+                    {'target_id': 3, 'relation_index': 0, 'phrase': 'between the two tables',
+                     'passing_reference_pairs': [],
                      'unknown_reference_pairs': [[7, 8]], 'failing_reference_pairs': []},
                 ],
             },
@@ -1773,6 +1837,13 @@ class ActiveDiagnosticTests(unittest.TestCase):
         update = apply_computed_evidence(diagnosis, evidence, 'position')
         self.assertEqual(update['removed_ids'], [2])
         self.assertEqual(diagnosis['candidate_ids'], [1, 3])
+        audit = diagnosis['active_computed_evidence'][0]['candidate_removal_audit']
+        failed = next(item for item in audit if item['candidate_id'] == 2)
+        unknown = next(item for item in audit if item['candidate_id'] == 3)
+        self.assertTrue(failed['removal_allowed'])
+        self.assertEqual(failed['comparison_scope_ids'], [2, 7, 8])
+        self.assertEqual(failed['source_quote'], 'between the two tables')
+        self.assertFalse(unknown['removal_allowed'])
 
     def test_distance_clauses_with_different_anchors_are_anded(self):
         rankings = [
@@ -1867,10 +1938,13 @@ class ActiveDiagnosticTests(unittest.TestCase):
 
     def test_visual_no_excludes_candidate_with_annotated_categories(self):
         objects = [obj(1, 'window', 0, 0), obj(2, 'window', 2, 0)]
-        initial = diagnose(parsed(), objects, objects, [0, 0, .5], trusted_categories=True)
+        query = validate_structure('the window', parsed())
+        initial = diagnose(query, objects, objects, [0, 0, .5], trusted_categories=True)
         self.assertEqual(initial['candidate_ids'], [1, 2])
-        checked = diagnose(parsed(), objects, objects, [0, 0, .5],
-                           checks=[{'id': 1, 'category': 'window', 'verdict': 'no'}],
+        checked = diagnose(query, objects, objects, [0, 0, .5],
+                           checks=[{'id': 1, 'category': 'window', 'role': 'target',
+                                    'verdict': 'no', 'visibility': 'visible',
+                                    'reason': 'solid wall surface contradicts a window category'}],
                            trusted_categories=True)
         self.assertEqual(checked['candidate_ids'], [2])
         self.assertEqual(checked['status'], 'resolved')

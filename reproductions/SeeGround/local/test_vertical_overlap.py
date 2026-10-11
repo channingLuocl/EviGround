@@ -112,7 +112,8 @@ class VerticalOverlapTests(unittest.TestCase):
                 np.zeros((2, 3), dtype=np.uint8), np.array([1, 2]),
                 Path(directory), [], trace, 2, True)
         self.assertFalse(result['accepted'])
-        self.assertIsNone(result['predicted_id'])
+        self.assertEqual(result['predicted_id'], 1)
+        self.assertEqual(result['prediction_source'], 'singleton_fallback')
         self.assertEqual(result['decision_status'], 'missing')
         self.assertEqual(trace['rejected_actions'], 1)
 

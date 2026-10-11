@@ -7,12 +7,21 @@ import re
 from types import SimpleNamespace
 import numpy as np
 from run import ROOT, load_objects, render, ground
-from qwen_api import chat, parse_json_object, QwenAPIError
+from qwen_api import (chat, parse_json_object, QwenAPIError, _redact, api_provider,
+                      api_config_summary, request_options)
 from evidence import (match_categories, distance_evidence, match_retrieval_categories,
                       distance_rankings, propose_category_checks, validate_distance_relations)
 
 MODES=['baseline','geometry','visual_review','ranked_geometry','category_review','diagnostic','active_diagnostic']
 OBJECT_TABLES={'pred':'objects.json','gt':'objects_gt.json'}
+
+
+def _recorded_api_failure(calls):
+    for call in calls:
+        diagnostic = call.get('api_diagnostic')
+        if diagnostic:
+            return {**diagnostic, 'failure_stage': call.get('stage')}
+    return None
 
 
 def object_table_path(scene_dir, object_table):
@@ -63,7 +72,9 @@ def parse_query(query, mode='baseline', calls=None):
                    'Do not introduce any unstated spatial condition. '
                    'Strip size/color modifiers from category names, including large screen -> screen.')
     if mode=='diagnostic':
-        from diagnostic import PARSER_INSTRUCTIONS
+        from diagnostic import PARSER_INSTRUCTIONS, SYNTAX_PARSER_INSTRUCTIONS
+        from query_syntax import analyze_query
+        syntax = analyze_query(query)
         # A dedicated schema keeps legacy examples and the query out of the instructions.
         prompt=('Parse only the object description in the user JSON. Return one JSON object. '
                 'Do not copy conditions from these instructions. Extract actual category names; '
@@ -85,9 +96,11 @@ def parse_query(query, mode='baseline', calls=None):
                 'Use nearest/farthest only for explicit distance superlatives, never proximity or motion. '
                 'Preserve every condition and its exact quote. Use singular category names without '
                 'appearance modifiers. No observer/category/reference may be invented. '
-                +PARSER_INSTRUCTIONS)
+                +PARSER_INSTRUCTIONS
+                +(SYNTAX_PARSER_INSTRUCTIONS if syntax['backend'] == 'spacy' else ''))
         messages=[{'role':'system','content':prompt},
-                  {'role':'user','content':json.dumps({'description':query},ensure_ascii=False)}]
+                  {'role':'user','content':json.dumps({'description':query,
+                      **({'syntax_hints':syntax} if syntax['backend'] == 'spacy' else {})},ensure_ascii=False)}]
     else:
         messages=[{'role':'user','content':prompt}]
     max_tokens=200 if mode=='baseline' else (1600 if mode=='diagnostic' else 700)
@@ -95,7 +108,8 @@ def parse_query(query, mode='baseline', calls=None):
     if calls is not None:
         calls.append({'stage':'parse_query','response':data['_content'],'usage':data.get('usage'),
                       'latency_s':data['_baseline']['latency_s'],'finish_reason':data.get('_finish_reason'),
-                      'response_format':{'type':'json_object'},'enable_thinking':False})
+                      **request_options(max_tokens,None,True),
+                      **data['_baseline']})
     try:
         obj=parse_json_object(data['_content'])
     except QwenAPIError as exc:
@@ -110,11 +124,16 @@ def parse_query(query, mode='baseline', calls=None):
             'values and conditions; do not add fields, invent missing content or reinterpret '
             'the description. Do not fill in a truncated response.'},
             {'role':'user','content':json.dumps({'description':query,'model_response':data['_content']},ensure_ascii=False)}]
-        data=chat(repair_messages,max_tokens=max_tokens,json_mode=True)
+        try:
+            data=chat(repair_messages,max_tokens=max_tokens,json_mode=True)
+        except QwenAPIError as repair_exc:
+            repair_exc.diagnostic['failure_stage']='parse_query_json_repair'
+            raise
         if calls is not None:
             calls.append({'stage':'parse_query_json_repair','response':data['_content'],'usage':data.get('usage'),
                           'latency_s':data['_baseline']['latency_s'],'finish_reason':data.get('_finish_reason'),
-                          'trigger_error':str(exc),'response_format':{'type':'json_object'},'enable_thinking':False})
+                          'trigger_error':str(exc),**request_options(max_tokens,None,True),
+                          **data['_baseline']})
         if data.get('_finish_reason')!='stop':
             raise QwenAPIError('JSON repair did not complete normally')
         obj=parse_json_object(data['_content'])
@@ -167,11 +186,15 @@ def repair_missing_attributes(query, parsed, calls):
         {'role':'user','content':json.dumps({
             'description':query,'categories':categories,
             'existing_attributes':parsed['Attributes'],'missing':missing},ensure_ascii=False)}]
-    data=chat(messages,max_tokens=600,json_mode=True)
+    try:
+        data=chat(messages,max_tokens=600,json_mode=True)
+    except QwenAPIError as exc:
+        exc.diagnostic['failure_stage']='parse_query_attribute_repair'
+        raise
     call={'stage':'parse_query_attribute_repair','response':data['_content'],
           'usage':data.get('usage'),'latency_s':data['_baseline']['latency_s'],
           'finish_reason':data.get('_finish_reason'),'trigger_missing':missing,
-          'response_format':{'type':'json_object'},'enable_thinking':False}
+          **request_options(600,None,True),**data['_baseline']}
     if calls is not None:
         calls.append(call)
     try:
@@ -240,6 +263,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
     out.mkdir(parents=True,exist_ok=True)
     calls=[]
     record={'query':query,'query_source':query_source,'mode':mode,'calls':calls,
+            'api_config':api_config_summary(),
             'object_table':object_table,'objects_file':objects_path.name,
             'ground_truth_supplied_to_model':object_table=='gt',
             'gt_categories_supplied_to_model':object_table=='gt',
@@ -252,7 +276,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             from react_decision import validate_react_config
             stage='react_configuration'
             record.update(decision_backend=validate_react_config(),planner_input='text_only',
-                          visual_backend='qwen')
+                          visual_backend=api_provider())
         stage='load_scene'
         with np.load(scene_dir/'scene.npz',allow_pickle=False) as cloud:
             xyz,rgb,ids=cloud['xyz'],cloud['rgb'],cloud['ids']
@@ -267,6 +291,12 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             matcher=match_retrieval_categories
         matched_targets=matcher(parsed['Target'],objects)
         matched_anchors=matcher(parsed['Anchor'],geometry_objects)
+        if mode in ('diagnostic','active_diagnostic'):
+            parsed['candidate_generation']={
+                'status':'bound' if matched_targets else 'unknown',
+                'source':'category_retrieval' if matched_targets else 'broad_fallback',
+                'category_pool_ids':[obj['bbox_id'] for obj in matched_targets],
+            }
         targets=matched_targets or objects
         anchors=(matched_anchors or targets) if mode=='baseline' else matched_anchors
         if mode=='active_diagnostic':
@@ -282,10 +312,16 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                           structural_reference_ids=[obj['bbox_id'] for obj in structural])
             prediction=active_ground(query,parsed,objects,geometry_objects,candidates,xyz,rgb,ids,
                                      out,calls,trace,review_limit,object_table=='gt')
-            record.update(diagnosis=prediction['diagnosis'],decision_status=prediction['decision_status'])
+            diagnostic = _recorded_api_failure(calls)
+            if diagnostic:
+                raise QwenAPIError('模型调用失败', diagnostic=diagnostic)
+            record.update(diagnosis=prediction['diagnosis'],decision_status=prediction['decision_status'],
+                          implementation_version='relative-size-v3',
+                          query_syntax=parsed.get('query_syntax', {}),
+                          prediction_source=prediction['prediction_source'])
             prediction.update(mode=mode,object_table=object_table,objects_file=objects_path.name,
                               decision_backend=trace['decision_backend'],planner_input='text_only',
-                              visual_backend='qwen',
+                              visual_backend=api_provider(),
                               gt_categories_supplied_to_model=object_table=='gt',query_target_id_supplied_to_model=False,
                               pipeline_latency_s=round(perf_counter()-started,4),api_calls=len(calls),
                               call_usage=[call.get('usage') for call in calls])
@@ -386,6 +422,9 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             evidence['structural_reference_ids']=[o['bbox_id'] for o in structural]
         if evidence is not None:
             evidence['object_table']=object_table
+        diagnostic = _recorded_api_failure(calls)
+        if diagnostic:
+            raise QwenAPIError('模型调用失败', diagnostic=diagnostic)
         print(json.dumps({'parsed':parsed,'marked_ids':info['marked_ids'],'mode':mode},ensure_ascii=False),flush=True)
         stage='ground'
         prediction=ground(SimpleNamespace(image=str(out/'view.png'),objects=str(objects_path),object_table=object_table,
@@ -414,13 +453,28 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         return prediction
     except (ValueError,OSError,KeyError,IndexError) as exc:
         record['error']=str(exc)
-        record['error_stage']=stage
+        recorded_stage = next((call.get('stage') for call in reversed(calls)
+                               if call.get('api_diagnostic')), None)
+        diagnostic = dict(getattr(exc, 'diagnostic', None) or {})
+        failure_stage = diagnostic.pop('failure_stage', None) or recorded_stage or stage
+        record['error_stage']=failure_stage
         record['error_type']=type(exc).__name__
+        diagnostic.setdefault('failure_kind', 'response_parse' if isinstance(exc, QwenAPIError) else 'runtime')
+        if diagnostic.get('stage'):
+            diagnostic['client_stage'] = diagnostic['stage']
+        diagnostic['stage'] = failure_stage
+        record['error_diagnostic'] = diagnostic
+        failure_call = {'stage': failure_stage, 'error': str(exc),
+                        'failure_kind': diagnostic.get('failure_kind'),
+                        'api_diagnostic': diagnostic}
+        if diagnostic.get('failure_kind') != 'runtime' and not recorded_stage:
+            calls.append(failure_call)
         (out/'prediction.json').unlink(missing_ok=True)
         raise
     finally:
         record['pipeline_latency_s']=round(perf_counter()-started,4)
-        (out/'run.json').write_text(json.dumps(record,ensure_ascii=False,indent=2))
+        saved_record = _redact(record, limit=None) if record.get('error') else record
+        (out/'run.json').write_text(json.dumps(saved_record,ensure_ascii=False,indent=2))
 
 if __name__=='__main__':
     try:main()

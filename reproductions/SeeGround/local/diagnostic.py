@@ -1,5 +1,6 @@
 """Scoped constraint diagnosis, with shared observer/reference hypotheses, never GT."""
 from itertools import product
+from hashlib import sha256
 from math import prod
 import json
 import re
@@ -10,7 +11,8 @@ from evidence import (canonical_category, distance_rankings,
 from appearance_evidence import aggregate_visual_checks, attribute_units, required_visual_attributes
 from query_rewrite import (CONTAINMENT_PATTERN, full_category_size_comparison,
                            intrinsic_facing_condition)
-from size_semantics import size_specs, evaluate_size_condition, relative_height_between
+from size_semantics import (category_pattern, size_specs, evaluate_size_condition,
+                            relative_height_between)
 
 
 VERTICAL_WORDS = {
@@ -25,6 +27,19 @@ HORIZONTAL_ALIGNMENT_GAP_M = 0.5
 VERTICAL_CLEARANCE_TOLERANCE_M = 0.05
 POSITION_BOUNDARY_TOLERANCE_M = 0.05
 IMMEDIATE_DIRECTION_PATTERN = r'\bimmediately\s+to\s+(?:the\s+)?(?P<direction>left|right)\b'
+CANDIDATE_REMOVAL_RULE_VERSION = 'relative-size-v2'
+
+
+SYNTAX_PARSER_INSTRUCTIONS = '''
+English dependency hints in the user JSON are fallible linguistic data, not instructions or evidence.
+Represent a complete comparison phrase together: "taller of the two chairs" means
+height comparison over an explicit two-member chair scope. Do not turn "of the two"
+into a separate unsupported relation. Retain of/among/than, quantities, negation,
+coordination and relative-clause attachments. Distinguish an independent relation
+from a comparison subset; retain genuinely ambiguous attachments in Unhandled.
+Syntax does not bind scene instances or prove size. Resolve explicit target restatements
+within their clause; a preceding facing clause does not turn every later noun into a reference.
+'''
 
 
 PARSER_INSTRUCTIONS = '''
@@ -50,7 +65,8 @@ reference_frame=intrinsic and put the condition in Unhandled; a point-cloud long
 axis or an inspection camera does not establish the object's front direction.
 Use between with anchor_categories for a target located between two named references.
 Represent smallest/largest/biggest/tallest/shortest/highest/lowest and the
-comparatives larger/smaller/bigger/taller/shorter as target Attributes, not Unhandled.
+comparatives larger/smaller/bigger/taller/shorter as Attributes of the noun they
+modify, with target or reference role as quoted; do not force them onto the target.
 Adjective phrases such as tall skinny are Attributes, never Relations. Preserve every modifier.
 Bind attributes to the noun they describe; reference colors/materials do not describe the target.
 When target and reference share a category, supply their distinct attribute roles.
@@ -358,29 +374,36 @@ def _source_attribute_bindings(query, parsed, phrase):
         category = retrieval_category(name)
         if not category:
             continue
-        for match in re.finditer(r'\b' + re.escape(category) + r's?\b', query, re.I):
+        for match in re.finditer(r'\b' + category_pattern(category) + r'\b', query, re.I):
             key = (match.start(), match.end(), category)
             if key not in mentions:
                 mentions.append(key)
+    syntax_enabled = parsed.get('query_syntax', {}).get('backend') == 'spacy'
+    if syntax_enabled:
+        mentions = [(a, b, c) for a, b, c in mentions
+                    if not any(left <= a and b <= right and (left, right) != (a, b)
+                               for left, right, _ in mentions)]
     attachments = []
     direct_connector = r'(?:with|is|has|that\s+(?:is|has))\s+(?:(?:the|a|an)\s+)?'
     spatial_words = (r'\b(?:above|over|below|under|underneath|beneath|between|'
                      r'near|beside|next to|left of|right of|behind|in front of|facing)\b')
+    head_modifiers = _SOURCE_VISUAL_MODIFIERS | {
+        'small', 'smallest', 'smaller', 'large', 'largest', 'larger', 'big',
+        'biggest', 'bigger', 'little', 'skinny', 'narrow', 'thin', 'wide',
+        'thick', 'tall', 'tallest', 'taller', 'high', 'highest', 'short',
+        'shortest', 'shorter', 'low', 'lowest',
+    }
     for attr_match in re.finditer(re.escape(phrase), query, re.I):
         # Parser attributes sometimes include their noun ("smaller trash can").
         # Bind that quoted head exactly as a bare modifier would be bound. A
         # phrase spanning multiple modeled nouns cannot identify one role.
         embedded_nouns = [(a, b, c) for a, b, c in mentions
                           if attr_match.start() <= a and b <= attr_match.end()]
-        head_modifiers = _SOURCE_VISUAL_MODIFIERS | {
-            'small', 'smallest', 'smaller', 'large', 'largest', 'larger', 'big',
-            'biggest', 'bigger', 'little', 'skinny', 'narrow', 'thin', 'wide',
-            'thick', 'tall', 'tallest', 'taller', 'high', 'highest', 'short',
-            'shortest', 'shorter', 'low', 'lowest',
-        }
         for start, end, category in mentions:
+            between_tokens = re.findall(r'\b\w+\b', query[attr_match.end():start].casefold())
             before_noun = (attr_match.end() <= start and
-                           not query[attr_match.end():start].strip())
+                           all(token in head_modifiers for token in between_tokens) and
+                           not re.search(r'[^a-z\s-]', query[attr_match.end():start], re.I))
             gap = query[end:attr_match.start()]
             # Keep a quoted connector/article on either side of the property
             # boundary, but never step through a different modeled noun.
@@ -390,7 +413,9 @@ def _source_attribute_bindings(query, parsed, phrase):
                               (re.fullmatch(r'\s+', gap) and
                                re.match(direct_connector + r'\S', phrase, re.I))))
             if any(attr_match.end() <= noun_start and
-                   not query[attr_match.end():noun_start].strip()
+                   all(token in head_modifiers for token in re.findall(
+                       r'\b\w+\b', query[attr_match.end():noun_start].casefold())) and
+                   not re.search(r'[^a-z\s-]', query[attr_match.end():noun_start], re.I)
                    for noun_start, _, _ in mentions):
                 after_noun = False
             prefix_tokens = re.findall(r'\b\w+\b', query[attr_match.start():start].casefold())
@@ -406,6 +431,12 @@ def _source_attribute_bindings(query, parsed, phrase):
             commands = list(re.finditer(r'\b(?:choose|select|find|pick|click)\b',
                                         query[:start], re.I))
             clause_start = commands[-1].end() if commands else 0
+            if syntax_enabled:
+                restatements = list(re.finditer(
+                    r'\bthe\s+(?:correct|target)\s+(?:object|' + category_pattern(category) +
+                    r')\s+is\s+', query[clause_start:start], re.I))
+                if category in targets and restatements:
+                    clause_start += restatements[-1].end()
             prefix = query[clause_start:start]
             earlier_target = any(clause_start <= a < start and c in targets
                                  for a, _, c in mentions)
@@ -590,6 +621,12 @@ def _condition_records(query, parsed, raw_relations, raw_attributes):
         add(condition_type, phrase, target_role, reference_role,
             binding_status=binding_status,
             evidence_status='missing' if binding_status != 'bound' else 'pending', reason=reason)
+        if condition_type == 'size' and parsed.get('query_syntax', {}).get('backend') == 'spacy':
+            from query_syntax import comparison_hint
+            hints = [comparison_hint(parsed, word, category) for word in
+                     re.findall(r'\b\w+\b', phrase_text)]
+            records[-1]['language_comparisons'] = [hint for hint in hints if hint]
+            records[-1]['scene_binding_status'] = 'pending'
 
     scope_match = re.search(r'\bof the two(?:\s+[a-z-]+)?\b', query, re.I)
     if scope_match and re.search(
@@ -756,7 +793,10 @@ def _condition_records(query, parsed, raw_relations, raw_attributes):
 
 def validate_structure(query, parsed):
     parsed = dict(parsed)
+    from query_syntax import analyze_query
+    parsed['query_syntax'] = analyze_query(query)
     parsed.pop('_size_scope_bindings', None)
+    parsed.pop('_verified_reference_bindings', None)
     parsed['source_query'] = query
     input_relations = parsed.get('Relations', [])
     preflight_missing = []
@@ -806,9 +846,40 @@ def validate_structure(query, parsed):
     if comparison and isinstance(parsed.get('Unhandled'), list):
         parsed['Anchor'] = []
         parsed['Attributes'] = [comparison]
-        parsed['Unhandled'] = [phrase for phrase in parsed['Unhandled']
-                               if not isinstance(phrase, str) or
-                               phrase.strip().rstrip('.!?').casefold() != query.strip().rstrip('.!?').casefold()]
+        covered = []
+        kept = []
+        for phrase in parsed['Unhandled']:
+            covered_phrase = (quoted(query, phrase) if parsed['query_syntax']['backend'] == 'spacy'
+                              else isinstance(phrase, str) and
+                              phrase.strip().rstrip('.!?').casefold() == query.strip().rstrip('.!?').casefold())
+            if covered_phrase:
+                covered.append({'source_quote': phrase, 'covered_by': 'complete_size_comparison',
+                                'source_phrase': query, 'scene_binding_status': 'pending'})
+            else:
+                kept.append(phrase)
+        parsed['Unhandled'] = kept
+        parsed['condition_coverage'] = covered
+    if parsed['query_syntax']['backend'] == 'spacy' and isinstance(parsed.get('Unhandled'), list):
+        # Cover only the quoted cardinal scope. Related appearance or spatial
+        # clauses retain their own obligations, and scene binding stays pending.
+        kept = []
+        for phrase in parsed['Unhandled']:
+            covered = next((hint for hint in parsed['query_syntax']['comparisons']
+                if hint['scope_type'] == 'explicit_set' and hint['required_member_count'] == 2
+                and isinstance(phrase, str) and quoted(query, phrase)
+                and re.fullmatch(r'of\s+the\s+two(?:\s+' + category_pattern(hint['head_category']) + r')?',
+                                 phrase.strip().rstrip('.!?'), re.I)
+                and any(isinstance(attr, dict) and attr.get('role') == 'target'
+                        and retrieval_category(attr.get('category', '')) == retrieval_category(hint['head_category'])
+                        and hint['word'] in re.findall(r'\b\w+\b', attr.get('phrase', '').casefold())
+                        for attr in parsed.get('Attributes', []))), None)
+            if covered:
+                parsed.setdefault('condition_coverage', []).append({
+                    'source_quote': phrase, 'covered_by': 'explicit_comparison_scope',
+                    'source_phrase': covered['source_phrase'], 'scene_binding_status': 'pending'})
+            else:
+                kept.append(phrase)
+        parsed['Unhandled'] = kept
     if len(targets) == 1:
         match = re.fullmatch(
             r'\s*(?:(?:choose|select|find|pick|click)\s+|it\s+is\s+)?(?:the\s+)?'
@@ -1044,10 +1115,19 @@ def validate_structure(query, parsed):
                                  (not explicit_role and category in reference_categories))
         role_ambiguous = (not explicit_role and category in target_categories and
                           category in reference_categories)
+        if (size_specs(attribute.get('phrase', ''), category) and
+                category in target_categories and category in reference_categories and
+                len(source_bindings) != 1 and len(list(re.finditer(
+                    re.escape(attribute.get('phrase', '')), query, re.I))) == 1):
+            role_ambiguous = True
         if (quoted(query, attribute.get('phrase')) and category in bound_categories and
                 ((role_matches and not role_ambiguous) or
                  (inferred_role_matches and not role_ambiguous))):
-            valid_attrs.append(attribute)
+            if not any(retrieval_category(item.get('category', '')) == category and
+                       attribute_role(parsed, item) == attribute_role(parsed, attribute) and
+                       item.get('phrase', '').casefold() == attribute.get('phrase', '').casefold()
+                       for item in valid_attrs):
+                valid_attrs.append(attribute)
         elif quoted(query, attribute.get('phrase')) and role_ambiguous:
             missing.append('attribute target/reference role is ambiguous: ' + attribute.get('phrase', ''))
         elif quoted(query, attribute.get('phrase')):
@@ -1109,10 +1189,12 @@ def validate_structure(query, parsed):
     if re.search(r'\b(smallest|largest|biggest|tallest|shortest|highest|lowest|'
                  r'larger|smaller|bigger|taller|shorter)\b', query, re.I):
         scope_match = re.search(r'\bof the two(?:\s+[a-z-]+)?\b', query, re.I)
-        if scope_match and not any(spec.get('required_member_count') == 2
-                for attr in parsed.get('Attributes', [])
-                for spec in size_specs(attr.get('phrase', ''), targets[0] if len(targets) == 1 else '',
-                                       query=query)):
+        scope_specs = (size_conditions(parsed, targets[0])
+                       if len(targets) == 1 and parsed['query_syntax']['backend'] == 'spacy' else
+                       [spec for attr in parsed.get('Attributes', [])
+                        for spec in size_specs(attr.get('phrase', ''), targets[0] if len(targets) == 1 else '',
+                                               query=query)])
+        if scope_match and not any(spec.get('required_member_count') == 2 for spec in scope_specs):
             missing.append('size comparison scope not bound: ' + scope_match.group())
     direction_query = re.sub(r'\bright\s+(?:above|over|below|under|underneath|beneath)\b', '', query, flags=re.I)
     if re.search(r'\b(left|right|ahead|behind)\b', direction_query, re.I) and not any(
@@ -1323,6 +1405,39 @@ def size_conditions(parsed, category, role='target'):
             continue
         for spec in size_specs(attribute.get('phrase', ''), category, query=query,
                                role=role, source=attribute):
+            from query_syntax import comparison_hint
+            hint = comparison_hint(parsed, spec['word'], category)
+            if hint:
+                spec.update(source_phrase=hint['source_phrase'], source_span=hint['source_span'],
+                            syntax_scope_type=hint['scope_type'])
+                if hint.get('required_member_count'):
+                    spec['required_member_count'] = hint['required_member_count']
+            if attribute.get('source_phrase') == query.strip() and attribute.get('comparison_scope'):
+                spec.update(scope_kind=attribute['comparison_scope'],
+                            scope_phrase=attribute['scope_phrase'])
+                if attribute.get('required_member_count'):
+                    spec['required_member_count'] = attribute['required_member_count']
+            # A post-noun relation can identify a local comparison subset.  A
+            # category match alone does not bind that subset, even if the
+            # parser omitted the relation or supplied a scene-wide pool.
+            if spec.get('scope_kind') == 'full_category' and spec['form'] != 'superlative':
+                noun = re.escape(retrieval_category(category))
+                dependency = re.search(
+                    r'\b' + re.escape(spec['word']) + r'\s+(?:[a-z-]+\s+)*?' + noun +
+                    r's?\s+(?P<scope>(?:that|which|on|in|at|near|beside|between|behind|'
+                    r'above|below|across|next\s+to|with)\b[^.!?;,]*)', query, re.I)
+                if dependency:
+                    spec.update(scope_kind='unbound_explicit_scope',
+                                scope_phrase=dependency['scope'].strip(),
+                                scope_binding_status='unknown',
+                                scope_binding_reason=('comparison modifier attachment is ambiguous'
+                                    if hint else 'comparison scope depends on an unbound quoted relation'))
+            if hint and hint['attachment'] == 'restrictive_subset':
+                spec.update(scope_kind='relation_subset',
+                            scope_relation_quotes=[m['text'] for m in hint['modifiers']],
+                            scope_phrase=hint['scope_phrase'])
+                if hint.get('required_member_count'):
+                    spec['required_member_count'] = hint['required_member_count']
             if not any(c['word'] == spec['word'] and c['role'] == role for c in conditions):
                 conditions.append(spec)
     return conditions
@@ -1360,6 +1475,7 @@ def appearance_checks_for(checks, parsed, category, role='target'):
 def size_condition_scope(parsed, objects, category, spec, checks=(), role='target'):
     """Every predicate binds its pool from the source, before target filtering."""
     pool = match_retrieval_categories([category], objects)
+    category_pool_missing = not pool
     record = {'status': 'bound', 'selected_ids': sorted(o['bbox_id'] for o in pool),
               'source': 'complete supplied category pool', 'unknown_ids': []}
     if bool(spec.get('scope_modifiers')):
@@ -1369,14 +1485,70 @@ def size_condition_scope(parsed, objects, category, spec, checks=(), role='targe
         if subset:
             record.update(subset)
         record['source'] = 'explicit quoted appearance subset'
+    if spec.get('scope_kind') == 'relation_subset':
+        original_pool = list(pool)
+        proofs = []
+        for quote in spec.get('scope_relation_quotes', []):
+            relation_quote = re.sub(r'^(?:that|which)\s+(?:is|are)\s+', '', quote, flags=re.I)
+            relations = [r for r in parsed.get('Relations', [])
+                         if r.get('relation') in ('above', 'below')
+                         and retrieval_category(r.get('target_category', '')) == retrieval_category(category)
+                         and relation_quote.casefold() in r.get('phrase', '').casefold()]
+            if len(relations) != 1:
+                record.update(status='unknown', unknown_ids=[o['bbox_id'] for o in pool],
+                              reason='quoted comparison subset relation is unsupported or ambiguous')
+                break
+            relation = relations[0]
+            anchor_category = relation['anchor_category']
+            anchors = match_retrieval_categories([anchor_category], objects)
+            anchors, anchor_scope = _attribute_comparison_pool(
+                parsed, anchors, anchor_category, checks, 'reference')
+            if len(anchors) != 1 or (anchor_scope and anchor_scope['status'] != 'bound'):
+                record.update(status='unknown', unknown_ids=[o['bbox_id'] for o in pool],
+                              reason='comparison subset reference is not uniquely bound')
+                break
+            states = {o['bbox_id']: _vertical_status(_pair_geometry(o, anchors[0]), relation['relation'])
+                      for o in pool}
+            proofs.extend({'candidate_id': oid, 'status': state, 'source_quote': quote,
+                           'anchor_id': anchors[0]['bbox_id'], 'relation': relation['relation']}
+                          for oid, state in states.items())
+            pool = [o for o in pool if states[o['bbox_id']] != 'fail']
+            unknown = [oid for oid, state in states.items() if state == 'unknown']
+            if unknown:
+                record.update(status='unknown', unknown_ids=unknown,
+                              reason='comparison subset contains unresolved relation members')
+                break
+        if not spec.get('scope_relation_quotes'):
+            record.update(status='unknown', unknown_ids=[o['bbox_id'] for o in original_pool],
+                          reason='comparison subset has no quoted relation')
+        record.update(selected_ids=sorted(o['bbox_id'] for o in pool),
+                      source='quoted relation comparison subset', member_evidence=proofs)
     category_scope = size_category_scope(pool)
     if category_scope:
         record.update(category_scope)
+    if spec.get('scope_kind') == 'unbound_explicit_scope':
+        record.update(status='unknown', unknown_ids=record['selected_ids'],
+                      source='unbound quoted comparison scope',
+                      reason=spec.get('scope_binding_reason') or
+                          'quoted comparison scope is not supported or fully bound')
+    generation = parsed.get('candidate_generation', {})
+    if (role == 'target' and isinstance(generation, dict) and
+            generation.get('source') == 'broad_fallback' and generation.get('status') != 'bound'):
+        record.update(status='unknown', unknown_ids=record['selected_ids'],
+                      source='unverified broad fallback',
+                      reason='broad fallback does not bind a size comparison category')
     if spec.get('required_member_count') and len(pool) != spec['required_member_count']:
         record.update(status='unknown', unknown_ids=record['selected_ids'],
-                      reason='explicit pair comparison requires exactly two bound instances')
+                      reason=('explicit pair comparison requires exactly two bound instances'
+                              if spec['required_member_count'] == 2 else
+                              'explicit comparison requires the quoted number of bound instances'))
     if not pool:
-        record.update(status='unknown', reason=record.get('reason', 'comparison pool is empty'))
+        record['status'] = 'unknown'
+        if category_pool_missing:
+            record.update(source='target/reference category recall is missing',
+                          reason='category recall/binding missing; comparison pool is empty')
+        else:
+            record.setdefault('reason', 'comparison pool is empty')
     key = json.dumps([role, category, spec['word'], spec.get('scope_kind'),
                       spec.get('scope_phrase'), spec.get('scope_modifiers')], sort_keys=True)
     bindings = parsed.setdefault('_size_scope_bindings', {})
@@ -1627,13 +1799,92 @@ def size_category_scope(objects):
             'reason': 'size comparison pool contains distinct category labels: ' + ', '.join(labels)}
 
 
+def candidate_removal_gate(record, *, source_quote=None, target_role='target',
+                           reference_role=None, role_binding_status=None,
+                           comparison_scope_ids=None, comparison_scope_status=None,
+                           measurement_source=None,
+                           explicit_fail_criterion=None):
+    """Return an auditable candidate record and whether its removal is allowed.
+
+    Candidate removal is deliberately stricter than a ``status == fail`` check.
+    A fail is actionable only when the language role, frozen comparison scope,
+    measurement provenance and fail criterion are all present and bound.  This
+    helper is shared by initial diagnosis and the active evidence controller so
+    unknown, incomplete or conflicting evidence remains live.
+    """
+    item = dict(record or {})
+    status = item.get('status', 'unknown')
+    quote = (item.get('source_quote') or item.get('original_quote') or
+             item.get('phrase') or source_quote or '')
+    role_status = (item.get('role_binding_status') or item.get('binding_status') or
+                   role_binding_status or 'unknown')
+    scope_status = (item.get('comparison_scope_status') or item.get('scope_status') or
+                    comparison_scope_status or 'unknown')
+    if role_binding_status is not None and role_status != role_binding_status:
+        role_status = 'conflicting'
+    if comparison_scope_status is not None and scope_status != comparison_scope_status:
+        scope_status = 'conflicting'
+    scope = item.get('comparison_scope_ids')
+    if scope is None:
+        scope = item.get('comparison_pool_ids')
+    if scope is None:
+        scope = comparison_scope_ids
+    scope = sorted({value for value in (scope or []) if type(value) is int})
+    source = item.get('measurement_source') or measurement_source or ''
+    criterion = item.get('explicit_fail_criterion') or explicit_fail_criterion or ''
+    recorded_roles = [item[key] for key in ('target_role', 'role') if item.get(key)]
+    bound_role = recorded_roles[0] if recorded_roles else target_role
+    scope_id = sha256(json.dumps([bound_role, quote, scope], sort_keys=True,
+                                ensure_ascii=False).encode('utf-8')).hexdigest()
+    item.update(source_quote=quote, target_role=bound_role,
+                reference_role=reference_role,
+                role_binding_status=role_status,
+                comparison_scope_ids=scope,
+                comparison_scope_status=scope_status,
+                comparison_scope_id='scope-v2-' + scope_id,
+                comparison_scope_frozen=scope_status == 'bound',
+                removal_rule_version=CANDIDATE_REMOVAL_RULE_VERSION,
+                measurement_source=source,
+                explicit_fail_criterion=criterion)
+    missing = []
+    if status != 'fail':
+        missing.append('candidate status is not an explicit fail')
+    if not isinstance(quote, str) or not quote.strip():
+        missing.append('original query condition is missing')
+    if (role_status != 'bound' or bound_role not in ('target', 'reference') or
+            any(role != target_role for role in recorded_roles)):
+        missing.append('target/reference role is not bound')
+    if scope_status != 'bound':
+        missing.append('comparison scope is not bound')
+    if not scope:
+        missing.append('comparison scope is empty or missing')
+    if type(item.get('candidate_id')) is not int or item.get('candidate_id') not in scope:
+        missing.append('candidate is not a member of the bound comparison scope')
+    if (not isinstance(source, str) or not source.strip() or
+            source.strip().casefold() in ('unknown', 'unspecified', 'missing')):
+        missing.append('measurement source is missing')
+    if not isinstance(criterion, str) or not criterion.strip():
+        missing.append('explicit fail criterion is missing')
+    reliability = item.get('measurement_reliability')
+    if (reliability is not None and reliability != 'usable' and
+            not (isinstance(reliability, dict) and reliability.get('status') == 'usable')):
+        missing.append('measurement is unavailable or unreliable')
+    item['removal_allowed'] = not missing
+    item['removal_blocked_reason'] = '; '.join(missing) if missing else None
+    return item
+
+
 def _attribute_comparison_pool(parsed, objects, category, checks, role='target'):
     """Bind a comparison subset using all explicitly checked role attributes."""
     source_attributes = attributes_for(parsed, category, role=role)
     modifiers = required_visual_attributes(appearance_attributes_for(parsed, category, role=role))
     if not modifiers:
         return list(objects), None
-    scoped, unknown = [], []
+    generation = parsed.get('candidate_generation', {})
+    unverified_fallback = (role == 'target' and isinstance(generation, dict) and
+                           generation.get('source') == 'broad_fallback' and
+                           generation.get('status') != 'bound')
+    scoped, unknown, audit = [], [], []
     for obj in objects:
         check = aggregate_visual_checks(
             appearance_checks_for([item for item in _checks_for_role(parsed, checks, category, role) if isinstance(item, dict)
@@ -1643,7 +1894,27 @@ def _attribute_comparison_pool(parsed, objects, category, checks, role='target')
         attrs = {item.get('attribute'): item for item in (check or {}).get('attribute_checks', [])
                  if isinstance(item, dict)}
         verdicts = [attrs.get(modifier, {}).get('verdict') for modifier in modifiers]
-        if (check and check.get('category_verdict') == 'no') or any(value == 'no' for value in verdicts):
+        failed_modifiers = [modifier for modifier, value in zip(modifiers, verdicts) if value == 'no']
+        explicit_no = bool((check and check.get('category_verdict') == 'no') or failed_modifiers)
+        item = candidate_removal_gate(
+            {'candidate_id': obj['bbox_id'], 'status': 'fail' if explicit_no else
+             'pass' if check and all(value == 'yes' for value in verdicts) else 'unknown',
+             'attribute_verdicts': dict(zip(modifiers, verdicts)),
+             'category_verdict': (check or {}).get('category_verdict', 'uncertain')},
+            source_quote=next((phrase for phrase in source_attributes
+                               if any(modifier.casefold() in phrase.casefold()
+                                      for modifier in failed_modifiers)),
+                              parsed.get('source_query', '')),
+            target_role=role, reference_role=role if role == 'reference' else None,
+            role_binding_status='bound' if source_attributes and not unverified_fallback else 'unknown',
+            comparison_scope_ids=[item['bbox_id'] for item in objects],
+            comparison_scope_status='unknown' if unverified_fallback else 'bound',
+            measurement_source='RGB appearance attribute checks',
+            explicit_fail_criterion=('explicit visible no for ' + ', '.join(failed_modifiers)
+                                     if failed_modifiers else 'explicit visible category no'
+                                     if explicit_no else None))
+        audit.append(item)
+        if item['removal_allowed']:
             continue
         if check and all(value == 'yes' for value in verdicts):
             scoped.append(obj)
@@ -1652,8 +1923,10 @@ def _attribute_comparison_pool(parsed, objects, category, checks, role='target')
     if unknown:
         return [], {'status': 'unknown', 'modifiers': modifiers,
                     'unknown_ids': sorted(unknown),
+                    'candidate_removal_audit': audit,
                     'reason': 'appearance comparison scope is not fully bound'}
     return scoped, {'status': 'bound', 'modifiers': modifiers,
+                    'candidate_removal_audit': audit,
                     'selected_ids': sorted(obj['bbox_id'] for obj in scoped)}
 
 
@@ -1818,15 +2091,25 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
     if len(names) != 1:
         missing.append('requires one bound target category')
     category = next(iter(names)) if len(names) == 1 else ''
+    category_pool = match_retrieval_categories([category], objects) if category else []
+    generation = parsed.get('candidate_generation', {})
+    unverified_fallback = (isinstance(generation, dict) and
+                           generation.get('source') == 'broad_fallback' and
+                           generation.get('status') != 'bound')
+    category_bound = bool(category_pool) and not unverified_fallback
+    if category and not category_bound:
+        missing.append('target category recall/binding missing: ' + category)
     checks_by_key = {}
     for check in checks:
         key = (check['id'], retrieval_category(check['category']))
         checks_by_key.setdefault(key, []).append(check)
     by_id = {o['bbox_id']:o for o in objects}
     geometry = {
+        'target_role_binding_status': 'bound' if category_bound else 'unknown',
         'size_constraints': [], 'floor_constraint': None, 'relation_pairs': [],
         'between_triplets': [], 'proximity_pairs': [], 'direction_evidence': [],
         'distance_rankings': [], 'distance_ignored': [],
+        'candidate_removal_audit': [],
         'vertical_policy': {
             'horizontal_overlap_required': False,
             'horizontal_gap_max_m': HORIZONTAL_ALIGNMENT_GAP_M,
@@ -1862,9 +2145,47 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
         if checked:
             return checked.get('verdict', 'uncertain')
         return 'uncertain'
-    eligible = [o for o in candidates if verdict(o['bbox_id'], category) != 'no']
+    eligible = []
+    initial_scope_ids = sorted({o['bbox_id'] for o in candidates
+                                if type(o.get('bbox_id')) is int})
+    for obj in candidates:
+        verdict_value = verdict(obj['bbox_id'], category)
+        check_rows = _checks_for_role(
+            parsed, checks_by_key.get((obj['bbox_id'], category), []), category, 'target')
+        failed_attributes = [item.get('attribute', '') for check in check_rows
+                             for item in check.get('attribute_checks', [])
+                             if isinstance(item, dict) and item.get('verdict') == 'no']
+        initial_evidence = candidate_removal_gate(
+            {'candidate_id': obj['bbox_id'],
+             'status': 'fail' if verdict_value == 'no' else
+                       'unknown' if verdict_value == 'uncertain' else 'pass',
+             'reason': 'category or appearance evidence contradicted this candidate',
+             'observed_category': canonical_category(obj['target']),
+             'required_category': category, 'appearance_checks': check_rows},
+            source_quote=next((attribute.get('phrase', '') for attribute in parsed.get('Attributes', [])
+                               if retrieval_category(attribute.get('category', '')) == category and
+                               attribute_role(parsed, attribute) == 'target' and
+                               any(unit and unit.casefold() in attribute.get('phrase', '').casefold()
+                                   for unit in failed_attributes)),
+                              parsed.get('source_query', '')),
+            target_role='target', role_binding_status='bound' if category_bound else 'unknown',
+            comparison_scope_ids=initial_scope_ids,
+            comparison_scope_status='bound' if category_bound else 'unknown',
+            measurement_source='annotated category' if trusted_categories and not
+                match_retrieval_categories([category], [obj]) else 'RGB appearance checks',
+            explicit_fail_criterion=('annotated category does not match the bound target category'
+                                     if trusted_categories and not match_retrieval_categories([category], [obj])
+                                     else 'category/appearance verdict is an explicit visible no'))
+        geometry['candidate_removal_audit'].append(initial_evidence)
+        if initial_evidence['removal_allowed']:
+            continue
+        if initial_evidence['status'] == 'fail':
+            missing.append('category/appearance failure lacks complete exclusion evidence: ' + str(obj['bbox_id']))
+        eligible.append(obj)
     distance_pool, distance_scope = _attribute_comparison_pool(
         parsed, list(candidates), category, checks)
+    if distance_scope:
+        geometry['candidate_removal_audit'].extend(distance_scope.get('candidate_removal_audit', []))
     if distance_scope and distance_scope['status'] == 'unknown':
         distance_pool = list(candidates)
     # Explicit superlatives and "on the floor" are deterministic box predicates.
@@ -1893,20 +2214,70 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
         if local_contrast and spec['word'] == local_contrast['target_word']:
             continue  # Evaluated jointly with its two bound references below.
         pool, scope_record = size_condition_scope(parsed, objects, category, spec, checks)
+        geometry['candidate_removal_audit'].extend(scope_record.get('candidate_removal_audit', []))
         record = evaluate_size_condition(spec, measurements, [o['bbox_id'] for o in pool],
             scope_bound=scope_record['status'] == 'bound', candidate_ids=[o['bbox_id'] for o in candidates],
             scope_source=scope_record['source'], scope_unknown_ids=scope_record.get('unknown_ids', []))
         geometry['size_constraints'].append(record)
         if apply_size_constraints:
-            flags = {item['candidate_id']: item['status'] for item in record['candidate_evidence']}
-            allowed = {o['bbox_id'] for o in candidates if flags.get(o['bbox_id']) != 'fail'}
+            gated_evidence = []
+            for item in record['candidate_evidence']:
+                gated = candidate_removal_gate(
+                    item,
+                    source_quote=record.get('original_quote'),
+                    target_role='target',
+                    role_binding_status=('bound' if record.get('scope_status') == 'bound'
+                                         else 'unknown'),
+                    comparison_scope_ids=record.get('comparison_pool_ids', []),
+                    comparison_scope_status=record.get('scope_status', 'unknown'),
+                    measurement_source=record.get('measurement_sources', {}).get(
+                        str(item.get('candidate_id')), ''),
+                    explicit_fail_criterion=(
+                        'reliable measurement contradicts the quoted size condition'
+                        if item.get('status') == 'fail' else None))
+                gated_evidence.append(gated)
+                geometry['candidate_removal_audit'].append(gated)
+                if gated['status'] == 'fail' and not gated['removal_allowed']:
+                    missing.append('target size failure lacks complete exclusion evidence: ' + str(item['candidate_id']))
+            record['candidate_evidence'] = gated_evidence
+            flags = {item['candidate_id']: item for item in gated_evidence}
+            allowed = {o['bbox_id'] for o in candidates
+                       if not flags.get(o['bbox_id'], {}).get('removal_allowed')}
             size_allowed = allowed if size_allowed is None else size_allowed & allowed
             if record['status'] == 'unknown':
                 missing.append(record['reason'])
     if size_allowed is not None and apply_size_constraints:
         eligible = [o for o in eligible if o['bbox_id'] in size_allowed]
     if floor_allowed is not None:
-        eligible = [o for o in eligible if o['bbox_id'] in floor_allowed]
+        kept = []
+        for obj in eligible:
+            floor_fail = obj['bbox_id'] not in floor_allowed
+            audit = candidate_removal_gate(
+                {'candidate_id': obj['bbox_id'],
+                 'status': 'fail' if floor_fail else 'pass',
+                 'reason': 'bottom of box is outside the declared floor tolerance',
+                 'bottom_z_m': _box_metrics(obj)['bottom_z_m'],
+                 'floor_z_m': geometry['floor_constraint']['floor_z_m'], 'tolerance_m': .15,
+                 'measurement_reliability': _box_metrics(obj)['measurement_reliability']},
+                source_quote=next((attribute.get('phrase', '')
+                                   for attribute in parsed.get('Attributes', [])
+                                   if retrieval_category(attribute.get('category', '')) == category and
+                                   attribute_role(parsed, attribute) == 'target' and
+                                   re.search(r'\b(on the floor|on floor|on the ground|grounded)\b',
+                                                attribute.get('phrase', ''), re.I)),
+                                  ''),
+                target_role='target', role_binding_status='bound' if category_bound else 'unknown',
+                comparison_scope_ids=sorted({item['bbox_id'] for item in objects}),
+                comparison_scope_status='bound' if category_bound else 'unknown',
+                measurement_source='annotated_box bottom_z_m',
+                explicit_fail_criterion=('bottom_z_m exceeds floor tolerance'
+                                         if floor_fail else None))
+            geometry['candidate_removal_audit'].append(audit)
+            if not audit['removal_allowed']:
+                kept.append(obj)
+                if floor_fail:
+                    missing.append('floor failure lacks complete exclusion evidence: ' + str(obj['bbox_id']))
+        eligible = kept
     if local_contrast and not apply_size_constraints:
         pending_size_conditions.append({'attribute': local_contrast['reference_word'],
                                         'phrase': local_contrast['reference_word'], 'role': 'reference'})
@@ -1914,11 +2285,51 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
         missing.append('target size conditions lack complete evidence')
     directions = any(r['relation'] in ('left', 'right', 'front', 'back') for r in parsed['Relations'])
     observer = parsed['Observer']
+    for observer_role in ('origin', 'facing'):
+        entry = observer.get(observer_role, {})
+        name = entry.get('category', '') if isinstance(entry, dict) else ''
+        for spec in size_conditions(parsed, name, role='reference') if name else []:
+            pending_size_conditions.append({'attribute': spec['word'],
+                'phrase': spec['original_quote'], 'role': 'reference', 'category': name,
+                'observer_role': observer_role, 'binding_status': 'unknown'})
+            missing.append('observer reference size comparison is not jointly bound to its frame: ' +
+                           spec['original_quote'])
     frames, frame_missing = observer_frames(parsed, objects, room_center) if directions else ([None], [])
     if directions:
-        frames = [frame for frame in frames if
-                  (frame['origin_id'] is None or verdict(frame['origin_id'], observer['origin'].get('category', ''), 'observer_origin') != 'no')
-                  and all(verdict(oid, observer['facing'].get('category', ''), 'observer_facing') != 'no' for oid in frame['facing_ids'])]
+        kept_frames = []
+        for frame in frames:
+            scope_ids = [*frame['facing_ids']]
+            if type(frame.get('origin_id')) is int:
+                scope_ids.append(frame['origin_id'])
+            frame_allowed = True
+            frame_checks = [('facing', oid) for oid in frame['facing_ids']]
+            if type(frame.get('origin_id')) is int:
+                frame_checks.append(('origin', frame['origin_id']))
+            for observer_role, oid in frame_checks:
+                entry = observer[observer_role]
+                name = retrieval_category(entry.get('category', ''))
+                value = verdict(oid, name, 'observer_' + observer_role)
+                audit = candidate_removal_gate(
+                    {'candidate_id': oid, 'status': 'fail' if value == 'no' else
+                     'unknown' if value == 'uncertain' else 'pass',
+                     'observer_role': observer_role,
+                     'appearance_checks': _checks_for_role(parsed,
+                         checks_by_key.get((oid, name), []), name, 'observer_' + observer_role)},
+                    source_quote=entry.get('phrase', ''), target_role='reference',
+                    reference_role='reference',
+                    role_binding_status='bound' if name and quoted(parsed.get('source_query', ''),
+                        entry.get('phrase', '')) else 'unknown',
+                    comparison_scope_ids=scope_ids, comparison_scope_status='bound',
+                    measurement_source='RGB observer reference checks',
+                    explicit_fail_criterion='observer reference has an explicit visible category/appearance no')
+                geometry['candidate_removal_audit'].append(audit)
+                if audit['removal_allowed']:
+                    frame_allowed = False
+                elif value == 'no':
+                    missing.append('observer reference failure lacks complete exclusion evidence')
+            if frame_allowed:
+                kept_frames.append(frame)
+        frames = kept_frames
         if not frames and not frame_missing:
             frame_missing.append('observer categories contradicted by RGB evidence')
         missing.extend(frame_missing)
@@ -1947,8 +2358,37 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
         elif relation['relation'] in ('nearest', 'farthest', 'near') or relation.get('scope') == 'relative_anchor':
             reference_names.add(retrieval_category(relation.get('anchor_category', '')))
     references = {}
+    unverified_reference_bindings = set()
     for name in sorted(reference_names):
-        matches = [o for o in match_retrieval_categories([name], objects) if verdict(o['bbox_id'], name, 'reference') != 'no']
+        reference_pool = match_retrieval_categories([name], objects)
+        matches = []
+        for obj in reference_pool:
+            reference_verdict = verdict(obj['bbox_id'], name, 'reference')
+            check_rows = _checks_for_role(parsed,
+                checks_by_key.get((obj['bbox_id'], name), []), name, 'reference')
+            failed_attributes = [item.get('attribute', '') for check in check_rows
+                                 for item in check.get('attribute_checks', [])
+                                 if isinstance(item, dict) and item.get('verdict') == 'no']
+            audit = candidate_removal_gate(
+                {'candidate_id': obj['bbox_id'],
+                 'status': 'fail' if reference_verdict == 'no' else
+                           'unknown' if reference_verdict == 'uncertain' else 'pass',
+                 'appearance_checks': check_rows},
+                source_quote=next((attribute.get('phrase', '') for attribute in parsed.get('Attributes', [])
+                                   if retrieval_category(attribute.get('category', '')) == name and
+                                   attribute_role(parsed, attribute) == 'reference' and
+                                   any(unit and unit.casefold() in attribute.get('phrase', '').casefold()
+                                       for unit in failed_attributes)),
+                                  parsed.get('source_query', '')),
+                target_role='reference', reference_role='reference', role_binding_status='bound',
+                comparison_scope_ids=[item['bbox_id'] for item in reference_pool],
+                comparison_scope_status='bound', measurement_source='RGB appearance checks',
+                explicit_fail_criterion='reference category/appearance has an explicit visible no')
+            geometry['candidate_removal_audit'].append(audit)
+            if not audit['removal_allowed']:
+                matches.append(obj)
+                if reference_verdict == 'no':
+                    missing.append('reference appearance failure lacks complete exclusion evidence: ' + str(obj['bbox_id']))
         explicit_anchor_ids = {
             relation.get('anchor_id', relation.get('anchor_instance_id'))
             for relation in parsed['Relations']
@@ -1956,14 +2396,52 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                 retrieval_category(relation.get('anchor_category', '')) == name and
                 type(relation.get('anchor_id', relation.get('anchor_instance_id'))) is int)
         }
+        verified_binding = parsed.get('_verified_reference_bindings', {}).get(name, {})
+        verified_id = verified_binding.get('id') if isinstance(verified_binding, dict) else None
+        binding_verified = (len(explicit_anchor_ids) == 1 and verified_id in explicit_anchor_ids and
+                            verified_binding.get('status') == 'bound' and
+                            bool(verified_binding.get('source')) and
+                            any(obj['bbox_id'] == verified_id for obj in matches))
         if len(explicit_anchor_ids) > 1:
             missing.append('distance reference has incompatible explicit instance bindings: ' + name)
-            matches = []
+        elif explicit_anchor_ids and not binding_verified:
+            missing.append('distance reference explicit instance binding lacks source verification: ' + name)
+        if binding_verified:
+            kept = []
+            for obj in matches:
+                audit = candidate_removal_gate(
+                    {'candidate_id': obj['bbox_id'],
+                     'status': 'pass' if obj['bbox_id'] == verified_id else 'fail',
+                     'verified_reference_binding': verified_binding},
+                    source_quote=next((relation.get('phrase', '') for relation in parsed['Relations']
+                                       if retrieval_category(relation.get('anchor_category', '')) == name), ''),
+                    target_role='reference', reference_role='reference', role_binding_status='bound',
+                    comparison_scope_ids=[item['bbox_id'] for item in reference_pool],
+                    comparison_scope_status='bound', measurement_source=verified_binding['source'],
+                    explicit_fail_criterion='reference instance ID differs from the independently verified binding')
+                geometry['candidate_removal_audit'].append(audit)
+                if not audit['removal_allowed']:
+                    kept.append(obj)
+            matches = kept
         elif explicit_anchor_ids:
-            matches = [o for o in matches if o['bbox_id'] in explicit_anchor_ids]
+            unverified_reference_bindings.add(name)
+            for obj in matches:
+                if obj['bbox_id'] in explicit_anchor_ids and len(explicit_anchor_ids) == 1:
+                    continue
+                audit = candidate_removal_gate(
+                    {'candidate_id': obj['bbox_id'], 'status': 'unknown',
+                     'reported_anchor_ids': sorted(explicit_anchor_ids),
+                     'reason': 'parser instance IDs do not establish a verified reference binding'},
+                    source_quote=next((relation.get('phrase', '') for relation in parsed['Relations']
+                                       if retrieval_category(relation.get('anchor_category', '')) == name), ''),
+                    target_role='reference', reference_role='reference', role_binding_status='unknown',
+                    comparison_scope_ids=[item['bbox_id'] for item in reference_pool],
+                    comparison_scope_status='unknown', measurement_source='', explicit_fail_criterion='')
+                geometry['candidate_removal_audit'].append(audit)
         if not local_contrast:
             for spec in size_conditions(parsed, name, role='reference'):
                 pool, scope_record = size_condition_scope(parsed, objects, name, spec, checks, 'reference')
+                geometry['candidate_removal_audit'].extend(scope_record.get('candidate_removal_audit', []))
                 if not apply_size_constraints:
                     pending_size_conditions.append({'attribute': spec['word'],
                         'phrase': spec['original_quote'], 'role': 'reference', 'category': name})
@@ -1973,8 +2451,34 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                     scope_bound=scope_record['status'] == 'bound', candidate_ids=[o['bbox_id'] for o in matches],
                     scope_source=scope_record['source'], scope_unknown_ids=scope_record.get('unknown_ids', []))
                 geometry['size_constraints'].append(record)
-                matches = [o for o in matches if not any(e['candidate_id'] == o['bbox_id']
-                           and e['status'] == 'fail' for e in record['candidate_evidence'])]
+                gated_evidence = []
+                for item in record['candidate_evidence']:
+                    gated = candidate_removal_gate(
+                        item,
+                        source_quote=record.get('original_quote'),
+                        target_role='reference', reference_role='reference',
+                        role_binding_status=('bound' if record.get('scope_status') == 'bound'
+                                             else 'unknown'),
+                        comparison_scope_ids=record.get('comparison_pool_ids', []),
+                        comparison_scope_status=record.get('scope_status', 'unknown'),
+                        measurement_source=record.get('measurement_sources', {}).get(
+                            str(item.get('candidate_id')), ''),
+                        explicit_fail_criterion=(
+                            'reliable measurement contradicts the quoted reference size condition'
+                            if item.get('status') == 'fail' else None))
+                    gated_evidence.append(gated)
+                    geometry['candidate_removal_audit'].append(gated)
+                    if gated['status'] == 'fail' and not gated['removal_allowed']:
+                        missing.append('reference size failure lacks complete exclusion evidence: ' + str(item['candidate_id']))
+                record['candidate_evidence'] = gated_evidence
+                matches = [o for o in matches if not any(
+                    e['candidate_id'] == o['bbox_id'] and e.get('removal_allowed')
+                    for e in gated_evidence)]
+                if any(not any(e['candidate_id'] == obj['bbox_id'] and e['status'] == 'pass'
+                               for e in gated_evidence) for obj in matches):
+                    pending_size_conditions.append({'attribute': spec['word'],
+                        'phrase': spec['original_quote'], 'role': 'reference', 'category': name})
+                    missing.append('reference size conditions lack complete evidence')
                 if record['status'] == 'unknown':
                     missing.append('reference ' + record['reason'])
         if not name or not matches:
@@ -2035,6 +2539,57 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
         missing.append('parsed reference has no represented relation/observer role')
     if any(retrieval_category(a['category']) not in represented | {category} for a in parsed['Attributes']):
         missing.append('appearance attribute has no represented target/reference role')
+
+    def hypothesis_fail_proof(hypothesis, oid, hypothesis_index):
+        references_complete = all(
+            verdict(value, reference_slot_categories.get(name, name), 'reference') == 'yes'
+            for name, value in hypothesis.get('references', {}).items())
+        bound_frame = hypothesis.get('observer')
+        if bound_frame:
+            references_complete = references_complete and all(
+                verdict(value, observer['facing'].get('category', ''), 'observer_facing') == 'yes'
+                for value in bound_frame.get('facing_ids', []))
+            if type(bound_frame.get('origin_id')) is int:
+                references_complete = references_complete and verdict(
+                    bound_frame['origin_id'], observer['origin'].get('category', ''), 'observer_origin') == 'yes'
+        rows = [row for row in hypothesis.get('measurements', []) if row.get('target_id') == oid]
+        for row in rows:
+            candidate_row = next((item for item in row.get('candidate_evidence', [])
+                                  if item.get('candidate_id') == oid), row)
+            if candidate_row.get('status') != 'fail':
+                continue
+            anchors = ([row['anchor_id']] if type(row.get('anchor_id')) is int else
+                       row.get('anchor_ids') or row.get('frame_facing_ids') or [])
+            scope = row.get('comparison_pool_ids') or [oid, *anchors]
+            scope_bound = (row.get('scope_status') == 'bound' if 'scope_status' in row else
+                           bool(anchors) and all(type(value) is int for value in anchors))
+            scope_bound = scope_bound and references_complete and not any(
+                item.get('role') == 'reference' for item in pending_size_conditions)
+            # Local short/tall is one joint comparison. A reliable target-size
+            # fail or a distinct-instance contradiction is already sufficient
+            # for this assignment; unknown size rows for other targets cannot
+            # invalidate it. Ordinary geometry still needs this target's
+            # reference size evidence to be complete.
+            if (row.get('interpretation') != 'reference_comparison' and
+                    row.get('measurement_source') != 'bound instance identity'):
+                scope_bound = scope_bound and not any(
+                    item.get('status') == 'unknown' for measurement in rows
+                    if measurement.get('role') == 'reference'
+                    for item in measurement.get('candidate_evidence', []))
+            proof = candidate_removal_gate(
+                {**candidate_row, 'candidate_id': oid, 'hypothesis_index': hypothesis_index,
+                 'evidence': row}, source_quote=row.get('original_quote') or row.get('phrase', ''),
+                target_role='target', role_binding_status='bound' if category_bound and scope_bound else 'unknown',
+                comparison_scope_ids=scope, comparison_scope_status='bound' if scope_bound else 'unknown',
+                measurement_source=(row.get('measurement_source') or
+                    row.get('measurement_sources', {}).get(str(oid)) or 'annotated_box relation geometry'),
+                explicit_fail_criterion=(row.get('explicit_fail_criterion') or candidate_row.get('reason') or
+                    'bound ' + str(row.get('relation', 'relation')) + ' geometry fails its declared predicate'))
+            if proof['removal_allowed']:
+                return proof
+        return {'hypothesis_index': hypothesis_index, 'removal_allowed': False,
+                'reason': 'this interpretation has no bound explicit candidate failure'}
+
     hypotheses = []
     distance_by_anchor = {}
     choices = list(references)
@@ -2073,8 +2628,20 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                                          [retrieval_category(relation.get('anchor_category', ''))])
                 relation_anchors = [binding.get(name)
                                     for name in relation_anchor_names]
+                if any(reference_slot_categories.get(name, name) in unverified_reference_bindings
+                       for name in relation_anchor_names):
+                    measured.append({'target_id': oid, 'relation': kind, 'relation_index': index,
+                                     'phrase': relation.get('phrase', ''), 'status': 'unknown',
+                                     'passes': None,
+                                     'reason': 'reference instance ID binding is unverified or conflicting'})
+                    continue
                 anchor = relation_anchors[0] if relation_anchors else None
                 if anchor and anchor['bbox_id'] == oid:
+                    measured.append({'target_id': oid, 'anchor_id': anchor['bbox_id'],
+                                     'relation': kind, 'relation_index': index,
+                                     'phrase': relation.get('phrase', ''), 'status': 'fail',
+                                     'passes': False, 'measurement_source': 'bound instance identity',
+                                     'explicit_fail_criterion': 'target and relation reference must be distinct instances'})
                     passed = False
                     break
                 if kind == 'between':
@@ -2095,6 +2662,12 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                         measured.append(between)
                         continue
                     if any(item['bbox_id'] == oid for item in relation_anchors):
+                        measured.append({'target_id': oid,
+                                         'anchor_ids': [item['bbox_id'] for item in relation_anchors],
+                                         'relation': kind, 'relation_index': index,
+                                         'phrase': relation.get('phrase', ''), 'status': 'fail',
+                                         'passes': False, 'measurement_source': 'bound instance identity',
+                                         'explicit_fail_criterion': 'between target must be distinct from both references'})
                         passed = False
                         break
                     if local_contrast and apply_size_constraints:
@@ -2178,8 +2751,11 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                     result = distance_by_anchor[key]
                     ranking = next(iter(result['rankings']), None)
                     requested_id = relation.get('target_id', relation.get('target_instance_id'))
+                    if type(requested_id) is int:
+                        geometry['target_instance_binding_status'] = 'unknown'
                     if type(requested_id) is int and requested_id != oid:
-                        distance_status = 'fail'
+                        distance_status = 'unknown'
+                        missing.append('distance target instance binding lacks source verification')
                     elif ranking is None or ranking['comparison_status'] == 'unknown':
                         distance_status = 'unknown'
                     else:
@@ -2188,11 +2764,18 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                                      ranking['ordered_targets'] if row['target_id'] == oid), None) if ranking else None
                     measured.append({
                         'target_id': oid, 'anchor_id': anchor['bbox_id'], 'relation': kind,
+                        'relation_index': index, 'phrase': relation.get('phrase', ''),
                         'distance_m': distance, 'metric': ranking['metric'] if ranking else None,
                         'status': distance_status,
                         'passes': None if distance_status == 'unknown' else distance_status == 'pass',
                         'best_ids': ranking['best_ids'] if ranking else [],
                         'unknown_target_ids': ranking['unknown_target_ids'] if ranking else [],
+                        'comparison_pool_ids': (ranking.get('comparison_pool_ids', []) + [anchor['bbox_id']]
+                                                if ranking else []),
+                        'scope_status': ('bound' if ranking and ranking.get('comparison_status') != 'unknown'
+                                         else 'unknown'),
+                        'explicit_fail_criterion': ('candidate is outside best_ids under the bound distance metric'
+                                                    if distance_status == 'fail' else None),
                     })
                     if distance_status == 'unknown':
                         missing.extend(item['reason'] for item in result['ignored'])
@@ -2259,13 +2842,56 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                         passed = passed and direction['passes']
             if passed:
                 possible.append(oid)
+        hypothesis = {'observer': frame, 'references': {n: o['bbox_id'] for n, o in binding.items()},
+                      'candidate_ids': possible, 'measurements': measured}
         if local_contrast and apply_size_constraints and not possible:
-            continue  # This assignment is explicitly contradicted by the joint predicates.
-        hypotheses.append({'observer': frame, 'references': {n: o['bbox_id'] for n, o in binding.items()},
-                           'candidate_ids': possible, 'measurements': measured})
+            proofs = [hypothesis_fail_proof(hypothesis, obj['bbox_id'], len(hypotheses))
+                      for obj in eligible]
+            if proofs and all(proof['removal_allowed'] for proof in proofs):
+                geometry.setdefault('rejected_hypotheses', []).append({
+                    **hypothesis, 'candidate_removal_audit': proofs})
+                continue
+        hypotheses.append(hypothesis)
     sets = [set(h['candidate_ids']) for h in hypotheses]
     possible = sorted(set.union(*sets)) if sets else []
     stable = sorted(set.intersection(*sets)) if sets else []
+    # Hypothesis evaluation is another candidate-removal path.  Reconcile
+    # excluded IDs through the same evidence gate so an unbound relation or a
+    # partially evaluated hypothesis cannot silently erase a candidate.
+    possible_set = set(possible)
+    for target in eligible:
+        oid = target['bbox_id']
+        if oid in possible_set:
+            continue
+        hypothesis_proofs = []
+        for hypothesis_index, hypothesis in enumerate(
+                hypotheses + geometry.get('rejected_hypotheses', [])):
+            hypothesis_proofs.append(hypothesis_fail_proof(hypothesis, oid, hypothesis_index))
+        relation_fail = bool(hypothesis_proofs) and all(proof['removal_allowed'] for proof in hypothesis_proofs)
+        scopes = sorted({value for proof in hypothesis_proofs
+                         for value in proof.get('comparison_scope_ids', [])})
+        audit = candidate_removal_gate(
+            {'candidate_id': oid, 'status': 'fail' if relation_fail else 'unknown',
+             'hypothesis_fail_evidence': hypothesis_proofs,
+             'reason': 'all bound relation interpretations fail the predicate'
+                       if relation_fail else 'relation interpretation is incomplete'},
+            source_quote=next((proof.get('source_quote', '') for proof in hypothesis_proofs
+                               if proof.get('source_quote')), ''),
+            target_role='target',
+            role_binding_status='bound' if relation_fail else 'unknown',
+            comparison_scope_ids=scopes,
+            comparison_scope_status='bound' if relation_fail else 'unknown',
+            measurement_source='; '.join(sorted({proof.get('measurement_source', '')
+                                                for proof in hypothesis_proofs if proof.get('measurement_source')})),
+            explicit_fail_criterion=('all bound relation measurements are explicit failures'
+                                     if relation_fail else None))
+        geometry['candidate_removal_audit'].append(audit)
+        if not audit['removal_allowed']:
+            possible_set.add(oid)
+            missing.append('candidate relation exclusion lacks complete fail evidence: ' + str(oid))
+    possible = sorted(possible_set)
+    geometry['reference_binding_status'] = ('unknown' if unverified_reference_bindings
+                                            else 'bound')
     between_by_id = {}
     for triplet in geometry['between_triplets']:
         entry = between_by_id.setdefault(triplet['target_id'], {
@@ -2320,7 +2946,7 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
     missing = list(dict.fromkeys(missing))
     if missing:
         status = 'missing'
-    elif not eligible or (sets and not possible):
+    elif not eligible or ((sets or geometry.get('rejected_hypotheses')) and not possible):
         status = 'conflict'
     elif len(possible) != 1 or any(len(s) != 1 for s in sets):
         status = 'ambiguous'
@@ -2328,6 +2954,7 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
         status = 'resolved'
     return {'status': status, 'missing': missing, 'candidate_ids': possible, 'stable_candidate_ids': stable,
             'pending_size_conditions': pending_size_conditions,
+            'candidate_removal_audit': list(geometry['candidate_removal_audit']),
             'hypotheses': hypotheses, 'visual_needs': needs, 'checks': list(checks),
             'candidate_hypothesis_support': candidate_hypothesis_support,
             'geometry': geometry,

@@ -8,13 +8,14 @@ from PIL import Image
 
 from diagnostic import (attribute_role, attributes_for, appearance_attributes_for, size_conditions,
                         size_condition_scope, candidate_hypothesis_support,
-                        diagnose, viewpoint_evidence, size_category_scope)
+                        diagnose, viewpoint_evidence, size_category_scope,
+                        candidate_removal_gate)
 from evidence import distance_rankings, match_retrieval_categories, retrieval_category
 from appearance_evidence import (aggregate_visual_checks, attribute_contexts, attribute_units,
                                   normalize_visual_check, required_visual_attributes)
 from object_geometry import build_geometry, point_cloud_measurements
 from size_semantics import evaluate_size_condition
-from qwen_api import QwenAPIError, chat, image_part, parse_json_object
+from qwen_api import QwenAPIError, chat, image_part, parse_json_object, api_provider
 from react_decision import jev_action, react_backend, text_state
 from run import render
 
@@ -142,6 +143,25 @@ def _relation_clause_key(item):
     return None
 
 
+def _unresolved_relation_bindings(diagnosis):
+    """A geometric fail cannot exclude through an unfinished language binding."""
+    reasons = []
+    for key in ('target_role_binding_status', 'reference_binding_status',
+                'target_instance_binding_status'):
+        if diagnosis.get('geometry', {}).get(key) == 'unknown':
+            reasons.append(key)
+    if any(item.get('role') == 'reference'
+           for item in diagnosis.get('pending_size_conditions', [])):
+        reasons.append('reference size is unresolved')
+    if any(condition.get('role') == 'reference' and any(
+            item.get('status') == 'unknown' for item in condition.get('candidate_evidence', []))
+            for condition in diagnosis.get('geometry', {}).get('size_constraints', [])):
+        reasons.append('reference size measurement is unknown')
+    if any(item.get('role') != 'target' for item in diagnosis.get('visual_needs', [])):
+        reasons.append('reference category/appearance is unresolved')
+    return reasons
+
+
 def position_candidate_evidence(diagnosis, candidate_ids=None):
     """AND clauses after retaining alternative bindings within each clause."""
     geometry = diagnosis.get('geometry', {})
@@ -162,10 +182,9 @@ def position_candidate_evidence(diagnosis, candidate_ids=None):
     clauses = {_relation_clause_key(row) or 'unidentified_condition' for row in rows}
     records = []
     for target_id in ids:
+        target_rows = [pair for pair in rows if pair.get('target_id') == target_id]
         groups = {clause: [] for clause in clauses}
-        for pair in rows:
-            if pair.get('target_id') != target_id:
-                continue
+        for pair in target_rows:
             clause = _relation_clause_key(pair)
             groups[clause or 'unidentified_condition'].append(
                 pair.get('passes') if clause else None)
@@ -182,11 +201,42 @@ def position_candidate_evidence(diagnosis, candidate_ids=None):
         records_for_id['exclusion_reason'] = (
             'all available reference interpretations fail the position predicate'
             if records_for_id['status'] == 'fail' else None)
+        anchors = [pair.get('anchor_id') for pair in target_rows
+                   if type(pair.get('anchor_id')) is int]
+        for pair in target_rows:
+            for key in ('anchor_ids', 'passing_reference_pairs',
+                        'unknown_reference_pairs', 'failing_reference_pairs', 'frame_facing_ids'):
+                values = pair.get(key, [])
+                if key in ('anchor_ids','frame_facing_ids'):
+                    values = [values]
+                for value in values:
+                    if isinstance(value, (list, tuple)):
+                        anchors.extend(item for item in value if type(item) is int)
+        records_for_id.update(
+            source_quote=next((pair.get('phrase', '') for pair in target_rows
+                               if pair.get('phrase') and normalized.get(
+                                   _relation_clause_key(pair), {}).get('status') == 'fail'),
+                              next((pair.get('phrase', '') for pair in target_rows
+                                    if pair.get('phrase')), '')),
+            role_binding_status=('bound' if target_rows and anchors and all(
+                group['status'] != 'unknown' for group in normalized.values()) else 'unknown'),
+            reference_role=('reference' if anchors else None),
+            comparison_scope_ids=sorted(set([target_id, *anchors])),
+            comparison_scope_status=('bound' if target_rows and anchors and all(
+                group['status'] != 'unknown' for group in normalized.values()) else 'unknown'),
+            measurement_source='annotated_box relation geometry',
+            explicit_fail_criterion=records_for_id['exclusion_reason'],
+            measurements=target_rows)
+        unresolved = _unresolved_relation_bindings(diagnosis)
+        if unresolved:
+            records_for_id.update(status='unknown', role_binding_status='unknown',
+                                  comparison_scope_status='unknown',
+                                  binding_missing=unresolved)
         records.append(records_for_id)
     return records
 
 
-def distance_candidate_evidence(rankings, candidate_ids):
+def distance_candidate_evidence(rankings, candidate_ids, diagnosis=None):
     """AND distance clauses after ORing their alternative reference bindings."""
     result = []
     clauses = {_relation_clause_key(row) or 'unidentified_condition' for row in rankings}
@@ -209,7 +259,40 @@ def distance_candidate_evidence(rankings, candidate_ids):
                        'evidence_scope': 'predicate-local clause summary; complete-query support requires one shared hypothesis',
                        'exclusion_reason': (
                            'all available bindings fail at least one explicit distance clause'
+                           if _overall_status(normalized) == 'fail' else None),
+                       'source_quote': next((row.get('phrase', '') for row in rankings
+                                             if candidate_id in ({item.get('target_id') for item in row.get('ordered_targets', [])} |
+                                                                 set(row.get('unknown_target_ids', []))) and row.get('phrase') and
+                                             normalized.get(_relation_clause_key(row), {}).get('status') == 'fail'),
+                                            next((row.get('phrase', '') for row in rankings if row.get('phrase')), '')),
+                       'role_binding_status': ('bound' if any(
+                           candidate_id in ({item.get('target_id') for item in row.get('ordered_targets', [])} |
+                                             set(row.get('unknown_target_ids', []))) and
+                           type(row.get('anchor_id')) is int for row in rankings) else 'unknown'),
+                       'comparison_scope_ids': sorted({candidate_id, *[
+                           row.get('anchor_id') for row in rankings
+                           if type(row.get('anchor_id')) is int], *[
+                           oid for row in rankings for oid in row.get('comparison_pool_ids', [])
+                           if type(oid) is int], *[
+                           item['target_id'] for row in rankings for item in row.get('ordered_targets', [])
+                           if type(item.get('target_id')) is int]}),
+                       'comparison_scope_status': ('bound' if rankings and all(
+                           type(row.get('anchor_id')) is int and
+                           row.get('scope_status', 'bound') == 'bound' and
+                           row.get('comparison_status') != 'unknown'
+                           for row in rankings) and all(
+                           group['status'] != 'unknown' for group in normalized.values()) else 'unknown'),
+                       'measurement_source': 'distance ranking geometry',
+                       'measurements': [row for row in rankings if candidate_id in (
+                           {item.get('target_id') for item in row.get('ordered_targets', [])} |
+                           set(row.get('unknown_target_ids', [])))],
+                       'explicit_fail_criterion': (
+                           'candidate is not in the best_ids of a bound nearest/farthest ranking'
                            if _overall_status(normalized) == 'fail' else None)})
+        unresolved = _unresolved_relation_bindings(diagnosis or {})
+        if unresolved:
+            result[-1].update(status='unknown', role_binding_status='unknown',
+                              comparison_scope_status='unknown', binding_missing=unresolved)
     return result
 
 
@@ -253,10 +336,24 @@ def size_candidate_evidence(parsed, candidates, measurements, comparison_pool_id
         flags = [e['status'] for e in proof]
         status = ('fail' if 'fail' in flags else 'unknown' if 'unknown' in flags else
                   'pass' if flags else 'not_applicable')
+        decisive = next((c for e, c in zip(proof, constraints) if e['status'] == 'fail'),
+                        constraints[0] if constraints else {})
+        scopes = decisive.get('comparison_pool_ids', [])
+        role_status = ('bound' if decisive.get('scope_status') == 'bound' and
+                       decisive.get('role', 'target') == 'target' else 'unknown')
+        source = decisive.get('measurement_sources', {}).get(str(oid), '')
+        criterion = 'reliable measurement contradicts the quoted size condition' if status == 'fail' else None
         records.append({'candidate_id': oid, 'status': status, 'metrics': by_id.get(oid, {}),
                         'attribute_evidence': [{**e, 'attribute': c['attribute'],
                             'original_quote': c['original_quote']} for e, c in zip(proof, constraints)],
-                        'exclusion_reason': 'explicit size predicate failed' if status == 'fail' else None})
+                        'exclusion_reason': 'explicit size predicate failed' if status == 'fail' else None,
+                        'source_quote': decisive.get('original_quote', ''),
+                        'target_role': decisive.get('role', 'target'),
+                        'role_binding_status': role_status,
+                        'comparison_scope_ids': scopes,
+                        'comparison_scope_status': role_status,
+                        'measurement_source': source,
+                        'explicit_fail_criterion': criterion})
     unknown = sorted({oid for c in constraints for oid in c['unknown_measurement_ids']})
     return records, constraints, {
         'attributes': constraints, 'candidate_count': len(candidates),
@@ -275,9 +372,74 @@ def size_candidate_evidence(parsed, candidates, measurements, comparison_pool_id
 
 def apply_computed_evidence(diagnosis, evidence, dimension, record=True, size_constraints=()):
     """Apply only definite failures from a computed dimension to the live scope."""
-    by_id = {item['candidate_id']: item for item in evidence}
+    unresolved = (_unresolved_relation_bindings(diagnosis)
+                  if dimension in ('position', 'distance') else [])
+    for reason in unresolved:
+        missing = 'relation evidence has unresolved binding: ' + reason
+        if missing not in diagnosis.setdefault('missing', []):
+            diagnosis['missing'].append(missing)
+    scope_ids = []
+    for constraint in size_constraints:
+        scope_ids.extend(constraint.get('comparison_pool_ids', []))
+    scope_ids = sorted({oid for oid in scope_ids if type(oid) is int})
+    gated = []
+    conflicting_ids = {item.get('candidate_id') for item in evidence
+                       if sum(other.get('candidate_id') == item.get('candidate_id')
+                              for other in evidence) > 1}
+    for item in evidence:
+        if unresolved:
+            item = {**item, 'status': 'unknown', 'role_binding_status': 'unknown',
+                    'comparison_scope_status': 'unknown', 'binding_missing': unresolved}
+        if item.get('candidate_id') in conflicting_ids:
+            item = {**item, 'status':'unknown', 'role_binding_status':'conflict',
+                    'reason':'duplicate candidate evidence records conflict'}
+        constraint = next((row for row in size_constraints
+                           if row.get('role', 'target') == 'target' and
+                           item.get('candidate_id') in row.get('comparison_pool_ids', []) and
+                           any(e.get('candidate_id') == item.get('candidate_id') and
+                               e.get('status') == item.get('status')
+                               for e in row.get('candidate_evidence', []))), None)
+        constraint_sources = (constraint or {}).get('measurement_sources', {})
+        constraint_role = (constraint or {}).get('role', 'target')
+        constraint_scope = (constraint or {}).get('comparison_pool_ids', scope_ids)
+        # Every computed dimension supplies its own predicate-local scope.  A
+        # missing scope is intentional evidence of an unbound condition and
+        # must not become a hard filter through the shared update path.
+        gated.append(candidate_removal_gate(
+            item,
+            source_quote=item.get('source_quote') or item.get('original_quote') or
+                (constraint or {}).get('original_quote', ''),
+            target_role=item.get('target_role') or constraint_role,
+            reference_role=item.get('reference_role'),
+            # Legacy/synthetic records without an explicit role binding are
+            # intentionally retained; a status string alone is not proof.
+            role_binding_status=item.get('role_binding_status') or
+                ('bound' if constraint and constraint.get('scope_status') == 'bound' else 'unknown'),
+            comparison_scope_ids=item.get('comparison_scope_ids') or constraint_scope or
+                scope_ids or
+                item.get('scope_ids'),
+            comparison_scope_status=item.get('comparison_scope_status') or
+                (constraint or {}).get('scope_status', 'unknown'),
+            measurement_source=(item.get('measurement_source') or
+                constraint_sources.get(str(item.get('candidate_id')), '') or
+                ((item.get('render_provenance') or {}).get('source_type', '')
+                 if isinstance(item.get('render_provenance'), dict) else '')),
+            explicit_fail_criterion=item.get('explicit_fail_criterion') or
+                ('reliable measurement contradicts the quoted size condition'
+                 if item.get('status') == 'fail' and constraint else None)))
+        if gated[-1].get('target_role') != 'target':
+            gated[-1]['removal_allowed'] = False
+            gated[-1]['removal_blocked_reason'] = 'reference evidence cannot remove a target candidate'
+    by_id = {item['candidate_id']: item for item in gated}
     before = list(diagnosis.get('candidate_ids', []))
-    removed = [oid for oid in before if by_id.get(oid, {}).get('status') == 'fail']
+    if conflicting_ids & set(before):
+        diagnosis.setdefault('missing', []).append('conflicting candidate evidence records')
+    for item in gated:
+        if item.get('candidate_id') in before and item.get('status') == 'fail' and not item['removal_allowed']:
+            reason = 'candidate exclusion blocked: ' + str(item['candidate_id']) + ': ' + item['removal_blocked_reason']
+            if reason not in diagnosis.setdefault('missing', []):
+                diagnosis['missing'].append(reason)
+    removed = [oid for oid in before if by_id.get(oid, {}).get('removal_allowed')]
     remaining = [oid for oid in before if oid not in set(removed)]
     hypotheses = diagnosis.get('hypotheses', [])
     candidate_sets = []
@@ -287,7 +449,6 @@ def apply_computed_evidence(diagnosis, evidence, dimension, record=True, size_co
             hypothesis['candidate_ids'] = sorted(
                 allowed & set(hypothesis.get('candidate_ids', [])))
             candidate_sets.append(set(hypothesis['candidate_ids']))
-        remaining = sorted(set.union(*candidate_sets))
         diagnosis['stable_candidate_ids'] = sorted(set.intersection(*candidate_sets))
     else:
         diagnosis['stable_candidate_ids'] = [oid for oid in diagnosis.get('stable_candidate_ids', [])
@@ -305,7 +466,9 @@ def apply_computed_evidence(diagnosis, evidence, dimension, record=True, size_co
                                     if reason != 'target size conditions lack complete evidence']
     if record:
         diagnosis.setdefault('active_computed_evidence', []).append({
-            'dimension': dimension, 'evidence': evidence, 'removed_ids': removed,
+            'dimension': dimension, 'evidence': gated, 'removed_ids': removed,
+            'candidate_removal_audit': [item for item in gated
+                                        if item.get('candidate_id') in before],
             **({'size_constraints': list(size_constraints)} if dimension == 'size' else {}),
         })
     if not remaining:
@@ -445,7 +608,7 @@ def compute_observation(dimension, query, parsed, diagnosis, candidates, geometr
             rankings = distance_rankings(query, parsed, candidates, geometry_objects,
                                          viewpoint=parsed.get('Observer'))
         candidate_evidence = distance_candidate_evidence(
-            rankings.get('rankings', []), diagnosis.get('candidate_ids', []))
+            rankings.get('rankings', []), diagnosis.get('candidate_ids', []), diagnosis)
         return {
             'tool': 'compute', 'dimension': dimension,
             'distance_rankings': rankings,
@@ -496,7 +659,19 @@ def compute_observation(dimension, query, parsed, diagnosis, candidates, geometr
                     'metrics': next((r for r in measurements if r['id'] == oid), {}),
                     'attribute_evidence': proofs,
                     'exclusion_reason': 'joint between/relative-height predicates fail in all legal assignments'
-                                        if state == 'fail' else None})
+                                        if state == 'fail' else None,
+                    'source_quote': next((c.get('original_quote', '') for c in constraints), ''),
+                    'target_role': 'target',
+                    'role_binding_status': ('bound' if constraints and all(
+                        c.get('scope_status') == 'bound' for c in constraints) else 'unknown'),
+                    'comparison_scope_ids': sorted({sid for c in constraints
+                                                    for sid in c.get('comparison_pool_ids', [])
+                                                    if type(sid) is int}),
+                    'comparison_scope_status': ('bound' if constraints and all(
+                        c.get('scope_status') == 'bound' for c in constraints) else 'unknown'),
+                    'measurement_source': 'joint bound relation measurements',
+                    'explicit_fail_criterion': ('all legal bound hypotheses fail the quoted predicate'
+                                                if state == 'fail' else None)})
             decision.update(attributes=constraints, joint_hypotheses=joint_size_diagnosis['hypotheses'])
         category_scope = size_category_scope(measurement_scope)
         if category_scope:
@@ -719,7 +894,7 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
                        if (item['category'], item['role']) == key] for key in keys]
         for group in groups:
             call = {'stage': 'active_evidence_visual_check', 'dimension': dimension,
-                'backend': 'qwen', 'role': 'visual_verifier',
+                'backend': api_provider(), 'role': 'visual_verifier',
                 'step': index, 'image': view['image'], 'focus_ids': view['focus_ids'],
                 'review_requirements': group,
                 'response_format': {'type': 'json_object'}}
@@ -778,9 +953,7 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
                                   140 * sum(len(item['attributes']) for item in group)),
                    json_mode=True)
                 call.update(response=data['_content'], usage=data.get('usage'),
-                            model=data['_baseline'].get('model'),
-                            latency_s=data['_baseline']['latency_s'],
-                            finish_reason=data.get('_finish_reason'))
+                            finish_reason=data.get('_finish_reason'), **data['_baseline'])
                 if data.get('_finish_reason') != 'stop':
                     raise QwenAPIError('appearance verification did not complete normally')
                 try:
@@ -795,6 +968,10 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
                     [item['id'] for item in group], geometry_objects, parsed, group, provenance))
             except (ValueError, OSError) as exc:
                 call['error'] = str(exc)
+                if isinstance(exc, QwenAPIError) and getattr(exc, 'diagnostic', None):
+                    call['api_diagnostic'] = dict(exc.diagnostic)
+                    call['failure_kind'] = exc.diagnostic.get('failure_kind', 'response_parse')
+                    raise
                 result['missing'].append('appearance verification failed: ' + str(exc))
         reported = {(check['id'], check['category'], check['role']) for check in result['checks']}
         for need in requirements:
@@ -834,8 +1011,29 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
                  and all(item['inspection_status'] == 'inspected'
                          for item in check.get('attribute_checks', [])) else 'uninspected'),
              'attribute_evidence': check.get('attribute_checks', []),
-             'render_provenance': provenance} for check in result['checks'] if check['role'] == 'target']
+             'render_provenance': provenance,
+             'source_quote': next((quote for item in requirements
+                                   if item.get('id') == check['id'] and item.get('role') == 'target'
+                                   for quote in item.get('source_attributes', [])),
+                                  parsed.get('source_query', query)),
+             'target_role': 'target', 'role_binding_status': 'bound',
+             'comparison_scope_ids': [check['id']],
+             'comparison_scope_status': 'bound',
+             'measurement_source': 'active rendered visual check',
+             'explicit_fail_criterion': (check.get('reason')
+                                         if check['verdict'] == 'no' else None)}
+             for check in result['checks'] if check['role'] == 'target']
         result['reference_evidence'] = [check for check in result['checks'] if check['role'] != 'target']
+    # Follow-up focus must use the same exclusion contract as the actual update.
+    # A raw visual verdict is not itself an allowed removal.
+    generation = parsed.get('candidate_generation', {})
+    fallback_unbound = (generation.get('source') == 'broad_fallback' and
+                        generation.get('status') != 'bound')
+    result['candidate_evidence'] = [candidate_removal_gate(
+        item, target_role='target', reference_role=item.get('reference_role'),
+        role_binding_status='unknown' if fallback_unbound else item.get('role_binding_status', 'unknown'),
+        comparison_scope_status='unknown' if fallback_unbound else item.get('comparison_scope_status', 'unknown'))
+        for item in result['candidate_evidence']]
     records = result['candidate_evidence']
     checked = [item['candidate_id'] for item in records if item.get('status') != 'not_applicable'
                and item.get('inspection_status') != 'uninspected']
@@ -850,7 +1048,8 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
     if unknown:
         result['missing'].append('candidate evidence remains unknown: ' + str(unknown))
     live_targets = [oid for oid in before if not any(
-        item['candidate_id'] == oid and item.get('status') == 'fail' for item in records)]
+        item['candidate_id'] == oid and item.get('removal_allowed')
+        for item in records)]
     result['next_evidence'] = ([{'action': 'evidence', 'dimension': 'appearance',
                                 'focus_ids': uninspected[:6],
                                 'azimuth_deg': action['azimuth_deg'],
@@ -917,6 +1116,16 @@ def evidence_state(diagnosis):
     }
 
 
+def singleton_prediction(predicted_id, remaining, objects):
+    """At normal completion, select one surviving real target without certification."""
+    if predicted_id is not None or len(remaining) != 1:
+        return predicted_id, False
+    oid = remaining[0]
+    if type(oid) is int and any(obj['bbox_id'] == oid for obj in objects):
+        return oid, True
+    return None, False
+
+
 def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb, ids,
                   out, calls, trace, limit, trusted_categories):
     backend = react_backend()
@@ -937,7 +1146,7 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
     trace.update(
         policy='category first; model selects the next evidence dimension; no fixed order',
         interface='evidence_by_dimension', evidence_budget=limit,
-        decision_backend=backend, planner_input='text_only', visual_backend='qwen',
+        decision_backend=backend, planner_input='text_only', visual_backend=api_provider(),
         internal_limits={'renders_per_evidence': 6,
                          'visual_call_policy': 'one per category/role group for shared IDs; no retries'},
         internal_usage={'compute': 0, 'render': 0, 'visual_check': 0},
@@ -966,6 +1175,10 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             status = 'missing'
         elif oid is not None and diagnosis.get('pending_size_conditions'):
             status = 'missing'
+        prediction_source = 'model' if oid is not None else 'abstained'
+        oid, fallback = singleton_prediction(oid, remaining, objects)
+        if fallback:
+            prediction_source = 'singleton_fallback'
         history.append({'action': action, 'remaining_candidate_ids': list(remaining),
                         'evidence_state': evidence_state(diagnosis)})
         trace.update(stop_reason=stop_reason, final_candidate_ids=list(remaining),
@@ -974,13 +1187,15 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         final_data = data.get('_target_decision') or data
         return {
             'query': query, 'predicted_id': oid,
+            'implementation_version': 'relative-size-v3',
+            'prediction_source': prediction_source,
             'bbox_3d': obj['bbox_3d'] if obj else None,
             'response': final_data.get('_content', ''), 'usage': final_data.get('usage'),
             'model': final_data.get('_baseline', {}).get('model'),
             'latency_s': final_data.get('_baseline', {}).get('latency_s'),
             'finish_reason': final_data.get('_finish_reason'), 'images': images,
             'diagnosis': diagnosis, 'decision_status': status,
-            'accepted': oid is not None and status == 'resolved',
+            'accepted': not fallback and oid is not None and status == 'resolved',
             'decision_reasons': [action['reason']],
             'diagnosis_policy': 'active_model_selected_evidence', 'active_trace': trace,
         }
@@ -1020,9 +1235,7 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                              {'role': 'user', 'content': [{'type': 'text', 'text':
                                  json.dumps(state, ensure_ascii=False)}]}], max_tokens=900, json_mode=True)
             call.update(response=data['_content'], usage=data.get('usage'),
-                        model=data['_baseline'].get('model'),
-                        latency_s=data['_baseline']['latency_s'],
-                        finish_reason=data.get('_finish_reason'))
+                        finish_reason=data.get('_finish_reason'), **data['_baseline'])
             if data.get('_finish_reason') == 'length':
                 call['error'] = 'active decision was truncated; no action was executed'
                 observation = {'tool': 'planner', 'error': call['error'],
@@ -1057,6 +1270,8 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 continue
         except (ValueError, OSError) as exc:
             call['error'] = str(exc)
+            if getattr(exc, 'diagnostic', None):
+                call['api_diagnostic'] = dict(exc.diagnostic)
             raise
         if action.get('action') == 'stop':
             pending_keys = {(item.get('attribute'), item.get('role', 'target'))
@@ -1096,6 +1311,9 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 special_support.get('status') == 'pass' and
                 remaining == [oid] and
                 bool(special_support.get('applicable_hypothesis_indices')) and
+                not parsed.get('diagnostic_missing') and
+                not any(item.get('status') == 'fail' and not item.get('removal_allowed')
+                        for item in diagnosis.get('candidate_removal_audit', [])) and
                 not diagnosis.get('pending_size_conditions') and
                 not diagnosis.get('visual_needs'))
             resolved = (diagnosis.get('status') == 'resolved' and remaining == [oid] and
@@ -1256,6 +1474,8 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                          remaining_candidate_ids=diagnosis.get('candidate_ids', []))
             history.append(entry)
             trace['diagnosis_after_step'] = diagnosis
+            if getattr(exc, 'diagnostic', None):
+                raise
             controller_feedback = (
                 'The previous tool request was invalid and acquired no evidence. '
                 'Correct its parameters before retrying; do not repeat the invalid request.'

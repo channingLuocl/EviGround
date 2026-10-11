@@ -110,6 +110,7 @@ class RelativeReferenceSizeTests(unittest.TestCase):
         self.assertEqual({c['role'] for c in diagnosis['pending_size_conditions']}, {'target', 'reference'})
         spec, = size_specs('taller', 'chair', query=query, role='target')
         measured_target = [{'id': oid, 'status': 'known', 'height_m': height,
+                            'source': 'synthetic complete target height measurement',
                             'metric_reliability': {'height_m': {'status': 'usable'}}}
                            for oid, height in ((1, 1.), (2, 2.))]
         target_condition = evaluate_size_condition(spec, measured_target, [1, 2],
@@ -120,6 +121,14 @@ class RelativeReferenceSizeTests(unittest.TestCase):
         self.assertTrue(any(c['attribute'] == 'taller' and c['role'] == 'reference'
                             for c in diagnosis['pending_size_conditions']))
         self.assertEqual(diagnosis['status'], 'missing')
+        audit = diagnosis['active_computed_evidence'][0]['candidate_removal_audit']
+        removed = next(item for item in audit if item['candidate_id'] == 1)
+        self.assertEqual(removed['target_role'], 'target')
+        self.assertEqual(removed['source_quote'], 'taller')
+        self.assertEqual(removed['comparison_scope_ids'], [1, 2])
+        self.assertEqual(removed['measurement_source'],
+                         'synthetic complete target height measurement')
+        self.assertTrue(removed['removal_allowed'])
 
     def test_missing_reference_points_remain_unknown_after_size_operation(self):
         objects, xyz, ids, parsed = fixture(missing_reference=True)
@@ -142,6 +151,20 @@ class RelativeReferenceSizeTests(unittest.TestCase):
             {'action': 'finish', 'predicted_id': 2, 'reason': 'taller reference remains unavailable'}], 1)
         self.assertFalse(result['accepted'])
         self.assertEqual(result['active_trace']['successful_tools'], 1)
+
+    def test_unknown_measured_reference_cannot_be_excluded_by_distance_refresh(self):
+        objects, xyz, ids, parsed = fixture(missing_reference=True)
+        diagnosis = diagnose(parsed, objects, objects[:2], [5, 0, 1], trusted_categories=True,
+                             query=QUERY, size_measurements=point_cloud_measurements(objects, xyz, ids))
+        self.assertEqual(diagnosis['candidate_ids'], [1, 2])
+        self.assertTrue(any(item['role'] == 'reference'
+                            for item in diagnosis['pending_size_conditions']))
+        evidence = compute_observation('distance', QUERY, parsed, diagnosis,
+                                       objects[:2], objects)['candidate_evidence']
+        self.assertTrue(all(item['status'] == 'unknown' for item in evidence))
+        update = apply_computed_evidence(diagnosis, evidence, 'distance')
+        self.assertEqual(update['removed_ids'], [])
+        self.assertEqual(diagnosis['candidate_ids'], [1, 2])
 
     def test_complete_reference_points_resolve_normal_active_and_replay_identically(self):
         objects, xyz, ids, parsed = fixture()
