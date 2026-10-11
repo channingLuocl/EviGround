@@ -206,7 +206,7 @@ def box_measurements(objects):
     return {'measurements':rows,'rankings':rankings}
 
 
-def point_cloud_measurements(objects, xyz, instance_ids):
+def point_cloud_measurements(objects, xyz, instance_ids, scene_objects=None):
     """Measure instance AABBs directly from the prepared scene point cloud.
 
     Missing instance points are reported as unknown instead of inheriting the
@@ -226,6 +226,13 @@ def point_cloud_measurements(objects, xyz, instance_ids):
         row = {'id': object_id, 'point_count': 0,
                'source': 'instance_point_cloud_aabb', 'status': 'unknown',
                'measurement_reliability': 'unknown'}
+        from v4_policy import enabled
+        if enabled('size'):
+            row['annotated_box_metrics'] = box_measurements([obj])['measurements'][0]
+            row['provenance'] = {'instance_id': object_id, 'coordinate_frame': 'prepared scene world; Z gravity',
+                                 'box_format': 'cx,cy,cz,dx,dy,dz',
+                                 'box_source': 'supplied object table (GT/pred recorded at run level)',
+                                 'independence': 'box and assigned-instance points are not independent evidence'}
         if object_points is None or not len(object_points):
             row['unknown_reason'] = 'no instance points in scene.npz'
             rows.append(row)
@@ -273,8 +280,97 @@ def point_cloud_measurements(objects, xyz, instance_ids):
         row.update(oriented)
         row['metric_reliability'] = metric_quality
         row['geometry_details'] = geometry_details
+        if enabled('size'):
+            row['boundary_stability'] = {axis: {
+                'raw_span_m': float(np.ptp(object_points[:, index])),
+                'robust_span_m': float(np.diff(np.quantile(object_points[:, index], [.01, .99]))[0]),
+                'raw_bounds_m': [float(v) for v in (lower[index], upper[index])],
+                'robust_bounds_m': np.quantile(object_points[:, index], [.01, .99]).tolist(),
+                'status': 'unstable' if _boundary_reason(object_points[:, index]) else 'stable'}
+                for index, axis in enumerate(('x', 'y', 'z'))}
+            row['observed_completeness'] = observed_completeness(object_points)
+            robust_bottom, robust_top = np.quantile(object_points[:, 2], [.05, .95])
+            row['body_height_diagnostics'] = {
+                'instance_total_span_m': float(extent[2]),
+                'central_90_percent_span_m': float(robust_top - robust_bottom),
+                'upper_tail_points': int(np.sum(object_points[:, 2] > robust_top)),
+                'lower_tail_points': int(np.sum(object_points[:, 2] < robust_bottom)),
+                'body_height_m': None,
+                'reason': 'quantile span is a diagnostic, not body segmentation; attached contents and missing body remain unresolved'}
+            for metric in ('volume_m3', 'footprint_m2'):
+                axes = ('x', 'y', 'z') if metric == 'volume_m3' else ('x', 'y')
+                reasons = [axis + ' boundary is unstable' for axis in axes
+                           if row['boundary_stability'][axis]['status'] != 'stable']
+                row['metric_reliability'][metric] = {'status': 'unknown' if reasons else 'usable',
+                    'reasons': reasons, 'units': 'm3' if metric == 'volume_m3' else 'm2',
+                    'algorithm': 'observed assigned-instance AABB'}
+            if canonical_category(obj['target']) in ('table', 'desk'):
+                row.update(tabletop_measurement(obj, object_points, scene_objects or objects, points, point_ids))
+                row['metric_reliability']['tabletop_height_m'] = {
+                    'status': row['tabletop_evidence']['status'], 'units': 'm',
+                    'algorithm': row['tabletop_evidence']['source'],
+                    'reasons': [] if row['tabletop_height_m'] is not None else [row['tabletop_evidence']['reason']]}
         rows.append(row)
     return rows
+
+
+def observed_completeness(points):
+    """A surface-only observation is a risk flag, not a missing-object verdict."""
+    centered = points - points.mean(0)
+    values, axes = np.linalg.eigh(centered.T @ centered / len(points))
+    normal = axes[:, 0]
+    thickness = float(np.diff(np.quantile(centered @ normal, [.05, .95]))[0])
+    planar = values[1] > 1e-10 and values[0] / values[1] < .015
+    horizontal = abs(float(normal[2])) > .95
+    surface_only = bool(planar and horizontal)
+    return {'status': 'unknown', 'surface_only_risk': surface_only,
+            'normal_xyz': normal.tolist(), 'surface_thickness_90_percent_m': thickness,
+            'observations': ['points predominantly form one horizontal surface; sides/bottom not established']
+                            if surface_only else ['multiple observed dimensions; complete physical body still unverified'],
+            'alternative_explanations': ['partial scan of a top surface', 'a genuinely thin object'] if surface_only else [],
+            'affected_metrics': ['volume_m3', 'oriented_volume_m3', 'height_m'] if surface_only else [],
+            'requires_visual_check': surface_only,
+            'policy': 'boundary stability, thickness and point count cannot certify completeness'}
+
+
+def tabletop_measurement(obj, object_points, objects, points, point_ids):
+    """Fit a horizontal upper surface and a nearby *labelled* floor independently."""
+    floor_ids = [o['bbox_id'] for o in objects if canonical_category(o['target']) in ('floor', 'ground')]
+    box = np.asarray(obj['bbox_3d'], float)
+    local = np.all(np.abs(points[:, :2] - box[:2]) <= box[3:5] / 2 + .30, axis=1)
+    floor = points[local & np.isin(point_ids, floor_ids)]
+    result = {'tabletop_height_m': None, 'tabletop_evidence': {'status': 'unknown',
+              'source': 'assigned horizontal surface and local labelled floor', 'floor_instance_ids': floor_ids}}
+    evidence = result['tabletop_evidence']
+    if len(floor) < 30 or len(object_points) < 30:
+        evidence['reason'] = 'local labelled floor or tabletop plane support unavailable'
+        return result
+    floor_z = float(np.median(floor[:, 2]))
+    if np.diff(np.quantile(floor[:, 2], [.05, .95]))[0] > .04:
+        evidence['reason'] = 'local floor is not one stable horizontal plane'
+        return result
+    upper = object_points[object_points[:, 2] >= np.median(object_points[:, 2])]
+    bins = np.floor(upper[:, 2] / .02).astype(int)
+    keys, counts = np.unique(bins, return_counts=True)
+    center_z = (keys[np.argmax(counts)] + .5) * .02
+    plane = upper[np.abs(upper[:, 2] - center_z) <= .02]
+    rectangle = _horizontal_rectangle(plane) if len(plane) >= 30 else None
+    overall = _horizontal_rectangle(object_points)
+    if (not rectangle or not overall or rectangle['area_m2'] < .50 * overall['area_m2']
+            or rectangle['hull_rectangle_coverage'] < .50):
+        evidence['reason'] = 'upper horizontal patch lacks broad tabletop support'
+        return result
+    z = float(np.median(plane[:, 2]))
+    centered = plane - plane.mean(0)
+    _, axes = np.linalg.eigh(centered.T @ centered / len(plane))
+    if abs(float(axes[2, 0])) < .98 or z - floor_z <= .10:
+        evidence['reason'] = 'tabletop orientation or above-floor separation not established'
+        return result
+    result['tabletop_height_m'] = z - floor_z
+    evidence.update(status='usable', tabletop_z_m=z, local_floor_z_m=floor_z,
+                    tabletop_enclosing_area_m2=rectangle['area_m2'],
+                    reason='broad horizontal assigned-instance patch above a stable local labelled floor')
+    return result
 
 
 def build_geometry(query, parsed, objects):

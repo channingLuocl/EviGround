@@ -67,7 +67,7 @@ def jev_state(state):
         compact_details = {key: details[key] for key in
                            ('dimension', 'candidate_ids', 'candidate_evidence', 'policy',
                            'candidate_metrics', 'attributes', 'visual_needs', 'size_decision',
-                           'joint_size_summary')
+                           'joint_size_summary', 'visual_inspection', 'relation_tasks', 'size_constraints')
                            if key in details}
         if 'distance_rankings' in details:
             rankings = details['distance_rankings']
@@ -107,6 +107,9 @@ def jev_state(state):
         'available_dimensions': state.get('available_dimensions', []),
         'evidence_capabilities': state.get('evidence_capabilities', {}),
         'tools_remaining': state.get('tools_remaining', 0),
+        'evidence_inventory': state.get('evidence_inventory'),
+        'backtrack_available': state.get('backtrack_available', False),
+        'internal_visual_budget': state.get('internal_visual_budget'),
     }
 
 

@@ -11,6 +11,7 @@ import sys
 
 from batch_nr3d import summarize
 from run import ROOT
+from v4_policy import settings as v4_settings
 
 
 def write_json(path, value):
@@ -38,6 +39,15 @@ def evaluate(row, prediction, log):
     trace = data.get('active_trace', {})
     return {**row, 'predicted_id': data.get('predicted_id'),
             'prediction_source': data.get('prediction_source'),
+            'implementation_version': data.get('implementation_version'),
+            'backtrack_count': data.get('backtrack_count', 0), 'final_review': data.get('final_review'),
+            'internal_budget_usage': data.get('internal_budget_usage'),
+            'v4_api_calls': data.get('v4_api_calls', 0), 'v4_latency_s': data.get('v4_latency_s', 0),
+            'review_triggered': data.get('review_triggered', False),
+            'backtrack_target_restored': any(row['target_id'] in b['restored_ids'] for b in trace.get('backtracks', [])),
+            'review_predictions': [{'predicted_id': r.get('predicted_id'),
+                                    'correct': r.get('predicted_id') == row['target_id']}
+                                   for r in trace.get('final_reviews', [])],
             'correct': data.get('predicted_id') == row['target_id'],
             'accepted': data.get('accepted'), 'decision_status': data.get('decision_status'),
             'missing': trace.get('final_evidence_state', {}).get('missing', []),
@@ -145,6 +155,7 @@ def main():
         'api_config': api_config_summary(),
         'scene_root': str(args.scene_root.resolve()), 'object_table': 'gt',
         'mode': 'active_diagnostic',
+        'v4': v4_settings(),
         'models': {key: os.getenv(key, '') for key in (
             'SEEGROUND_REACT_BACKEND', 'SEEGROUND_JEV_MODEL', 'SEEGROUND_MODEL',
             'SEEGROUND_BASE_URL')},

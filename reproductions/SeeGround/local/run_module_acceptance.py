@@ -6,6 +6,7 @@ from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
+from v4_policy import settings as v4_settings
 
 from appearance_evidence import required_visual_attributes
 from batch_nr3d import summarize
@@ -66,6 +67,7 @@ def preflight(manifest, scene_root, review_limit):
         from decision_api import JEV_URL, jev_model
         models.update(jev_model=jev_model(), jev_url=JEV_URL)
     return {'selection': manifest, 'review_limit': review_limit,
+            'v4': v4_settings(),
             'query_syntax': syntax_settings(),
             'mode': 'active_diagnostic', 'object_table': 'gt',
             'query_target_id_supplied_to_model': False,

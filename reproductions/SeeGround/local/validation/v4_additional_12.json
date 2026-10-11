@@ -1,0 +1,270 @@
+{
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "purpose": "Twelve cases outside the v4 named diagnostic set; selected before fresh v4 inference from the existing v3 sample, not an independent dataset",
+  "selection": "Unchanged official utterances and scene data; target and stimulus fields evaluation-only",
+  "rows": [
+    {
+      "csv_row": 1546,
+      "scene": "scene0086_00",
+      "query": "The smallest bathroom stall",
+      "target_id": 28,
+      "instance_type": "bathroom stall",
+      "stimulus_id": "scene0086_00-bathroom_stall-2-28-1",
+      "stimulus_candidate_ids": [
+        28,
+        1
+      ],
+      "stage": "simple_superlative",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    },
+    {
+      "csv_row": 971,
+      "scene": "scene0256_00",
+      "query": "the large white box on the bottom",
+      "target_id": 4,
+      "instance_type": "box",
+      "stimulus_id": "scene0256_00-box-3-4-3-12",
+      "stimulus_candidate_ids": [
+        4,
+        3,
+        12
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "large"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    },
+    {
+      "csv_row": 1828,
+      "scene": "scene0081_00",
+      "query": "the smallest section of the couch on the right",
+      "target_id": 8,
+      "instance_type": "couch",
+      "stimulus_id": "scene0081_00-couch-3-8-0-7",
+      "stimulus_candidate_ids": [
+        8,
+        0,
+        7
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    },
+    {
+      "csv_row": 665,
+      "scene": "scene0462_00",
+      "query": "It's the bigger box, on the bottom.",
+      "target_id": 1,
+      "instance_type": "box",
+      "stimulus_id": "scene0462_00-box-2-1-21",
+      "stimulus_candidate_ids": [
+        1,
+        21
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "bigger"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    },
+    {
+      "csv_row": 1161,
+      "scene": "scene0648_00",
+      "query": "choose the smaller picture box selection",
+      "target_id": 8,
+      "instance_type": "picture",
+      "stimulus_id": "scene0648_00-picture-2-8-7",
+      "stimulus_candidate_ids": [
+        8,
+        7
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    },
+    {
+      "csv_row": 1460,
+      "scene": "scene0221_00",
+      "query": "Standing at the end of the beds, choose the bed on the left and choose the smaller front pillow on that bed.",
+      "target_id": 39,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0221_00-pillow-6-39-40-41-44-45-46",
+      "stimulus_candidate_ids": [
+        39,
+        40,
+        41,
+        44,
+        45,
+        46
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    },
+    {
+      "csv_row": 749,
+      "scene": "scene0665_00",
+      "query": "The cubicle to the left, near the small rectangular wooden desk",
+      "target_id": 29,
+      "instance_type": "desk",
+      "stimulus_id": "scene0665_00-desk-4-29-2-20-31",
+      "stimulus_candidate_ids": [
+        29,
+        2,
+        20,
+        31
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    },
+    {
+      "csv_row": 1526,
+      "scene": "scene0086_00",
+      "query": "chose the larger bathroom stall on the left that is wheel-chair accessible.",
+      "target_id": 1,
+      "instance_type": "bathroom stall",
+      "stimulus_id": "scene0086_00-bathroom_stall-2-1-28",
+      "stimulus_candidate_ids": [
+        1,
+        28
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "larger"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    },
+    {
+      "csv_row": 1720,
+      "scene": "scene0353_00",
+      "query": "Choose the smallest shoe box that is closest to the blue chair and diagonal to the brown sofa.",
+      "target_id": 31,
+      "instance_type": "shoes",
+      "stimulus_id": "scene0353_00-shoes-4-31-1-23-33",
+      "stimulus_candidate_ids": [
+        31,
+        1,
+        23,
+        33
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    },
+    {
+      "csv_row": 1509,
+      "scene": "scene0164_00",
+      "query": "Taller box that's closest to stove.",
+      "target_id": 24,
+      "instance_type": "box",
+      "stimulus_id": "scene0164_00-box-2-24-41",
+      "stimulus_candidate_ids": [
+        24,
+        41
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "taller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    },
+    {
+      "csv_row": 365,
+      "scene": "scene0081_00",
+      "query": "The small blue couch that is on the end.",
+      "target_id": 8,
+      "instance_type": "couch",
+      "stimulus_id": "scene0081_00-couch-3-8-0-7",
+      "stimulus_candidate_ids": [
+        8,
+        0,
+        7
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    },
+    {
+      "csv_row": 610,
+      "scene": "scene0462_00",
+      "query": "small trash can near the printer, grey in color.",
+      "target_id": 8,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0462_00-trash_can-2-8-10",
+      "stimulus_candidate_ids": [
+        8,
+        10
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely",
+      "modules": [
+        "size"
+      ]
+    }
+  ]
+}

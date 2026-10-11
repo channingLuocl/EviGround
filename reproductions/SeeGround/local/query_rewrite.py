@@ -302,6 +302,7 @@ def rewrite_query(query, parsed):
         phrase = re.search(r'\b(on the floor|on floor|on the ground|grounded)\b', query, re.I).group()
         constraints.append({'type': 'bottom_z_near_floor', 'target': 'target', 'reference': None,
                             'metric': 'bottom_z_m', 'phrase': phrase, 'confidence': 'lexical_recovered'})
+    from v4_policy import enabled, evidence_inventory
     return {
         'query': query,
         'target': targets,
@@ -310,6 +311,7 @@ def rewrite_query(query, parsed):
         'unresolved': unresolved,
         'query_syntax': parsed.get('query_syntax'),
         'condition_coverage': parsed.get('condition_coverage', []),
+        **({'evidence_inventory': evidence_inventory(query, parsed)} if enabled('inventory') else {}),
         'language_reference': {
             'type': 'observer',
             'origin': dict(origin),

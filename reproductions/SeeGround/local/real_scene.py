@@ -316,7 +316,8 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             if diagnostic:
                 raise QwenAPIError('模型调用失败', diagnostic=diagnostic)
             record.update(diagnosis=prediction['diagnosis'],decision_status=prediction['decision_status'],
-                          implementation_version='relative-size-v3',
+                          implementation_version=prediction['implementation_version'],
+                          final_review=prediction.get('final_review'), backtrack_count=prediction.get('backtrack_count', 0),
                           query_syntax=parsed.get('query_syntax', {}),
                           prediction_source=prediction['prediction_source'])
             prediction.update(mode=mode,object_table=object_table,objects_file=objects_path.name,

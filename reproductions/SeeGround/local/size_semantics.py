@@ -126,7 +126,13 @@ def _usable(row, metric, legacy_superlative=False):
     value = row.get(metric)
     if not isinstance(value, (float, int)) or not math.isfinite(value) or value <= 0:
         return False
-    if legacy_superlative and metric in {'volume_m3', 'footprint_m2'}:
+    from v4_policy import enabled
+    if enabled('size') and metric in ('volume_m3', 'oriented_volume_m3', 'height_m'):
+        completeness = row.get('observed_completeness', {})
+        if completeness.get('status') == 'suspected_incomplete' or (completeness.get('surface_only_risk')
+                and completeness.get('status') != 'supported'):
+            return False
+    if legacy_superlative and metric in {'volume_m3', 'footprint_m2'} and not enabled('size'):
         return row.get('measurement_reliability', 'usable') == 'usable'
     reliability = row.get('metric_reliability')
     if isinstance(reliability, dict):
@@ -190,6 +196,15 @@ def evaluate_size_condition(spec, measurements, comparison_pool_ids, *, scope_bo
     by_id = {row['id']: row for row in measurements}
     rows = [by_id[oid] for oid in pool_ids if oid in by_id]
     metric = spec['metric']
+    from v4_policy import enabled
+    if (enabled('size') and metric == 'oriented_footprint_m2' and rows
+            and spec.get('metric_choice_source') == 'category surface structure; declared v4 policy'
+            and all(_usable(r, 'oriented_volume_m3') and _usable(r, 'oriented_footprint_m2') for r in rows)
+            and _proxy_ambiguity(rows, spec['direction'], 'oriented_volume_m3', 'oriented_footprint_m2') is None):
+        metric = 'oriented_volume_m3'
+        spec = {**spec, 'tentative_metric': False,
+                'metric_reason': 'reliable observed volume with agreeing horizontal area ordering',
+                'metric_choice_source': 'reliable volume and agreeing area; static fallback unnecessary'}
     legacy_superlative = spec['form'] == 'superlative'
     if metric == 'volume_m3' and not legacy_superlative:
         metric = 'oriented_volume_m3'
@@ -197,7 +212,9 @@ def evaluate_size_condition(spec, measurements, comparison_pool_ids, *, scope_bo
     if metric == 'volume_m3':
         metric_reason = 'existing explicit superlative uses AABB volume; AABB footprint extreme must agree'
     elif metric == 'oriented_volume_m3':
-        metric_reason = 'relative overall size uses gravity-aligned oriented volume; oriented footprint extreme must agree'
+        metric_reason = ('relative overall size uses observed oriented volume; conflicting area ordering remains tentative'
+                         if enabled('size') else
+                         'relative overall size uses gravity-aligned oriented volume; oriented footprint extreme must agree')
     result = {**spec, 'metric': metric, 'metric_reason': metric_reason, 'comparison_pool_ids': pool_ids,
               'comparison_pool_frozen': bool(scope_bound), 'scope_source': scope_source,
               'scope_status': 'bound' if scope_bound else 'unknown',
@@ -221,6 +238,15 @@ def evaluate_size_condition(spec, measurements, comparison_pool_ids, *, scope_bo
             for oid in candidate_ids]
         result['selected_ids'] = sorted(oid for oid, state in statuses.items() if state == 'pass')
         result['status'] = 'known' if statuses and all(state != 'unknown' for state in statuses.values()) else 'unknown'
+        if spec.get('tentative_metric') and result['selected_ids']:
+            result['tentative_selected_ids'] = result['selected_ids'][:]
+            result['selected_ids'] = []
+            result['status'] = 'unknown'
+            result['reason'] = 'alternative size proxy supports a tentative ordering; original size remains unproved'
+            for item in result['candidate_evidence']:
+                item['tentative_status'] = item['status']
+                item['status'] = 'unknown'
+                item['reason'] = result['reason']
         return result
 
     if not scope_bound or scope_unknown_ids:
@@ -282,8 +308,13 @@ def evaluate_size_condition(spec, measurements, comparison_pool_ids, *, scope_bo
         ambiguity = _proxy_ambiguity(rows, spec['direction'], metric, footprint)
         if ambiguity:
             result['metric_ambiguity'] = ambiguity
-            return finish(ambiguity['reason'])
-        if metric.startswith('oriented_') and not all(_usable(row, footprint) for row in rows):
+            from v4_policy import enabled
+            if not enabled('size'):
+                return finish(ambiguity['reason'])
+            spec = {**spec, 'tentative_metric': True}
+            result['tentative_metric'] = True
+        from v4_policy import enabled
+        if not enabled('size') and metric.startswith('oriented_') and not all(_usable(row, footprint) for row in rows):
             return finish('overall size footprint proxy is unavailable or unreliable')
     ordered = sorted(rows, key=lambda row: row[metric], reverse=spec['direction'] == 'max')
     best, second = ordered[0][metric], ordered[1][metric]
@@ -295,6 +326,16 @@ def evaluate_size_condition(spec, measurements, comparison_pool_ids, *, scope_bo
                                 'pair_comparison' if spec['form'] == 'comparative' and len(pool_ids) == 2 else
                                 'set_comparison')
     if gap <= margin:
+        if spec.get('relax_once') and metric not in ('height_m', 'tabletop_height_m'):
+            # The absolute floor is retained; ordinal errors and ambiguous semantics never qualify.
+            lower = max(.0005 if metric.endswith('_m3') else .005 if metric.endswith('_m2') else .03,
+                        .05 * max(abs(best), abs(second)))
+            if gap > lower and not result.get('metric_ambiguity'):
+                result.update(dynamic_threshold={'old_margin': margin, 'new_margin': lower,
+                    'trigger': 'planner stop after unchanged, valid bound measurements'}, tentative_metric=True)
+                spec = {**spec, 'tentative_metric': True}
+                winner = ordered[0]['id']
+                return finish(None, {oid: 'pass' if oid == winner else 'fail' for oid in pool_ids})
         return finish('size extreme is tied or not clearly separated at the declared tolerance')
     winner = ordered[0]['id']
     return finish(None, {oid: 'pass' if oid == winner else 'fail' for oid in pool_ids})

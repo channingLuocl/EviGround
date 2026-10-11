@@ -13,7 +13,8 @@ def syntax_settings():
     backend = os.getenv('SEEGROUND_SYNTAX_BACKEND', 'spacy').strip()
     if backend not in ('spacy', 'none'):
         raise ValueError('SEEGROUND_SYNTAX_BACKEND must be spacy or none')
-    settings = {'backend': backend, 'implementation_version': 'relative-size-v3'}
+    from v4_policy import settings as v4_settings
+    settings = {'backend': backend, 'implementation_version': v4_settings()['version']}
     if backend == 'spacy':
         settings.update(model=MODEL, spacy_version=version('spacy'), model_version=version(MODEL))
     return settings

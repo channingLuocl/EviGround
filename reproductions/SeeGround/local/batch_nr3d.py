@@ -48,6 +48,17 @@ def summarize(results):
         stats['accepted_count']=len(accepted)
         stats['accepted_coverage']=len(accepted)/len(results) if results else None
         stats['accepted_accuracy']=sum(r.get('correct') is True for r in accepted)/len(accepted) if accepted else None
+    if any('final_review' in r for r in results):
+        stats['backtrack_count'] = sum(r.get('backtrack_count', 0) for r in results)
+        stats['review_status_counts'] = {s: sum((r.get('final_review') or {}).get('status') == s for r in results)
+                                         for s in ('consistent', 'contradiction', 'unknown', 'not_applicable', 'disabled')}
+        changed = [r for r in results if r.get('review_predictions')]
+        stats['review_wrong_to_correct'] = sum(r['review_predictions'][0]['correct'] is False and r.get('correct') is True for r in changed)
+        stats['review_correct_to_wrong'] = sum(r['review_predictions'][0]['correct'] is True and r.get('correct') is False for r in changed)
+        stats['internal_v4_calls'] = sum(sum((r.get('internal_budget_usage') or {}).values()) for r in results)
+        stats['review_trigger_count'] = sum(r.get('review_triggered') is True for r in results)
+        stats['v4_api_calls'] = sum(r.get('v4_api_calls', 0) for r in results)
+        stats['v4_latency_s'] = sum(r.get('v4_latency_s', 0) for r in results)
     return stats
 
 def experiment_settings(scene_dir, mode, review_limit=6, object_table='pred'):
@@ -66,7 +77,9 @@ def experiment_settings(scene_dir, mode, review_limit=6, object_table='pred'):
     if mode in ('diagnostic','active_diagnostic'):
         from query_syntax import syntax_settings
         settings['query_syntax'] = syntax_settings()
-        for name in ('query_syntax.py', 'query_rewrite.py', 'size_semantics.py'):
+        from v4_policy import settings as v4_settings
+        settings['v4'] = v4_settings()
+        for name in ('query_syntax.py', 'query_rewrite.py', 'size_semantics.py', 'v4_policy.py', 'v4_visual.py', 'v4_relations.py'):
             settings['code_sha256'][name] = hashlib.sha256((code_dir/name).read_bytes()).hexdigest()
         from rgb_review import input_hashes
         settings['rgb_sha256']=input_hashes(scene_dir,load_objects(selected_path))
@@ -121,6 +134,8 @@ def run_batch(csv_path, scene, rows, available, output, mode='baseline', review_
             if prediction.get('object_table')!=object_table:raise ValueError('缓存物体表来源不一致')
             result.update(predicted_id=prediction['predicted_id'],response=prediction['response'],model=prediction['model'],
                           prediction_source=prediction.get('prediction_source'),
+                          final_review=prediction.get('final_review'), backtrack_count=prediction.get('backtrack_count', 0),
+                          internal_budget_usage=prediction.get('internal_budget_usage'),
                           latency_s=prediction.get('latency_s'),pipeline_latency_s=prediction.get('pipeline_latency_s'),
                           api_calls=prediction.get('api_calls'),call_usage=prediction.get('call_usage'),
                           finish_reason=prediction.get('finish_reason'),images=prediction.get('images',[]))

@@ -1407,6 +1407,9 @@ def size_conditions(parsed, category, role='target'):
                                role=role, source=attribute):
             from query_syntax import comparison_hint
             hint = comparison_hint(parsed, spec['word'], category)
+            from v4_policy import enabled
+            if enabled() and hint:
+                spec['syntax_attachment'] = hint['attachment']
             if hint:
                 spec.update(source_phrase=hint['source_phrase'], source_span=hint['source_span'],
                             syntax_scope_type=hint['scope_type'])
@@ -1420,7 +1423,8 @@ def size_conditions(parsed, category, role='target'):
             # A post-noun relation can identify a local comparison subset.  A
             # category match alone does not bind that subset, even if the
             # parser omitted the relation or supplied a scene-wide pool.
-            if spec.get('scope_kind') == 'full_category' and spec['form'] != 'superlative':
+            if (spec.get('scope_kind') == 'full_category' and spec['form'] != 'superlative'
+                    and not (enabled() and hint and hint['attachment'] == 'independent')):
                 noun = re.escape(retrieval_category(category))
                 dependency = re.search(
                     r'\b' + re.escape(spec['word']) + r'\s+(?:[a-z-]+\s+)*?' + noun +
@@ -1438,6 +1442,28 @@ def size_conditions(parsed, category, role='target'):
                             scope_phrase=hint['scope_phrase'])
                 if hint.get('required_member_count'):
                     spec['required_member_count'] = hint['required_member_count']
+            if (enabled() and hint and hint['attachment'] == 'ambiguous' and hint.get('modifiers')
+                    and not attribute.get('scene_scope_assumption')
+                    and not re.search(r'\band\s+(?:above|below|near|behind|in front)\b', query, re.I)):
+                spec.update(scope_kind='unbound_explicit_scope',
+                            scope_relation_quotes=[m['text'] for m in hint['modifiers']],
+                            scope_binding_reason='independent condition and comparison-subset attachments remain ambiguous')
+            if enabled('size') and spec['metric'] == 'volume_m3':
+                if retrieval_category(category) in ('table', 'desk'):
+                    spec.update(metric='oriented_footprint_m2',
+                                metric_reason='table/desk horizontal enclosing area proxy; not exact tabletop area',
+                                tentative_metric=True,
+                                metric_choice_source='category surface structure; declared v4 policy')
+                else:
+                    spec.update(metric='oriented_volume_m3',
+                                metric_reason='observed oriented volume proxy; completeness and alternative rankings retained')
+            if enabled('size') and spec['metric'] == 'height_m' and retrieval_category(category) in ('desk', 'table'):
+                spec.update(metric='tabletop_height_m',
+                            metric_reason='fitted horizontal tabletop above a supplied local floor; total span is not tabletop height')
+            choice = parsed.get('_v4_metric_choices', {}).get('|'.join((role, retrieval_category(category), spec['word'])))
+            if enabled('size') and choice and spec['metric'] in ('oriented_volume_m3', 'oriented_footprint_m2'):
+                spec.update(metric=choice['metric'], metric_reason=choice['reason'], tentative_metric=True,
+                            metric_choice_source='structured internal visual observation')
             if not any(c['word'] == spec['word'] and c['role'] == role for c in conditions):
                 conditions.append(spec)
     return conditions
@@ -1490,6 +1516,20 @@ def size_condition_scope(parsed, objects, category, spec, checks=(), role='targe
         proofs = []
         for quote in spec.get('scope_relation_quotes', []):
             relation_quote = re.sub(r'^(?:that|which)\s+(?:is|are)\s+', '', quote, flags=re.I)
+            from v4_policy import enabled
+            if enabled('relations'):
+                from v4_relations import verified_members
+                members = verified_members(parsed, relation_quote, category)
+                if members:
+                    states = {o['bbox_id']: members.get(o['bbox_id'], {}).get('status', 'unknown') for o in pool}
+                    proofs.extend(members.values())
+                    pool = [o for o in pool if states[o['bbox_id']] != 'fail']
+                    unknown = [oid for oid, state in states.items() if state == 'unknown']
+                    if unknown:
+                        record.update(status='unknown', unknown_ids=unknown,
+                                      reason='comparison subset contains unresolved relation members')
+                        break
+                    continue
             relations = [r for r in parsed.get('Relations', [])
                          if r.get('relation') in ('above', 'below')
                          and retrieval_category(r.get('target_category', '')) == retrieval_category(category)
@@ -1559,11 +1599,19 @@ def size_condition_scope(parsed, objects, category, spec, checks=(), role='targe
         by_id = {o['bbox_id']: o for o in objects}
         changed = (record['status'] != 'bound' or
                    record['selected_ids'] != frozen['selected_ids'])
+        proposed = dict(record)
         pool = [by_id[oid] for oid in frozen['selected_ids'] if oid in by_id]
         record = {**frozen, 'frozen': True}
         if changed or len(pool) != len(frozen['selected_ids']):
             record.update(status='unknown', unknown_ids=frozen['selected_ids'],
-                          reason='bound size comparison membership changed or became unknown')
+                          reason='bound size comparison membership changed or became unknown',
+                          proposed_binding=proposed)
+            from v4_policy import enabled
+            if enabled():
+                parsed.setdefault('_v4_binding_changes', {})[key] = {
+                    'source_quote': spec['original_quote'], 'old_ids': frozen['selected_ids'],
+                    'new_ids': proposed['selected_ids'], 'status': proposed['status'],
+                    'evidence': proposed.get('member_evidence', [])}
     return pool, record
 
 
