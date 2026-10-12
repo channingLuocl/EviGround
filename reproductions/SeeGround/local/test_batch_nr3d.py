@@ -22,7 +22,7 @@ class BatchTests(unittest.TestCase):
             data.write_text('scan_id,correct_guess,utterance,target_id,stimulus_id\nscene,True,window,1,fixture\n')
             output=root/'experiment'
             def stopped_run(scene_dir,query,out,*args,**kwargs):
-                out.mkdir(parents=True)
+                out.mkdir(parents=True, exist_ok=True)
                 (out/'prediction.json').write_text(json.dumps({
                     'query':query,'object_table':'gt','predicted_id':None,'bbox_3d':None,
                     'response':'insufficient evidence','model':'mock',
@@ -56,7 +56,7 @@ class BatchTests(unittest.TestCase):
             def mock_run(scene_dir,query,out,*args,**kwargs):
                 self.assertEqual(kwargs['object_table'],'gt')
                 self.assertNotIn('target_id',kwargs)
-                out.mkdir(parents=True)
+                out.mkdir(parents=True, exist_ok=True)
                 (out/'prediction.json').write_text(json.dumps({'query':query,'object_table':'gt',
                     'predicted_id':1,'bbox_3d':gt[0]['bbox_3d'],'response':'mock','model':'mock'}))
             argv=['batch_nr3d.py','--csv',str(data),'--scene','scene','--count','1',
@@ -74,7 +74,7 @@ class BatchTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'不同实验'):main()
                 api.assert_not_called()
 
-    def test_batch_failure_prints_reason_and_keeps_stage_and_latency(self):
+    def test_batch_failure_only_prints_prediction_and_correct_and_keeps_stage_and_latency(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);scene=root/'local_outputs'/'scene';scene.mkdir(parents=True)
             objects=[{'bbox_id':1,'target':'window','bbox_3d':[0,0,0,1,1,1]}]
@@ -85,7 +85,7 @@ class BatchTests(unittest.TestCase):
             data.write_text('scan_id,correct_guess,utterance,target_id,stimulus_id\nscene,True,window,1,fixture\n')
             output=root/'experiment'
             def failed_run(scene_dir,query,out,*args,**kwargs):
-                out.mkdir(parents=True)
+                out.mkdir(parents=True, exist_ok=True)
                 (out/'run.json').write_text(json.dumps({'query':query,'error_stage':'parse_query',
                                                        'pipeline_latency_s':.25,'calls':[]}))
                 raise ValueError('fixture parser failure')
@@ -95,7 +95,8 @@ class BatchTests(unittest.TestCase):
                  patch('batch_nr3d.ROOT',root),patch('batch_nr3d.run_query',side_effect=failed_run), \
                  redirect_stdout(console):
                 main()
-            self.assertIn('ERROR [parse_query/ValueError]: fixture parser failure',console.getvalue())
+            self.assertEqual([json.loads(line) for line in console.getvalue().splitlines()],
+                             [{'predicted_id': None, 'correct': False}])
             result=json.loads((output/'results.json').read_text())
             self.assertEqual(result['results'][0]['error_stage'],'parse_query')
             self.assertEqual(result['summary']['mean_pipeline_latency_s'],.25)

@@ -15,7 +15,7 @@ def reply(content, finish='stop'):
 
 class RealSceneTests(unittest.TestCase):
     def setUp(self):
-        env=patch.dict('os.environ',{'SEEGROUND_REACT_BACKEND':'qwen'})
+        env=patch.dict('os.environ',{'SEEGROUND_REACT_BACKEND':'qwen', 'SEEGROUND_API_PROVIDER':'qwen', 'SEEGROUND_V5':'0'})
         env.start()
         self.addCleanup(env.stop)
 

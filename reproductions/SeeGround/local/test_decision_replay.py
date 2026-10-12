@@ -29,6 +29,12 @@ def fixture():
 
 
 class DecisionTests(unittest.TestCase):
+    def setUp(self):
+        env = patch.dict('os.environ', {'SEEGROUND_V5': '0', 'SEEGROUND_API_PROVIDER': 'qwen',
+                                      'SEEGROUND_REACT_BACKEND': 'jev'})
+        env.start()
+        self.addCleanup(env.stop)
+
     def test_jev_request_and_response_are_typed_without_evaluation(self):
         run,objects=fixture();state,questions=build_input(run,objects)
         payload={'model':'jev-fixture','answers':answers(questions),'usage':{'input_tokens':4}}

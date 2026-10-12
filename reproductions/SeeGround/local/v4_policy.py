@@ -2,13 +2,23 @@
 import os
 
 
+def v5_enabled(feature=None):
+    active = enabled() and os.getenv('SEEGROUND_V5', '0') == '1'
+    return active and (feature is None or os.getenv('SEEGROUND_V5_' + feature.upper(), '1') == '1')
+
+
 def enabled(feature=None):
     active = os.getenv('SEEGROUND_V4', '1') == '1'
     return active and (feature is None or os.getenv('SEEGROUND_V4_' + feature.upper(), '1') == '1')
 
 
 def settings():
-    return {'version': 'relative-size-v4' if enabled() else 'relative-size-v3',
+    return {'version': 'relative-size-v5' if v5_enabled() else 'relative-size-v4' if enabled() else 'relative-size-v3',
+            'v5': v5_enabled(),
+            'v5_scope': v5_enabled('scope'), 'v5_measurements': v5_enabled('measurements'),
+            'v5_call_economy': v5_enabled('call_economy'),
+            'extra_api_attempts_limit': 1 if v5_enabled() else 0,
+            'context_text_upper_bound': int(os.getenv('SEEGROUND_CONTEXT_LIMIT', '32768')),
             'inventory': enabled('inventory'), 'backtrack': enabled('backtrack'),
             'final_review': enabled('final_review'), 'size': enabled('size'),
             'relations': enabled('relations'),
@@ -44,6 +54,7 @@ def evidence_inventory(query, parsed):
                          'scope_kind': spec['scope_kind'], 'scope_phrase': spec.get('scope_phrase'),
                          'member_count': spec.get('required_member_count'),
                          'attachment': spec.get('syntax_attachment'),
+                         **({'scope_hypotheses': spec['scope_hypotheses']} if spec.get('scope_hypotheses') else {}),
                          'dependencies': ['bind comparison members'] + spec.get('scope_relation_quotes', [])})
     for phrase in parsed.get('Unhandled', []):
         if phrase.casefold() in query.casefold():
@@ -75,6 +86,13 @@ def backtrack_events(events, problem, used=False):
     """Select affected deletions only; a bare model disagreement is insufficient."""
     if used or not problem.get('supported'):
         return []
+    if v5_enabled() and problem.get('trigger') == 'final_review':
+        refuted = {(f.get('event_id'), f.get('candidate_id'), f.get('source_quote'))
+                   for f in problem.get('findings', [])
+                   if f.get('finding') == 'refutes_exclusion' and f.get('validated')}
+        return [e for e in events if not e['invalidated'] and any(
+            event_id == e['event_id'] and oid == e['candidate_id'] and quote in e['source_quotes']
+            for event_id, oid, quote in refuted)]
     ids = set(problem.get('candidate_ids', []))
     quotes = set(problem.get('source_quotes', []))
     return [event for event in events if not event['invalidated'] and

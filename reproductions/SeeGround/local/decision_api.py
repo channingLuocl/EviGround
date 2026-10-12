@@ -52,7 +52,7 @@ def validate_answers(answers, questions, allow_partial_probabilities=False):
     return warnings
 
 
-def decide(backend, state, questions):
+def _decide_once(backend, state, questions):
     started=perf_counter()
     if backend=='jev':
         key=os.getenv('TYPESAFE_API_KEY','').strip()
@@ -130,3 +130,51 @@ def decide(backend, state, questions):
                     'stage':'response_parse'} if backend=='jev' else {})
         raise DecisionAPIError(str(exc),data,diagnostic=failure) from exc
     return {**data,'validation_warnings':warnings,'latency_s':round(perf_counter()-started,4)}
+
+
+def decide(backend, state, questions):
+    from v4_policy import v5_enabled
+    if backend != 'jev' or not v5_enabled():
+        return _decide_once(backend, state, questions)
+    from copy import deepcopy
+    import hashlib
+    from v5_runtime import sample_recovery, retryable, persist_api_recovery
+    budget = sample_recovery.get() or {'used': False, 'attempts': []}
+    request_hash = hashlib.sha256(json.dumps({'backend': backend, 'state': state,
+        'questions': questions}, sort_keys=True).encode()).hexdigest()
+    if budget.get('resuming') and request_hash in budget.get('completed_requests', {}):
+        return {**deepcopy(budget['completed_requests'][request_hash]), 'cache_hit': True,
+                'api_attempts': [], 'usage': None, 'latency_s': 0}
+    if budget.pop('manual_resume_pending', False):
+        failure = budget.get('failed_request', {})
+        if failure.get('hash') != request_hash or not retryable(failure.get('diagnostic', {})):
+            raise DecisionAPIError('Saved failed request is not eligible for stage recovery', {})
+        budget['used'] = True
+        budget['attempts'].append({'reason': 'stage_resume', 'context_compressed': False})
+        persist_api_recovery(budget)
+    attempts, started = [], perf_counter()
+    while True:
+        attempt_started = perf_counter()
+        try:
+            data = _decide_once(backend, state, questions)
+            attempts.append({'status': 'success', 'latency_s': round(perf_counter() - attempt_started, 4),
+                             'usage': data.get('usage')})
+            data.update(api_attempts=attempts, extra_attempts=len(attempts) - 1,
+                        latency_s=round(perf_counter() - started, 4))
+            if budget.get('api_checkpoint'):
+                budget.setdefault('completed_requests', {})[request_hash] = data
+                persist_api_recovery(budget)
+            return data
+        except DecisionAPIError as exc:
+            attempts.append({'status': 'failed', 'latency_s': round(perf_counter() - attempt_started, 4),
+                             'diagnostic': dict(exc.diagnostic)})
+            if not budget['used'] and retryable(exc.diagnostic):
+                budget['used'] = True
+                budget['attempts'].append({'reason': exc.diagnostic.get('failure_kind'), 'context_compressed': False})
+                persist_api_recovery(budget)
+                continue
+            exc.diagnostic.update(api_attempts=attempts, extra_attempts=len(attempts) - 1,
+                                  latency_s=round(perf_counter() - started, 4))
+            budget['failed_request'] = {'hash': request_hash, 'diagnostic': dict(exc.diagnostic)}
+            persist_api_recovery(budget)
+            raise

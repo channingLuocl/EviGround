@@ -1,5 +1,6 @@
 """Model-directed, bounded evidence loop for candidate disambiguation."""
 from copy import deepcopy
+import hashlib
 import json
 import re
 
@@ -18,7 +19,7 @@ from size_semantics import evaluate_size_condition
 from qwen_api import QwenAPIError, chat, image_part, parse_json_object, api_provider
 from react_decision import jev_action, react_backend, text_state
 from run import render
-from v4_policy import enabled, settings as v4_settings, evidence_inventory, deletion_events, backtrack_events
+from v4_policy import enabled, v5_enabled, settings as v4_settings, evidence_inventory, deletion_events, backtrack_events
 from v4_visual import boxed_view, visual_report
 from v4_relations import bind_tasks
 
@@ -320,6 +321,11 @@ def size_candidate_evidence(parsed, candidates, measurements, comparison_pool_id
     for spec in size_conditions(parsed, category):
         if contrast and spec['word'] == contrast['target_word']:
             continue  # compute_observation binds the two references in the joint diagnosis.
+        if v5_enabled('scope') and spec.get('scope_hypotheses') and objects is not None:
+            from diagnostic import evaluate_scope_hypotheses
+            constraints.append(evaluate_scope_hypotheses(parsed, objects, category, spec, checks,
+                measurements, [o['bbox_id'] for o in candidates], comparison_scope_bound))
+            continue
         scoped_ids, bound, source, unknown = pool_ids, comparison_scope_bound, 'frozen initial category pool', []
         if objects is not None:
             pool, scope_record = size_condition_scope(parsed, objects, category, spec, checks)
@@ -644,6 +650,11 @@ def compute_observation(dimension, query, parsed, diagnosis, candidates, geometr
                              or (parsed.get('relative_height_binding') and
                                  retrieval_category(obj['target']) == retrieval_category(parsed['Target'][0]))]
         measurements = point_cloud_measurements(measurement_scope, xyz, ids, scene_objects=geometry_objects)
+        if v5_enabled():
+            for row in measurements:
+                previous = parsed.get('_v5_measurement_observations', {}).get(str(row['id']))
+                if previous and previous['measurement_version'] == measurement_version(row):
+                    row['observed_completeness'] = deepcopy(previous['observed_completeness'])
         candidate_evidence, constraints, decision = size_candidate_evidence(
             parsed, scope, measurements, comparison_pool_ids=comparison_pool_ids,
             comparison_scope_bound=comparison_scope_bound, objects=geometry_objects,
@@ -885,6 +896,12 @@ def evidence_request(action, candidate_ids, geometry_objects):
     return request
 
 
+def measurement_version(row):
+    data = json.dumps({key: value for key, value in row.items()
+        if key not in ('observed_completeness', 'visual_observations')}, sort_keys=True)
+    return hashlib.sha256(data.encode()).hexdigest()
+
+
 def execute_v4_inspection(action, query, parsed, diagnosis, candidates, objects,
                           xyz, rgb, ids, out, index, calls, result):
     """One optional common-camera VLM observation inside a chosen evidence task."""
@@ -899,39 +916,63 @@ def execute_v4_inspection(action, query, parsed, diagnosis, candidates, objects,
         c.get('metric_ambiguity') or c.get('unknown_measurement_ids') or c.get('tentative_metric')
         for c in details.get('size_constraints', [])))
     trigger = trigger or (feature == 'size' and any(r.get('observed_completeness', {}).get('requires_visual_check')
-                                                   for r in rows))
+        and (not v5_enabled('call_economy') or r.get('observed_completeness', {}).get('status') != 'supported')
+        for r in rows))
     details['relation_tasks'] = relation_rows
     if not trigger and not action.get('inspect'):
         return
-    cap = v4_settings()[feature + '_visual_calls_limit' if feature == 'size' else 'relation_visual_calls_limit']
-    if budget[feature] >= cap:
-        details['visual_inspection'] = {'status': 'unknown', 'reason': 'internal visual-call budget exhausted'}
+    if v5_enabled('call_economy') and feature == 'size' and not trigger:
         return
+    cap = v4_settings()[feature + '_visual_calls_limit' if feature == 'size' else 'relation_visual_calls_limit']
     anchors = sorted({oid for r in relation_rows for oid in r['geometry_evidence'].get('anchor_ids', [])})
     pool = [r['id'] for r in rows] if feature == 'size' else [o['bbox_id'] for o in candidates]
     focus = action.get('focus_ids') or list(dict.fromkeys(pool[:max(1, 6 - len(anchors[:2]))] + anchors[:2]))[:6]
-    view = boxed_view(objects, focus, xyz, rgb, ids, out, f'v4_{feature}_{index}', rows,
-                      action.get('azimuth_deg', 90), action.get('elevation_deg', 30))
-    budget[feature] += 1
-    report = visual_report('active_' + feature + '_visual_check', query, view,
-        {'purpose': feature + ' evidence', 'constraints': details.get('size_constraints', []),
-         'measurements': rows, 'relations': relation_rows}, calls, chat_fn=chat)
-    result['images'].append(view['image'])
-    result['internal_steps'].extend([{'tool': 'render', **view},
-                                    {'tool': 'visual_check', 'call': calls[-1]}])
+    relevant_quotes = {c.get('original_quote') for c in details.get('size_constraints', [])}
+    relevant_quotes.update(q for c in details.get('size_constraints', []) for q in c.get('scope_relation_quotes', []))
+    relevant_quotes.update(r.get('source_quote') for r in relation_rows)
+    cache_key = json.dumps({'query': query, 'feature': feature, 'focus': focus, 'measurements': rows,
+        'relations': relation_rows, 'constraints': details.get('size_constraints', []), 'azimuth': action.get('azimuth_deg', 90),
+        'elevation': action.get('elevation_deg', 30),
+        'invalidated': sorted(set(parsed.get('_v4_invalidated_conditions', [])) & relevant_quotes)}, sort_keys=True)
+    cached = parsed.get('_v5_visual_cache', {}).get(cache_key) if v5_enabled('call_economy') else None
+    if cached:
+        view, report = deepcopy(cached['view']), deepcopy(cached['report'])
+        report['cache_hit'] = True
+    else:
+        if budget[feature] >= cap:
+            details['visual_inspection'] = {'status': 'unknown', 'reason': 'internal visual-call budget exhausted'}
+            return
+        view = boxed_view(objects, focus, xyz, rgb, ids, out, f'v4_{feature}_{index}', rows,
+                          action.get('azimuth_deg', 90), action.get('elevation_deg', 30))
+        budget[feature] += 1
+        report = visual_report('active_' + feature + '_visual_check', query, view,
+            {'purpose': feature + ' evidence', 'constraints': details.get('size_constraints', []),
+             'measurements': rows, 'relations': relation_rows}, calls, chat_fn=chat)
+        if v5_enabled('call_economy'):
+            parsed.setdefault('_v5_visual_cache', {})[cache_key] = {'view': deepcopy(view), 'report': deepcopy(report)}
+        result['images'].append(view['image'])
+        result['internal_steps'].extend([{'tool': 'render', **view},
+                                        {'tool': 'visual_check', 'call': calls[-1]}])
     details['visual_inspection'] = report
     if feature == 'size':
         for observation in report['observations']:
             row = next((r for r in rows if r['id'] == observation['id']), None)
             if row:
+                if v5_enabled() and observation['completeness'] == 'unknown':
+                    row.setdefault('visual_observations', []).append(observation)
+                    continue
                 row['observed_completeness'].update(status=observation['completeness'],
                                                      visual_evidence=observation)
+                if v5_enabled():
+                    parsed.setdefault('_v5_measurement_observations', {})[str(row['id'])] = {
+                        'measurement_version': measurement_version(row),
+                        'observed_completeness': deepcopy(row['observed_completeness'])}
         for choice in report['metric_choices']:
             category = retrieval_category(choice.get('category', ''))
             specs = size_conditions(parsed, category)
             spec = next((s for s in specs if s['word'] == choice.get('word') and
                          s['original_quote'].casefold() in choice['source_quote'].casefold() and
-                         s['metric'] in ('oriented_volume_m3', 'oriented_footprint_m2')), None)
+                         s['metric'] in ('oriented_volume_m3', 'oriented_footprint_m2', 'body_plane_area_m2')), None)
             if spec:
                 parsed.setdefault('_v4_metric_choices', {})['|'.join(('target', category, spec['word']))] = choice
                 parsed['_v4_invalidated_conditions'] = [q for q in parsed.get('_v4_invalidated_conditions', [])
@@ -953,13 +994,38 @@ def execute_v4_inspection(action, query, parsed, diagnosis, candidates, objects,
                                   for oid in geometry.get('anchor_ids', []))
             state = (item['status'] if item and item['status'] == geometry['status'] and
                      geometry.get('anchor_ids') and anchors_visible else 'unknown')
+            binding_proofs = []
+            if v5_enabled('scope') and geometry.get('anchor_hypotheses'):
+                states = []
+                for binding in geometry['anchor_hypotheses']:
+                    anchor = binding['anchor_ids'][0] if binding.get('anchor_ids') else None
+                    proof = next((p for p in report['relations'] if p.get('anchor_id') == anchor
+                        and p['candidate_id'] == row['candidate_id'] and
+                        p['source_quote'].casefold() == row['source_quote'].casefold()), None)
+                    states.append(binding['status'] if proof and proof['status'] == binding['status']
+                                  and view['visible_instance_pixels'].get(str(anchor), 0) >= 20 else 'unknown')
+                    binding_proofs.append({'anchor_id': anchor, 'status': states[-1],
+                                           'geometry_evidence': binding, 'visual_evidence': proof})
+                state = 'pass' if 'pass' in states else 'fail' if all(s == 'fail' for s in states) else 'unknown'
+                if geometry.get('reference_binding', {}).get('status') == 'unknown':
+                    state = 'unknown'
+            reference_bound = bool(geometry.get('anchor_ids')) and geometry.get('reference_binding', {}).get('status') != 'unknown'
             verified.append({**row, 'status': state, 'visual_evidence': item,
+                             **({'reference_bindings': binding_proofs} if binding_proofs else {}),
                              'measurement_source': view['source'], 'reference_role': geometry.get('anchor_ids'),
-                             'role_binding_status': 'bound' if geometry.get('anchor_ids') else 'unknown',
-                             'comparison_scope_status': 'bound' if geometry.get('anchor_ids') else 'unknown',
+                             'role_binding_status': 'bound' if reference_bound else 'unknown',
+                             'comparison_scope_status': 'bound' if reference_bound else 'unknown',
                              'comparison_scope_ids': [o['bbox_id'] for o in candidates], 'target_role': 'target',
                              'explicit_fail_criterion': 'bound box separation and visible relation both contradict quote' if state == 'fail' else None})
         keys = {(r['candidate_id'], r['source_quote']) for r in verified}
+        if v5_enabled():
+            previous_rows = {(r['candidate_id'], r['source_quote']): r for r in parsed.get('_v4_relation_evidence', [])}
+            for index, row in enumerate(verified):
+                previous = previous_rows.get((row['candidate_id'], row['source_quote']))
+                if (row['status'] == 'unknown' and previous and previous['status'] in ('pass', 'fail')
+                        and previous.get('geometry_evidence') == row['geometry_evidence']):
+                    verified[index] = {**previous, 'additional_visual_observations':
+                        previous.get('additional_visual_observations', []) + [row.get('visual_evidence')]}
         cache = [r for r in parsed.get('_v4_relation_evidence', []) if (r['candidate_id'], r['source_quote']) not in keys]
         parsed['_v4_relation_evidence'] = cache + verified
         details['relation_tasks'] = cache + verified
@@ -1281,7 +1347,7 @@ def singleton_prediction(predicted_id, remaining, objects):
 
 
 def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb, ids,
-                  out, calls, trace, limit, trusted_categories):
+                  out, calls, trace, limit, trusted_categories, resume=None):
     backend = react_backend()
     room_center = (xyz.min(0) + xyz.max(0)) / 2
     diagnosis = diagnose(parsed, geometry_objects, candidates, room_center,
@@ -1335,12 +1401,49 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                  successful_tools=0, rejected_actions=0)
     data = {}
 
+    current_evidence = {'measurements': [], 'size_constraints': [], 'observations': [], 'relations': []}
+    if resume is not None and v5_enabled():
+        diagnosis = resume['diagnosis']
+        trace.update(resume['active_trace'])
+        history = trace['steps']
+        deletions, reviews = trace['deletion_provenance'], trace['final_reviews']
+        current_evidence = resume['current_evidence']
+        runtime = resume['runtime']
+        checks, computed_filters = runtime['checks'], runtime['computed_filters']
+        used = {tuple(signature) for signature in runtime['used']}
+        used_dimensions = set(runtime['used_dimensions'])
+        attempts, tool_count, limit = runtime['attempts'], runtime['tool_count'], runtime['limit']
+        backtrack_used = bool(trace['backtracks'])
+        restored_ids = set(runtime['restored_ids'])
+        invalidated_dimensions = set(runtime['invalidated_dimensions'])
+        images = resume['images']
+        data = runtime['data']
+        observation = runtime.get('observation', observation)
+        controller_feedback = runtime.get('controller_feedback')
+        tentative_id, tentative_source = runtime['tentative_id'], runtime['tentative_source']
+
+    def checkpoint(stage, action=None):
+        if not v5_enabled():
+            return
+        from v5_runtime import save_checkpoint
+        save_checkpoint(out / 'pending_inference.json', {
+            'stage': stage, 'action': action, 'checkpoint_identity': trace.get('checkpoint_identity'),
+            'parsed_query': parsed, 'diagnosis': diagnosis, 'active_trace': trace,
+            'current_evidence': current_evidence, 'calls': calls, 'images': images,
+            'runtime': {'checks': checks, 'computed_filters': computed_filters, 'used': list(used),
+                'used_dimensions': list(used_dimensions), 'attempts': attempts, 'tool_count': tool_count,
+                'limit': limit, 'restored_ids': list(restored_ids), 'invalidated_dimensions': list(invalidated_dimensions),
+                'data': data, 'tentative_id': tentative_id, 'tentative_source': tentative_source,
+                'observation': observation, 'controller_feedback': controller_feedback}})
+
     def recover(problem):
         nonlocal diagnosis, observation, backtrack_used, limit, controller_feedback
         affected = backtrack_events(deletions, problem, backtrack_used)
         if not enabled('backtrack') or not affected or attempts >= max_attempts - 1:
             return False
         backtrack_used = True
+        if v5_enabled():
+            (out / 'pending_review.json').unlink(missing_ok=True)
         before = deepcopy(diagnosis)
         restored = {e['candidate_id'] for e in affected}
         dimensions = {e['dimension'] for e in affected}
@@ -1349,16 +1452,61 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         restored_ids.update(restored)
         invalidated_dimensions.update(dimensions)
         quotes = {q for e in affected for q in e['source_quotes'] if q}
-        parsed['_v4_invalidated_conditions'] = list(quotes)
-        parsed['_size_scope_bindings'] = {}
-        parsed['_v4_binding_changes'] = {}
-        parsed['_v4_metric_choices'] = {}
+        parsed['_v4_invalidated_conditions'] = sorted(set(parsed.get('_v4_invalidated_conditions', [])) | quotes)
+        if v5_enabled():
+            parsed['_size_scope_bindings'] = {k: v for k, v in parsed.get('_size_scope_bindings', {}).items()
+                if not any(q in (json.loads(k)[4] or '') or q in (json.loads(k)[5] or '') for q in quotes)
+                and not (k in parsed.get('_v4_binding_changes', {}) and
+                         parsed['_v4_binding_changes'][k].get('source_quote') in quotes)}
+            parsed['_v4_metric_choices'] = {k: v for k, v in parsed.get('_v4_metric_choices', {}).items()
+                if v.get('source_quote') not in quotes}
+            parsed['_v5_visual_cache'] = {k: v for k, v in parsed.get('_v5_visual_cache', {}).items()
+                if not any(c.get('original_quote') in quotes or set(c.get('scope_relation_quotes', [])) & quotes
+                    for c in json.loads(k).get('constraints', []))
+                and not any(r.get('candidate_id') in restored and r.get('source_quote') in quotes
+                    for r in json.loads(k).get('relations', []))}
+        else:
+            parsed['_size_scope_bindings'] = {}
+            parsed['_v4_metric_choices'] = {}
+        if not v5_enabled():
+            parsed['_v4_binding_changes'] = {}
         parsed['_v4_relax_once'] = False
         if 'appearance' in dimensions:
-            checks[:] = [c for c in checks if c.get('id') not in restored]
+            if v5_enabled():
+                for check in checks:
+                    if check.get('id') not in restored:
+                        continue
+                    for attribute in check.get('attribute_checks', []):
+                        if set(attribute.get('source_quotes', [])) & quotes or attribute.get('attribute') in quotes:
+                            attribute.update(verdict='uncertain', reason='condition invalidated by supported backtrack')
+                    verdicts = [check.get('category_verdict', 'uncertain')] + [
+                        a.get('verdict', 'uncertain') for a in check.get('attribute_checks', [])]
+                    check['verdict'] = 'no' if 'no' in verdicts else 'yes' if all(v == 'yes' for v in verdicts) else 'uncertain'
+            else:
+                checks[:] = [c for c in checks if c.get('id') not in restored]
         parsed['_v4_relation_evidence'] = [r for r in parsed.get('_v4_relation_evidence', [])
-                                          if r.get('source_quote') not in quotes]
-        computed_filters[:] = [f for f in computed_filters if f['dimension'] not in dimensions and f['dimension'] != 'size']
+                                          if r.get('source_quote') not in quotes or
+                                          (v5_enabled() and r.get('candidate_id') not in restored)]
+        if v5_enabled():
+            for computed in computed_filters:
+                affected_specs = [c for c in computed.get('size_constraints', [])
+                    if c.get('original_quote') in quotes or set(c.get('scope_relation_quotes', [])) & quotes]
+                dependent_quotes = {c['original_quote'] for c in affected_specs}
+                computed['size_constraints'] = [c for c in computed.get('size_constraints', []) if c not in affected_specs]
+                for proof in computed['evidence']:
+                    attrs = proof.get('attribute_evidence')
+                    if attrs is not None:
+                        proof['attribute_evidence'] = [e for e in attrs if e.get('original_quote') not in quotes | dependent_quotes]
+                        states = [e.get('status') for e in proof['attribute_evidence']]
+                        proof['status'] = 'fail' if 'fail' in states else 'pass' if states and all(s == 'pass' for s in states) else 'unknown'
+                    if proof.get('source_quote') in quotes | dependent_quotes:
+                        proof.update(status='unknown', removal_allowed=False, role_binding_status='unknown')
+            current_evidence['size_constraints'] = [c for c in current_evidence['size_constraints']
+                if c.get('original_quote') not in quotes and not set(c.get('scope_relation_quotes', [])) & quotes]
+            current_evidence['relations'] = [r for r in current_evidence['relations']
+                if r.get('source_quote') not in quotes or r.get('candidate_id') not in restored]
+        else:
+            computed_filters[:] = [f for f in computed_filters if f['dimension'] not in dimensions and f['dimension'] != 'size']
         diagnosis = diagnose(parsed, geometry_objects, candidates, room_center, checks,
             trusted_categories=trusted_categories, apply_size_constraints=False, query=query)
         diagnosis['size_comparison_pool_ids'] = initial_candidates[:]
@@ -1366,14 +1514,15 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         permitted = set(before['candidate_ids']) | restored
         diagnosis['candidate_ids'] = sorted((set(diagnosis['candidate_ids']) | restored) & permitted)
         for computed in computed_filters:
-            apply_computed_evidence(diagnosis, computed['evidence'], computed['dimension'], record=False)
+            apply_computed_evidence(diagnosis, computed['evidence'], computed['dimension'], record=False,
+                                    size_constraints=computed.get('size_constraints', []) if v5_enabled() else ())
         diagnosis['missing'].append('backtracked deletion requires fresh evidence: ' + ', '.join(map(str, sorted(restored))))
         diagnosis['status'] = 'missing'
         limit = original_limit + 1  # one declared reserved operation; never unbounded replenishment
         trace['tool_budget'] = limit
         event = {'problem': problem, 'restored_ids': sorted(restored),
                  'invalidated_event_ids': [e['event_id'] for e in affected],
-                 'invalidated_dimensions': sorted(dimensions | {'size'}),
+                 'invalidated_dimensions': sorted(dimensions if v5_enabled() else dimensions | {'size'}),
                  'before': before, 'after': deepcopy(diagnosis), 'opportunity_used': 1}
         trace['backtracks'].append(event)
         used.clear()
@@ -1399,35 +1548,92 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             prediction_source = 'singleton_fallback'
         if oid is None and tentative_id in remaining:
             oid, prediction_source, fallback = tentative_id, tentative_source, True
+        if v5_enabled() and oid is not None:
+            from v5_runtime import save_checkpoint
+            save_checkpoint(out / 'pending_review.json', {'query': query, 'predicted_id': oid,
+                'implementation_version': v4_settings()['version'], 'prediction_source': prediction_source,
+                'accepted': not fallback and status == 'resolved', 'decision_status': status,
+                'diagnosis': diagnosis, 'active_trace': trace, 'parsed_query': parsed,
+                'current_evidence': current_evidence, 'calls': calls, 'images': images,
+                'checkpoint_identity': trace.get('checkpoint_identity'), 'response': data.get('_content', ''),
+                'runtime': {'checks': checks, 'computed_filters': computed_filters, 'used': list(used),
+                    'used_dimensions': list(used_dimensions), 'attempts': attempts, 'tool_count': tool_count,
+                    'limit': limit, 'restored_ids': list(restored_ids), 'invalidated_dimensions': list(invalidated_dimensions),
+                    'data': data, 'tentative_id': tentative_id, 'tentative_source': tentative_source},
+                'action': action, 'stop_reason': stop_reason})
         review = {'status': 'not_applicable', 'reason': 'no prediction'}
         if oid is not None and not enabled('final_review'):
             review = {'status': 'disabled', 'reason': 'final-review ablation'}
         if oid is not None and enabled('final_review'):
             budget = parsed['_v4_budget']
-            if budget['review'] < 2:
+            review_limit = v4_settings()['final_review_calls_limit']
+            if v5_enabled('call_economy'):
+                review_limit = min(review_limit, 1 + int(backtrack_used))
+            if budget['review'] < review_limit:
                 references_to_review = sorted({ref for h in diagnosis.get('hypotheses', [])
                                                for ref in h.get('references', {}).values() if type(ref) is int})
                 alternatives = [e['candidate_id'] for e in reversed(deletions) if e['candidate_id'] != oid]
                 alternatives += [i for i in remaining if i != oid]
                 focus = list(dict.fromkeys([oid] + alternatives[:3] + references_to_review[:2] + alternatives))[:6]
                 view = boxed_view(geometry_objects, focus, xyz, rgb, ids, out,
-                                  f'v4_final_review_{budget["review"] + 1}')
+                                  f'v4_final_review_{budget["review"] + 1}',
+                                  current_evidence['measurements'] if v5_enabled() else ())
                 images.append(view['image'])
                 budget['review'] += 1
                 trace['internal_usage']['render'] += 1
                 trace['internal_usage']['visual_check'] += 1
-                review = visual_report('final_prediction_review', query, view,
-                    {'selected_id': oid, 'prediction_source': prediction_source,
-                     'missing': diagnosis.get('missing', []), 'evidence_inventory': inventory,
-                     'deletions': deletions}, calls, chat_fn=chat)
+                payload = {'selected_id': oid, 'prediction_source': prediction_source,
+                    'missing': diagnosis.get('missing', []), 'evidence_inventory': inventory, 'deletions': deletions}
+                if v5_enabled():
+                    payload['measurements'] = [m for m in current_evidence['measurements'] if m['id'] in focus]
+                    payload['size_constraints'] = [{**c, 'candidate_evidence': [e for e in c['candidate_evidence']
+                        if e['candidate_id'] in focus]} for c in current_evidence['size_constraints']]
+                    payload['relations'] = [r for r in current_evidence.get('relations', []) if r['candidate_id'] in focus]
+                    payload['deletions'] = [{k: event.get(k) for k in
+                        ('event_id', 'candidate_id', 'dimension', 'source_quotes', 'invalidated', 'evidence')}
+                        for event in deletions if event['candidate_id'] in focus]
+                try:
+                    review = visual_report('final_prediction_review', query, view, payload, calls, chat_fn=chat)
+                except QwenAPIError as exc:
+                    if not v5_enabled():
+                        raise
+                    review = {'status': 'review_failed', 'reason': str(exc), 'supported': False,
+                              'api_diagnostic': exc.diagnostic, 'findings': []}
+                    budget['review'] -= 1  # A transport failure has not completed this review opportunity.
+                    from v5_runtime import save_checkpoint, sample_recovery
+                    pending = json.loads((out / 'pending_review.json').read_text())
+                    pending.update(calls=calls, parsed_query=parsed, recovery_state=sample_recovery.get())
+                    save_checkpoint(out / 'pending_review.json', pending)
                 review.update(predicted_id=oid, prediction_source=prediction_source,
                               before_accepted=not fallback and status == 'resolved')
                 reviews.append(review)
-                if review['supported']:
+                findings = review.get('findings', [])
+                if v5_enabled():
+                    for finding in findings:
+                        if finding['finding'] == 'confirms_exclusion':
+                            event = next(e for e in deletions if e['event_id'] == finding['event_id'])
+                            event.setdefault('confirmations', []).append(finding)
+                    if review.get('selected_contradicted'):
+                        contradicted_quotes = {f['source_quote'] for f in findings
+                                              if f['finding'] == 'contradicts_selected'}
+                        parsed['_v4_invalidated_conditions'] = sorted(set(parsed.get('_v4_invalidated_conditions', [])) |
+                                                                    contradicted_quotes)
+                        for constraint in current_evidence['size_constraints']:
+                            if constraint.get('original_quote') not in contradicted_quotes:
+                                continue
+                            constraint.update(status='unknown', selected_ids=[], tentative_selected_ids=[],
+                                reason='selected-target condition contradicted by final review')
+                            for proof in constraint.get('candidate_evidence', []):
+                                if proof['candidate_id'] == oid:
+                                    proof.update(status='unknown', invalidated_by='final_review')
+                        diagnosis['missing'].append('final review refuted a quoted selected-target condition')
+                        diagnosis['status'] = status = 'missing'
+                if (review.get('restore_supported') if v5_enabled() else review['supported']):
                     problem = {'supported': True,
                         'candidate_ids': sorted({i for c in review['contradictions'] for i in c['candidate_ids']}),
                         'source_quotes': [c['source_quote'] for c in review['contradictions']],
                         'evidence': review['contradictions'], 'trigger': 'final_review'}
+                    problem['findings'] = findings
                     if recover(problem):
                         tentative_id, tentative_source = None, None
                         return None
@@ -1458,100 +1664,117 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                                                   'final_prediction_review') for c in calls),
             'v4_latency_s': sum(c.get('latency_s', 0) or 0 for c in calls if c.get('stage') in
                                 ('active_size_visual_check', 'active_relations_visual_check', 'final_prediction_review')),
-            'review_triggered': any(r.get('supported') for r in reviews),
+            'review_triggered': any(r.get('restore_supported') if v5_enabled() else r.get('supported') for r in reviews),
+            'current_evidence': current_evidence if v5_enabled() else None,
             'decision_reasons': [action['reason']],
             'diagnosis_policy': 'active_model_selected_evidence', 'active_trace': trace,
         }
 
+    if resume is not None and v5_enabled() and resume.get('stage', 'review') == 'review':
+        result = finish_result(resume['action'], resume['stop_reason'], resume['predicted_id'])
+        if result is not None:
+            return result
+    resume_action = resume.get('action') if resume and resume.get('stage') == 'evidence' else None
     while attempts < max_attempts:
         remaining = diagnosis.get('candidate_ids') or []
-        state = {
-            'query': query, 'parsed_query': parsed, 'target_table': target_table,
-            'reference_table': references, 'annotated_categories': trusted_categories,
-            'category_candidates': category_candidates,
-            'remaining_candidate_ids': remaining,
-            'history': history, 'observation': observation,
-            'evidence_state': evidence_state(diagnosis),
-            'action_attempts_remaining': max_attempts - attempts,
-            'used_dimensions': sorted(used_dimensions),
-            'computed_filters': [item['dimension'] for item in computed_filters],
-            'available_dimensions': list(DIMENSIONS),
-            'evidence_capabilities': EVIDENCE_CAPABILITIES,
-            'tools_remaining': max(0, limit - tool_count),
-            'evidence_inventory': inventory, 'backtrack_available': enabled('backtrack') and not backtrack_used,
-            'reserved_operations': 1 if enabled('backtrack') and not backtrack_used else 0,
-            'internal_visual_budget': dict(parsed['_v4_budget']),
-        }
-        instructions = INSTRUCTIONS
-        if enabled():
-            instructions = instructions.replace('Size selects its own source-bound pools. Supply only action, dimension and reason.',
-                'Size selects its own source-bound pools; optional inspection parameters are described below.')
-            instructions += ('\nUse evidence_inventory to resolve quoted dependencies; do not execute a fixed schedule. '
-                'Size, position and distance support optional inspect=true, focus_ids (1-6 known IDs including a target), '
-                'azimuth_deg and elevation_deg for one common-camera internal inspection. '
-                'Request another focused view or reference-binding evidence when useful. '
-                'Metric choices based on structure remain tentative; never infer hidden geometry. '
-                'Backtrack opportunity and internal visual budgets are shared and bounded.')
-            state['evidence_capabilities'] = {**EVIDENCE_CAPABILITIES,
-                'size': 'Source-bound metric quality, completeness risk, appropriate proxy interpretation; optional common-camera VLM inspection, tentative outputs preserve unknown constraints.',
-                'position': 'Existing geometry and quoted support/attachment/corner tasks; uniquely bound anchors and visible confirmation required.',
-                'distance': 'Nearest/farthest as before; near uses an explicit box support band plus visible confirmation, with an unknown intermediate band. Near never means nearest.'}
-        if controller_feedback:
-            instructions += '\nController correction: ' + controller_feedback
-        if tool_count >= limit:
-            instructions += '\nThe tool budget is exhausted. Return action=finish or action=stop now.'
-        state = text_state(state)
-        call = {'stage': 'active_decision', 'step': attempts + 1,
-                'backend': backend, 'role': 'planner',
-                'response_format': {'type': 'json_object'}}
-        calls.append(call)
-        trace['action_attempts'] += 1
-        try:
-            if backend == 'jev':
-                data = jev_action(state, instructions, call, calls)
-            else:
-                data = chat([{'role': 'system', 'content': instructions},
-                             {'role': 'user', 'content': [{'type': 'text', 'text':
-                                 json.dumps(state, ensure_ascii=False)}]}], max_tokens=900, json_mode=True)
-            call.update(response=data['_content'], usage=data.get('usage'),
-                        finish_reason=data.get('_finish_reason'), **data['_baseline'])
-            if data.get('_finish_reason') == 'length':
-                call['error'] = 'active decision was truncated; no action was executed'
-                observation = {'tool': 'planner', 'error': call['error'],
-                               'no_evidence_acquired': True}
-                history.append({'observation': observation,
-                                'remaining_candidate_ids': list(remaining)})
-                controller_feedback = (
-                    'The previous response was truncated and acquired no evidence. '
-                    'Return one complete JSON action with reason within 40 words.'
-                )
-                trace['rejected_actions'] += 1
-                attempts += 1
-                continue
-            if data.get('_finish_reason') != 'stop':
-                raise QwenAPIError('active decision did not complete normally')
+        if resume_action is not None:
+            action, resume_action = resume_action, None
+        else:
+            checkpoint('planner')
+            state = {
+                'query': query, 'parsed_query': parsed, 'target_table': target_table,
+                'reference_table': references, 'annotated_categories': trusted_categories,
+                'category_candidates': category_candidates,
+                'remaining_candidate_ids': remaining,
+                'history': history, 'observation': observation,
+                'evidence_state': evidence_state(diagnosis),
+                'action_attempts_remaining': max_attempts - attempts,
+                'used_dimensions': sorted(used_dimensions),
+                'computed_filters': [item['dimension'] for item in computed_filters],
+                'available_dimensions': list(DIMENSIONS),
+                'evidence_capabilities': EVIDENCE_CAPABILITIES,
+                'tools_remaining': max(0, limit - tool_count),
+                'evidence_inventory': inventory, 'backtrack_available': enabled('backtrack') and not backtrack_used,
+                'deletion_events': deletions if v5_enabled() else [],
+                'reserved_operations': 1 if enabled('backtrack') and not backtrack_used else 0,
+                'internal_visual_budget': dict(parsed['_v4_budget']),
+            }
+            instructions = INSTRUCTIONS
+            if enabled():
+                instructions = instructions.replace('Size selects its own source-bound pools. Supply only action, dimension and reason.',
+                    'Size selects its own source-bound pools; optional inspection parameters are described below.')
+                instructions += ('\nUse evidence_inventory to resolve quoted dependencies; do not execute a fixed schedule. '
+                    'Size, position and distance support optional inspect=true, focus_ids (1-6 known IDs including a target), '
+                    'azimuth_deg and elevation_deg for one common-camera internal inspection. '
+                    'Request another focused view or reference-binding evidence when useful. '
+                    'Metric choices based on structure remain tentative; never infer hidden geometry. '
+                    'Backtrack opportunity and internal visual budgets are shared and bounded.')
+                state['evidence_capabilities'] = {**EVIDENCE_CAPABILITIES,
+                    'size': 'Source-bound metric quality, completeness risk, appropriate proxy interpretation; optional common-camera VLM inspection, tentative outputs preserve unknown constraints.',
+                    'position': 'Existing geometry and quoted support/attachment/corner tasks; uniquely bound anchors and visible confirmation required.',
+                    'distance': 'Nearest/farthest as before; near uses an explicit box support band plus visible confirmation, with an unknown intermediate band. Near never means nearest.'}
+            if controller_feedback:
+                instructions += '\nController correction: ' + controller_feedback
+            if tool_count >= limit:
+                instructions += '\nThe tool budget is exhausted. Return action=finish or action=stop now.'
+            state = text_state(state)
+            context_audit = None
+            if v5_enabled():
+                from react_decision import planner_state
+                state, context_audit = planner_state(state, instruction_bytes=len(instructions.encode()))
+            call = {'stage': 'active_decision', 'step': attempts + 1,
+                    'backend': backend, 'role': 'planner',
+                    'response_format': {'type': 'json_object'}}
+            calls.append(call)
+            if context_audit:
+                call['context_audit'] = context_audit
+            trace['action_attempts'] += 1
             try:
-                action = parse_json_object(data['_content'])
-                if not isinstance(action.get('reason'), str) or not action['reason'].strip():
-                    raise QwenAPIError('active decision requires a brief evidence-based reason')
-            except ValueError as exc:
+                if backend == 'jev':
+                    data = jev_action(state, instructions, call, calls)
+                else:
+                    data = chat([{'role': 'system', 'content': instructions},
+                                 {'role': 'user', 'content': [{'type': 'text', 'text':
+                                     json.dumps(state, ensure_ascii=False, separators=(',', ':'))}]}], max_tokens=900, json_mode=True)
+                call.update(response=data['_content'], usage=data.get('usage'),
+                            finish_reason=data.get('_finish_reason'), **data['_baseline'])
+                if data.get('_finish_reason') == 'length':
+                    call['error'] = 'active decision was truncated; no action was executed'
+                    observation = {'tool': 'planner', 'error': call['error'],
+                                   'no_evidence_acquired': True}
+                    history.append({'observation': observation,
+                                    'remaining_candidate_ids': list(remaining)})
+                    controller_feedback = (
+                        'The previous response was truncated and acquired no evidence. '
+                        'Return one complete JSON action with reason within 40 words.'
+                    )
+                    trace['rejected_actions'] += 1
+                    attempts += 1
+                    continue
+                if data.get('_finish_reason') != 'stop':
+                    raise QwenAPIError('active decision did not complete normally')
+                try:
+                    action = parse_json_object(data['_content'])
+                    if not isinstance(action.get('reason'), str) or not action['reason'].strip():
+                        raise QwenAPIError('active decision requires a brief evidence-based reason')
+                except ValueError as exc:
+                    call['error'] = str(exc)
+                    observation = {'tool': 'planner', 'error': call['error'],
+                                   'no_evidence_acquired': True}
+                    history.append({'observation': observation,
+                                    'remaining_candidate_ids': list(remaining)})
+                    controller_feedback = (
+                        'The previous response was not a valid JSON action and acquired no evidence. '
+                        'Return one complete JSON action with reason within 40 words; use stop if unresolved.'
+                    )
+                    trace['rejected_actions'] += 1
+                    attempts += 1
+                    continue
+            except (ValueError, OSError) as exc:
                 call['error'] = str(exc)
-                observation = {'tool': 'planner', 'error': call['error'],
-                               'no_evidence_acquired': True}
-                history.append({'observation': observation,
-                                'remaining_candidate_ids': list(remaining)})
-                controller_feedback = (
-                    'The previous response was not a valid JSON action and acquired no evidence. '
-                    'Return one complete JSON action with reason within 40 words; use stop if unresolved.'
-                )
-                trace['rejected_actions'] += 1
-                attempts += 1
-                continue
-        except (ValueError, OSError) as exc:
-            call['error'] = str(exc)
-            if getattr(exc, 'diagnostic', None):
-                call['api_diagnostic'] = dict(exc.diagnostic)
-            raise
+                if getattr(exc, 'diagnostic', None):
+                    call['api_diagnostic'] = dict(exc.diagnostic)
+                raise
         if action.get('action') == 'stop':
             pending_keys = {(item.get('attribute'), item.get('role', 'target'))
                             for item in diagnosis.get('pending_size_conditions', [])}
@@ -1702,6 +1925,7 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             trace['rejected_actions'] += 1
             attempts += 1
             continue
+        checkpoint('evidence', action)
         entry = {'action': request}
         before = list(diagnosis.get('candidate_ids', []))
         before_state = deepcopy(diagnosis)
@@ -1710,6 +1934,16 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             observation = execute_evidence(
                 request, query, parsed, diagnosis, candidates, geometry_objects,
                 xyz, rgb, ids, out, tool_count + 1, calls)
+            if v5_enabled():
+                details = observation.get('details', {})
+                if dimension == 'size':
+                    current_evidence['measurements'] = details.get('comparison_metrics', [])
+                    current_evidence['size_constraints'] = details.get('size_constraints', [])
+                if details.get('relation_tasks'):
+                    current_evidence['relations'] = details['relation_tasks']
+                if details.get('visual_inspection'):
+                    current_evidence['observations'].append({'dimension': dimension,
+                        'report': details['visual_inspection']})
             images.extend(observation['images'])
             for step in observation['internal_steps']:
                 if not step.get('call', {}).get('skipped'):
@@ -1731,6 +1965,8 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                             trusted_categories=trusted_categories, apply_size_constraints=True, query=query,
                             size_measurements=computed['size_measurements'])
                         diagnosis['size_comparison_pool_ids'] = initial_candidates[:]
+                        if v5_enabled():
+                            current_evidence['size_constraints'] = diagnosis['geometry'].get('size_constraints', [])
                     elif computed.get('size_measurements'):
                         scope_ids = set(diagnosis['candidate_ids'])
                         evidence, constraints, _ = size_candidate_evidence(parsed,
@@ -1739,6 +1975,9 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                             objects=geometry_objects, checks=checks)
                         diagnosis = apply_size_observation(diagnosis,
                             {'candidate_evidence': evidence, 'size_constraints': constraints}, record=False)
+                        if v5_enabled():
+                            computed['evidence'], computed['size_constraints'] = evidence, constraints
+                            current_evidence['size_constraints'] = constraints
                     else:
                         apply_computed_evidence(diagnosis, computed['evidence'], computed['dimension'],
                                                 record=False,

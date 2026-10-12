@@ -25,6 +25,60 @@ SIZE_GEOMETRY_POLICY = {
     'plane_thickness_quantiles': [0.05, 0.95],
 }
 
+V5_PLANE_POLICY = {'residual_m': .015, 'minimum_support': 30,
+    'minimum_floor_fraction': .65, 'maximum_normal_tilt_deg': 5,
+    'ambiguous_plane_fraction': .25, 'ransac_trials': 64, 'seed': 5,
+    'minimum_floor_area_m2': .10}
+
+
+def horizontal_plane(points):
+    """Fit labelled observations only; competing supported levels remain unknown."""
+    policy = V5_PLANE_POLICY
+    result = {'status': 'unknown', 'policy': dict(policy), 'support_count': 0}
+    if len(points) < policy['minimum_support']:
+        return {**result, 'reason': 'insufficient labelled plane support'}
+    rng = np.random.default_rng(policy['seed'])
+    best = None
+    for _ in range(policy['ransac_trials']):
+        a, b, c = points[rng.choice(len(points), 3, replace=False)]
+        normal = np.cross(b - a, c - a)
+        norm = np.linalg.norm(normal)
+        if norm < 1e-10:
+            continue
+        normal /= norm
+        if abs(normal[2]) < np.cos(np.deg2rad(policy['maximum_normal_tilt_deg'])):
+            continue
+        mask = np.abs((points - a) @ normal) <= policy['residual_m']
+        if best is None or mask.sum() > best.sum():
+            best = mask
+    if best is None or best.sum() < policy['minimum_support']:
+        return {**result, 'reason': 'no supported near-horizontal plane'}
+    inliers = points[best]
+    center = inliers.mean(0)
+    _, axes = np.linalg.eigh((inliers - center).T @ (inliers - center) / len(inliers))
+    normal = axes[:, 0]
+    if normal[2] < 0:
+        normal = -normal
+    residual = np.abs((points - center) @ normal)
+    best = residual <= policy['residual_m']
+    fraction = float(best.mean())
+    area = _hull_area(_convex_hull(points[best, :2]))
+    result.update(normal_xyz=normal.tolist(), point_xyz=center.tolist(), support_count=int(best.sum()),
+        support_fraction=fraction, outlier_fraction=1 - fraction,
+        residual_95_m=float(np.quantile(residual[best], .95)), support_area_m2=area,
+        support_region_xy={'min': points[best, :2].min(0).tolist(),
+                           'max': points[best, :2].max(0).tolist()})
+    if (fraction < policy['minimum_floor_fraction'] or area < policy['minimum_floor_area_m2']
+            or abs(normal[2]) < np.cos(np.deg2rad(policy['maximum_normal_tilt_deg']))):
+        return {**result, 'reason': 'plane lacks dominant, broad horizontal support'}
+    remaining = points[~best]
+    if len(remaining) >= policy['ambiguous_plane_fraction'] * len(points):
+        second = horizontal_plane(remaining)
+        if second['status'] == 'usable' and second['support_count'] >= policy['ambiguous_plane_fraction'] * len(points):
+            return {**result, 'reason': 'multiple supported local floor levels',
+                    'alternative_plane': second}
+    return {**result, 'status': 'usable', 'reason': 'dominant labelled near-horizontal plane with audited residuals'}
+
 
 def _convex_hull(points):
     """Monotone-chain hull of a two-dimensional point set."""
@@ -156,6 +210,40 @@ def _oriented_measurements(obj, points):
     record('vertical_face_width_m', width, algorithm, 'm', face_reasons)
     record('vertical_face_height_m', height, algorithm, 'm', face_reasons)
     record('vertical_face_area_m2', width * height, algorithm, 'm2', face_reasons)
+    from v4_policy import v5_enabled
+    if v5_enabled('measurements'):
+        centered = points - points.mean(0)
+        values, axes = np.linalg.eigh(centered.T @ centered / len(points))
+        normal = axes[:, 0]
+        projected = np.column_stack((centered @ axes[:, 2], centered @ axes[:, 1], np.zeros(len(points))))
+        plane = _horizontal_rectangle(projected)
+        thickness = float(np.diff(np.quantile(centered @ normal, [.05, .95]))[0])
+        reasons = []
+        if (not plane or values[1] <= 1e-10 or thickness > .20 * min(plane['long_m'], plane['short_m'])):
+            reasons.append('observations do not establish a thin two-dimensional body plane')
+        elif plane['hull_rectangle_coverage'] < .50:
+            reasons.append('body-plane boundary lacks broad support')
+        if plane:
+            reasons += [r for axis in (plane['long_axis_xy'], plane['short_axis_xy'])
+                        if (r := _boundary_reason(projected[:, :2] @ axis))]
+        record('body_plane_area_m2', plane['area_m2'] if plane else 0,
+               'observed PCA body plane enclosing rectangle; not screen area', 'm2', reasons)
+        algorithm = 'observed PCA body plane enclosing rectangle; not screen area'
+        record('body_plane_long_extent_m', plane['long_m'] if plane else 0, algorithm, 'm', reasons)
+        record('body_plane_short_extent_m', plane['short_m'] if plane else 0, algorithm, 'm', reasons)
+        thickness_reason = _boundary_reason(centered @ normal)
+        record('body_plane_thickness_m', thickness, 'observed PCA normal 90-percent span', 'm',
+               list(dict.fromkeys(reasons + ([thickness_reason] if thickness_reason else []))))
+        # Zero observed thickness describes a surface; it does not prove a
+        # zero-thickness physical object or erase the supported plane area.
+        metrics['body_plane_thickness_m'] = thickness
+        details['body_plane'] = {'normal_xyz': normal.tolist(), 'observed_thickness_m': thickness,
+            'rectangle': plane,
+            'orientation': ('horizontal' if abs(normal[2]) >= .95 else
+                            'vertical' if abs(normal[2]) <= .15 else 'oblique'),
+            'boundary_quality': quality['body_plane_area_m2'],
+            'represented_structure': canonical_category(obj['target']),
+            'represents': 'observed dominant body plane; hidden boundaries unproved'}
     # Preserve the observed AABB height even when its quality is unknown.
     metrics.pop('height_m')
     return metrics, quality, details
@@ -342,6 +430,41 @@ def tabletop_measurement(obj, object_points, objects, points, point_ids):
     result = {'tabletop_height_m': None, 'tabletop_evidence': {'status': 'unknown',
               'source': 'assigned horizontal surface and local labelled floor', 'floor_instance_ids': floor_ids}}
     evidence = result['tabletop_evidence']
+    from v4_policy import v5_enabled
+    if v5_enabled('measurements'):
+        evidence['floor_instance_ids'] = sorted(set(int(oid) for oid in point_ids[local & np.isin(point_ids, floor_ids)]))
+        evidence['local_region_xy'] = {'min': (box[:2] - box[3:5] / 2 - .30).tolist(),
+                                       'max': (box[:2] + box[3:5] / 2 + .30).tolist()}
+        fit = horizontal_plane(floor)
+        evidence['floor_plane'] = fit
+        if fit['status'] != 'usable':
+            evidence['reason'] = fit['reason']
+            return result
+        overall = _horizontal_rectangle(object_points)
+        patches = []
+        for level in np.unique(np.floor(object_points[:, 2] / .04)):
+            patch = object_points[np.abs(object_points[:, 2] - (level + .5) * .04) <= .03]
+            rectangle = _horizontal_rectangle(patch) if len(patch) >= 30 else None
+            if not rectangle or not overall or rectangle['area_m2'] < .5 * overall['area_m2']:
+                continue
+            if rectangle['hull_rectangle_coverage'] < .5 or np.ptp(patch[:, 2]) > .04:
+                continue
+            z = float(np.median(patch[:, 2]))
+            if not any(abs(z - p['z']) < .04 for p in patches):
+                patches.append({'z': z, 'area': rectangle['area_m2'], 'support': len(patch)})
+        center, normal = np.asarray(fit['point_xyz']), np.asarray(fit['normal_xyz'])
+        floor_z = float(center[2] - np.dot(normal[:2], box[:2] - center[:2]) / normal[2])
+        patches = [p for p in patches if p['z'] - floor_z > .10]
+        if len(patches) != 1:
+            evidence.update(reason='broad tabletop plane unavailable or multiple supported tabletop levels',
+                            tabletop_hypotheses=patches)
+            return result
+        patch = patches[0]
+        result['tabletop_height_m'] = patch['z'] - floor_z
+        evidence.update(status='usable', tabletop_z_m=patch['z'], local_floor_z_m=floor_z,
+            tabletop_enclosing_area_m2=patch['area'], tabletop_support=patch['support'],
+            reason='broad assigned tabletop above robust labelled local floor')
+        return result
     if len(floor) < 30 or len(object_points) < 30:
         evidence['reason'] = 'local labelled floor or tabletop plane support unavailable'
         return result

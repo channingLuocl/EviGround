@@ -1,9 +1,11 @@
 """Typed JEV decisions for the text-only outer evidence loop."""
 import json
 import os
+from collections import Counter
 
 from decision_api import DecisionAPIError, decide, jev_model
 from qwen_api import api_provider
+from v4_policy import v5_enabled
 
 
 def react_backend():
@@ -46,11 +48,258 @@ def text_state(value):
     return value
 
 
+def compact_repeated_evidence(result):
+    """Share identical proof blocks across every planner evidence container."""
+    if result.get('evidence_encoding'):
+        return result, len(result.get('shared_evidence', {}))
+    table_fields = {'candidate_evidence', 'candidate_removal_audit', 'relation_tasks',
+                    '_v4_relation_evidence', 'reference_bindings', 'anchor_hypotheses',
+                    'member_binding', 'scope_hypotheses'}
+    # These values are read locally before transport or retained as direct
+    # obligations. Encoding them as references would change execution shape.
+    direct_fields = {'next_evidence', 'condition_records', 'missing', 'target_table',
+                     'reference_table', 'category_candidates', 'remaining_candidate_ids',
+                     'available_dimensions', 'evidence_capabilities', 'tools_remaining', 'deletion_events',
+                     'distance_rankings'}
+    def tables(value, field=None):
+        if field in direct_fields:
+            return value
+        if isinstance(value, dict):
+            return {key: tables(item, key) for key, item in value.items()}
+        if isinstance(value, list):
+            rows = [tables(item) for item in value]
+            if (field in table_fields and len(rows) >= 3 and all(isinstance(row, dict) for row in rows)
+                    and all(row.keys() == rows[0].keys() for row in rows)):
+                shared = {key: value for key, value in rows[0].items()
+                          if all(row[key] == value for row in rows[1:])}
+                columns = [key for key in rows[0] if key not in shared]
+                return {'table_shared': shared, 'table_columns': columns,
+                        'table_rows': [[row[key] for key in columns] for row in rows]}
+            return rows
+        return value
+    evidence = {key: tables(value, key) for key, value in result.items()}
+    counts = Counter()
+    def fingerprint(value):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    def count(value, field=None):
+        if field in direct_fields:
+            return
+        if isinstance(value, (dict, list)):
+            encoded = fingerprint(value)
+            if len(encoded.encode()) >= 96:
+                counts[encoded] += 1
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    count(child, key)
+            else:
+                for child in value:
+                    count(child)
+    for key, value in evidence.items():
+        count(value, key)
+    definitions, identifiers = {}, {}
+    def share(value, field=None, container=False):
+        if field in direct_fields:
+            return value
+        if isinstance(value, (dict, list)):
+            encoded = fingerprint(value)
+            if not container and counts[encoded] > 1:
+                if encoded not in identifiers:
+                    identifier = 'e' + str(len(identifiers) + 1)
+                    identifiers[encoded] = identifier
+                    definitions[identifier] = ({key: share(item, key) for key, item in value.items()}
+                                               if isinstance(value, dict)
+                                               else [share(item) for item in value])
+                return {'shared_evidence_ref': identifiers[encoded]}
+            if isinstance(value, dict):
+                return {key: share(item, key, container=(key == 'observation'))
+                        for key, item in value.items()}
+            return [share(item, container=(field == 'history')) for item in value]
+        return value
+    # Keep each top-level container directly accessible to evidence_tasks and
+    # jev_state; only their repeated structured contents use shared references.
+    result = {key: share(value, key, container=True) for key, value in evidence.items()}
+    if definitions:
+        result['shared_evidence'] = definitions
+    result['evidence_encoding'] = ('table_rows follow table_columns in order plus table_shared fields. shared_evidence_ref resolves '
+        'the complete block in shared_evidence. All candidate/anchor IDs, roles, member counts, '
+        'unknown/fail states and reasons are preserved; encoding never proves a condition.')
+    return result, len(definitions)
+
+
+
+def planner_state(state, tighter=False, instruction_bytes=0):
+    """Keep obligations and proof states, not repeated point/measurement payloads."""
+    if state.get('evidence_encoding'):
+        # References and tables already encode complete summaries. Projecting
+        # their keys again would erase proof fields; only trim summary history.
+        result = {**state, 'history': state.get('history', [])[-(1 if tighter else 3):]}
+        summary_bytes = len(json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode())
+        audit = {'method': 'utf8_bytes_upper_bound', 'input_units': summary_bytes + instruction_bytes + 64,
+            'summary_bytes': summary_bytes, 'protocol_reserve': 64, 'instruction_bytes': instruction_bytes,
+            'context_limit': int(os.getenv('SEEGROUND_CONTEXT_LIMIT', '32768')),
+            'removed': [], 'history_entries': len(result['history']), 'tighter': tighter,
+            'evidence_encoding': 'lossless_tables_and_shared_blocks',
+            'shared_evidence_blocks': len(result.get('shared_evidence', {}))}
+        if audit['input_units'] > audit['context_limit'] - 2048:
+            if not tighter:
+                return planner_state(state, tighter=True, instruction_bytes=instruction_bytes)
+            raise ValueError('required planner obligations exceed configured text context budget')
+        return result, audit
+    drop = {'comparison_metrics', 'candidate_metrics', 'geometry_conditions', 'geometry_details',
+            'annotated_box_metrics', 'provenance', 'comparison_bindings', 'before_state',
+            'before', 'after', 'internal_steps', 'between_triplets', 'metrics', 'size_measurements'}
+    drop.update({'_v5_visual_cache', '_v4_metric_choices', '_size_scope_bindings', '_v4_binding_changes',
+                 'query_syntax', 'query_rewrite', 'active_computed_evidence', 'candidate_shape_evidence',
+                 'render_provenance', 'checks', 'relation_pairs', 'visual_inspection', 'history',
+                 'deletion_provenance', 'deletion_events'})
+    removed = set()
+    def proofs(rows):
+        groups = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            # Preserve every obligation, failure reason and unknown candidate;
+            # aggregate identical proof states while metrics stay in local trace.
+            proof = {k: compact(row[k]) for k in ('status', 'source_quote', 'original_quote',
+                'reason', 'target_role', 'role_binding_status', 'comparison_scope_status',
+                'removal_allowed', 'explicit_fail_criterion', 'attribute_evidence', 'relation_evidence',
+                'binding_missing', 'comparison_scope_ids', 'kind', 'target_category', 'anchor_category',
+                'reference_role', 'reference_ids', 'anchor_ids', 'unknown_member_ids', 'unknown_measurement_ids',
+                'geometry_evidence', 'visual_evidence', 'observations', 'exclusion_reason', 'missing',
+                'condition_checks', 'source_quotes', 'reference_bindings', 'scope_hypotheses',
+                'relation', 'support_subject', 'binding_status', 'next_evidence', 'anchor_hypotheses') if k in row}
+            if 'attribute_evidence' in row:
+                proof['attribute_evidence'] = [{k: compact(e[k]) for k in
+                    ('status', 'tentative_status', 'reason', 'original_quote', 'source_quote', 'attribute',
+                     'metric', 'role', 'target_role', 'reference_role', 'reference_ids', 'scope_kind',
+                     'scope_status', 'scope_unknown_ids', 'comparison_pool_ids', 'unknown_measurement_ids',
+                     'scope_hypotheses', 'removal_allowed', 'explicit_fail_criterion', 'role_binding_status',
+                     'comparison_scope_status') if k in e}
+                    for e in row['attribute_evidence']]
+                for summary, original in zip(proof['attribute_evidence'], row['attribute_evidence']):
+                    quality = original.get('measurement_reliability')
+                    summary['measurement_status'] = quality.get('status') if isinstance(quality, dict) else quality
+            key = json.dumps(proof, sort_keys=True)
+            groups.setdefault(key, {**proof, 'candidate_ids': []})['candidate_ids'].extend(
+                row.get('candidate_ids', [row['candidate_id']] if 'candidate_id' in row else []))
+        return list(groups.values())
+
+    def compact(value):
+        if isinstance(value, dict):
+            result = {}
+            for key, item in value.items():
+                if key in drop:
+                    removed.add(key)
+                    continue
+                if key in ('candidate_evidence', 'candidate_removal_audit', 'relation_tasks', '_v4_relation_evidence') and isinstance(item, list):
+                    result[key] = proofs(item)
+                elif key in ('size_decision', 'size_comparison') and isinstance(item, dict):
+                    result[key] = compact({k: v for k, v in item.items() if k != 'attributes'})
+                    result[key]['condition_refs'] = [c.get('original_quote') for c in item.get('attributes', [])]
+                elif key == 'scope_hypotheses' and isinstance(item, list):
+                    result[key] = [compact({k: hypothesis[k] for k in ('interpretation', 'scope_kind',
+                        'scope_status', 'scope_phrase', 'scope_relation_quotes', 'required_member_count',
+                        'comparison_pool_ids', 'scope_unknown_ids', 'unknown_measurement_ids', 'selected_ids',
+                        'tentative_selected_ids', 'status', 'reason', 'member_binding', 'candidate_evidence',
+                        'metric', 'tentative_metric', 'original_quote', 'reference_ids') if k in hypothesis})
+                        for hypothesis in item]
+                elif key == 'geometry_evidence' and isinstance(item, dict):
+                    result[key] = compact({k: v for k, v in item.items() if k != 'geometry'})
+                    if 'geometry' in item:
+                        result[key]['measured_geometry_fields'] = list(item['geometry'])
+                elif key == 'anchor_hypotheses' and isinstance(item, list):
+                    result[key] = [{k: compact(binding[k]) for k in ('status', 'anchor_ids', 'reason') if k in binding}
+                                   for binding in item]
+                else:
+                    result[key] = compact(item)
+            if isinstance(result.get('details'), dict) and 'candidate_evidence' in result:
+                result['details'].pop('candidate_evidence', None)
+            return result
+        if isinstance(value, list):
+            return [compact(v) for v in value]
+        return value
+    # History and deletion provenance are summarized separately below. Do not
+    # recursively copy their repeated snapshots merely to overwrite them.
+    result = compact(text_state({k: v for k, v in state.items() if k not in
+                                 ('history', 'deletion_provenance', 'deletion_events')}))
+    parsed = result.get('parsed_query', {})
+    tasks = result.get('observation', {}).get('details', {}).get('relation_tasks')
+    if tasks is not None and parsed.get('_v4_relation_evidence') == tasks:
+        parsed['_v4_relation_evidence'] = {'same_as_current_relation_tasks': True}
+    result['history'] = [{'action': item.get('action'), 'remaining_candidate_ids': item.get('remaining_candidate_ids'),
+        'missing': item.get('evidence_state', {}).get('missing', [])}
+        for item in state.get('history', [])[-(1 if tighter else 3):]]
+    if result.get('observation', {}).get('evidence_state') == result.get('evidence_state'):
+        result['observation']['evidence_state'] = {'same_as_current_evidence_state': True}
+    for entry in result['history']:
+        if entry.get('missing') == result.get('evidence_state', {}).get('missing'):
+            entry['missing'] = {'same_as_current_missing': True}
+    if ('missing' in result.get('observation', {}) and
+            result['observation']['missing'] == result.get('evidence_state', {}).get('missing')):
+        result['observation']['missing'] = {'same_as_current_missing': True}
+    observation = result.get('observation', {})
+    if isinstance(observation.get('details'), dict):
+        for key, value in list(observation['details'].items()):
+            if key in observation and value == observation[key]:
+                observation['details'][key] = {'same_as_current_observation': key}
+    result['deletion_events'] = [{k: event.get(k) for k in
+        ('event_id', 'candidate_id', 'dimension', 'source_quotes', 'invalidated')}
+        for event in state.get('deletion_events', [])]
+    for summary, event in zip(result['deletion_events'], state.get('deletion_events', [])):
+        summary['proofs'] = [{k: proof.get(k) for k in ('candidate_id', 'status', 'source_quote', 'reason',
+            'explicit_fail_criterion', 'role_binding_status', 'comparison_scope_status')}
+            for proof in event.get('evidence', event.get('proofs', []))]
+    payload = json.dumps(result, ensure_ascii=False, separators=(',', ':'))
+    # Byte length is an honest conservative bound when the configured model
+    # has no supported local tokenizer. Include protocol overhead as well.
+    audit = {'method': 'utf8_bytes_upper_bound', 'input_units': len(payload.encode()) + instruction_bytes + 64,
+        'summary_bytes': len(payload.encode()), 'protocol_reserve': 64,
+        'instruction_bytes': instruction_bytes,
+        'context_limit': int(os.getenv('SEEGROUND_CONTEXT_LIMIT', '32768')),
+        'removed': sorted(removed), 'history_entries': len(result['history']), 'tighter': tighter}
+    # Each UTF-8 byte is a conservative upper bound for text BPE token count.
+    # This is deliberately labelled as an upper bound, never exact tokens.
+    if audit['input_units'] > audit['context_limit'] - 2048:
+        result, shared_blocks = compact_repeated_evidence(result)
+        payload = json.dumps(result, ensure_ascii=False, separators=(',', ':'))
+        audit.update(input_units=len(payload.encode()) + instruction_bytes + 64,
+                     summary_bytes=len(payload.encode()),
+                     evidence_encoding='lossless_tables_and_shared_blocks',
+                     shared_evidence_blocks=shared_blocks)
+    if audit['input_units'] > audit['context_limit'] - 2048:
+        if not tighter:
+            return planner_state(state, tighter=True, instruction_bytes=instruction_bytes)
+        raise ValueError('required planner obligations exceed configured text context budget')
+    return result, audit
+
+
+def compress_planner_messages(messages):
+    from copy import deepcopy
+    result = deepcopy(messages)
+    instruction_bytes = sum(len(message['content'].encode()) for message in result
+                            if message.get('role') == 'system' and isinstance(message.get('content'), str))
+    for message in result:
+        if message.get('role') != 'user' or not isinstance(message.get('content'), list):
+            continue
+        for part in message['content']:
+            if part.get('type') != 'text':
+                continue
+            try:
+                state = json.loads(part['text'])
+            except (ValueError, KeyError):
+                continue
+            if isinstance(state, dict) and 'evidence_state' in state:
+                compact, _ = planner_state(state, tighter=True, instruction_bytes=instruction_bytes)
+                part['text'] = json.dumps(compact, ensure_ascii=False, separators=(',', ':'))
+    return result
+
+
 def jev_state(state):
     """Send decision-relevant summaries instead of the full local audit trace."""
     parsed = state.get('parsed_query') or {}
     parsed = {key: parsed[key] for key in (
-        'Target', 'Anchor', 'Relations', 'Viewpoint', 'Observer', 'Attributes', 'Unhandled'
+        'Target', 'Anchor', 'Relations', 'Viewpoint', 'Observer', 'Attributes', 'Unhandled',
+        'condition_records', 'target_coreferences'
     ) if key in parsed}
     source_observation = state.get('observation') or {}
     observation = {key: source_observation[key] for key in
@@ -58,11 +307,15 @@ def jev_state(state):
                     'coverage', 'missing', 'next_evidence', 'policy')
                    if key in source_observation}
     geometry = source_observation.get('geometry')
+    if isinstance(geometry, dict) and set(geometry) == {'shared_evidence_ref'}:
+        geometry = state.get('shared_evidence', {}).get(geometry['shared_evidence_ref'], geometry)
     if isinstance(geometry, dict):
         geometry = {key: value for key, value in geometry.items()
                     if key != 'between_triplets'}
         observation['geometry'] = geometry
     details = source_observation.get('details')
+    if isinstance(details, dict) and set(details) == {'shared_evidence_ref'}:
+        details = state.get('shared_evidence', {}).get(details['shared_evidence_ref'], details)
     if isinstance(details, dict):
         compact_details = {key: details[key] for key in
                            ('dimension', 'candidate_ids', 'candidate_evidence', 'policy',
@@ -110,6 +363,8 @@ def jev_state(state):
         'evidence_inventory': state.get('evidence_inventory'),
         'backtrack_available': state.get('backtrack_available', False),
         'internal_visual_budget': state.get('internal_visual_budget'),
+        **({'deletion_events': state.get('deletion_events', [])} if v5_enabled() else {}),
+        **{key: state[key] for key in ('shared_evidence', 'evidence_encoding') if key in state},
     }
 
 
@@ -187,7 +442,8 @@ def jev_action(state, instructions, call, calls):
             call['api_diagnostic'] = dict(exc.diagnostic)
         raise
     call.update(model=result['model'], answers=result['answers'], usage=result.get('usage'),
-                latency_s=result['latency_s'], validation_warnings=result['validation_warnings'])
+                latency_s=result['latency_s'], validation_warnings=result['validation_warnings'],
+                **{key: result[key] for key in ('api_attempts', 'extra_attempts', 'cache_hit') if key in result})
     action = dict(tasks[result['answers']['next_task']['choice']])
     call['reason_source'] = 'selected_task_description'
     target_data = None
@@ -214,7 +470,8 @@ def jev_action(state, instructions, call, calls):
                     target_call['api_diagnostic'] = dict(exc.diagnostic)
             raise
         target_call.update(model=target['model'], answers=target['answers'], usage=target.get('usage'),
-                           latency_s=target['latency_s'], validation_warnings=target['validation_warnings'])
+                           latency_s=target['latency_s'], validation_warnings=target['validation_warnings'],
+                           **{key: target[key] for key in ('api_attempts', 'extra_attempts', 'cache_hit') if key in target})
         action['predicted_id'] = int(target['answers']['target']['choice'])
         target_call['response'] = json.dumps({'predicted_id': action['predicted_id']})
         target_call['finish_reason'] = 'stop'
@@ -222,5 +479,6 @@ def jev_action(state, instructions, call, calls):
                        'usage': target.get('usage'), '_baseline': {
                            'model': target['model'], 'latency_s': target['latency_s']}}
     return {'_content': json.dumps(action), '_finish_reason': 'stop', 'usage': result.get('usage'),
-            '_baseline': {'model': result['model'], 'latency_s': result['latency_s']},
+            '_baseline': {'model': result['model'], 'latency_s': result['latency_s'],
+                **{key: result[key] for key in ('api_attempts', 'extra_attempts', 'cache_hit') if key in result}},
             '_target_decision': target_data}

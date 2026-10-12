@@ -74,7 +74,7 @@ def preflight(manifest, scene_root, review_limit):
             'gt_categories_supplied_to_model': True,
             'scene_root': str(scene_root.resolve()), 'models': models,
             'code_sha256': {path.name: digest(path) for path in sorted((ROOT / 'local').glob('*.py'))
-                            if not path.name.startswith('test_')},
+                            if not path.name.startswith(('test_', '._'))},
             'input_sha256': hashes, 'csv_verification': source_check}
 
 
@@ -178,9 +178,17 @@ def audit_case(row, scene_root, output, review_limit, retry_errors=False):
     result = run_case(row, scene_root, output, review_limit, retry_errors)
     directory = output / f"q{row['csv_row']:05d}"
     run_path = directory / 'run.json'
-    run = json.loads(run_path.read_text()) if run_path.exists() else {}
+    try:
+        run = json.loads(run_path.read_text()) if run_path.exists() else {}
+    except (OSError, ValueError) as exc:
+        run = {}
+        result['run_artifact_error'] = str(exc)
     prediction_path = directory / 'prediction.json'
-    prediction = json.loads(prediction_path.read_text()) if prediction_path.exists() else {}
+    try:
+        prediction = json.loads(prediction_path.read_text()) if prediction_path.exists() else {}
+    except (OSError, ValueError) as exc:
+        prediction = {}
+        result['prediction_artifact_error'] = str(exc)
     parsed = run.get('parsed_query', {})
     trace = prediction.get('active_trace') or run.get('active_diagnostic', {})
     diagnosis = prediction.get('diagnosis') or trace.get('diagnosis_after_step') or trace.get('initial_diagnosis', {})
@@ -245,14 +253,17 @@ def main():
     output = (args.output or ROOT / 'local_outputs' /
               ('evidence_module_acceptance_' + datetime.now().strftime('%Y%m%d_%H%M%S'))).resolve()
     bind_output(output, settings)
-    print(json.dumps({'cases': len(selected_rows), 'expected_total': len(selected_rows),
+    if args.dry_run:
+        print(json.dumps({'cases': len(selected_rows), 'expected_total': len(selected_rows),
         'selected_modules': selected_modules, 'module_counts': dict(Counter(
         module for row in selected_rows for module in case_modules(row)
         if module in selected_modules)),
         'models': settings['models'], 'csv_status': settings['csv_verification']['status'],
-        'output': str(output), 'dry_run': args.dry_run}, ensure_ascii=False), flush=True)
+            'output': str(output), 'dry_run': args.dry_run}, ensure_ascii=False), flush=True)
     if args.dry_run:
         return
+    from batch_progress import BatchProgress
+    progress = BatchProgress(len(selected_rows))
     saved = {}
     for row in manifest['rows']:
         path = output / f"q{row['csv_row']:05d}" / 'module_evaluation.json'
@@ -268,10 +279,8 @@ def main():
             result = future.result()
             saved[result['csv_row']] = result
             report(output, list(saved.values()), manifest['rows'])
-            print(json.dumps({key: result.get(key) for key in ('csv_row', 'module', 'scene', 'prediction_source',
-                'predicted_id', 'target_id', 'accepted', 'decision_status', 'final_missing', 'error')},
-                ensure_ascii=False), flush=True)
-    print(json.dumps(report(output, list(saved.values()), manifest['rows']), ensure_ascii=False, indent=2))
+            progress.update(result)
+    report(output, list(saved.values()), manifest['rows'])
 
 
 if __name__ == '__main__':

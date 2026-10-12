@@ -61,6 +61,12 @@ def joint_size_state(audit_repetitions=1):
 
 
 class ReactDecisionTests(unittest.TestCase):
+    def setUp(self):
+        env = patch.dict('os.environ', {'SEEGROUND_V5': '0', 'SEEGROUND_API_PROVIDER': 'qwen',
+                                      'SEEGROUND_REACT_BACKEND': 'jev'})
+        env.start()
+        self.addCleanup(env.stop)
+
     def test_default_backend_is_jev_and_invalid_backend_fails(self):
         with patch.dict('os.environ', {}, clear=True):
             self.assertEqual(react_backend(), 'jev')

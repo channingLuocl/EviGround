@@ -185,7 +185,7 @@ def _request_id(response: Any) -> str | None:
     return None
 
 
-def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: float | None = None,
+def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: float | None = None,
          timeout: tuple[int, int] = (15, 120), json_mode: bool = False) -> dict[str, Any]:
     base, model, key = _settings()
     options = request_options(max_tokens, temperature, json_mode)
@@ -255,6 +255,70 @@ def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: 
     data["_content"] = content
     data['_finish_reason'] = data['choices'][0].get('finish_reason')
     return data
+
+
+def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: float | None = None,
+         timeout: tuple[int, int] = (15, 120), json_mode: bool = False) -> dict[str, Any]:
+    from v4_policy import v5_enabled
+    if not v5_enabled():
+        return _chat_once(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, json_mode=json_mode)
+    from v5_runtime import sample_recovery, retryable, persist_api_recovery
+    budget = sample_recovery.get()
+    if budget is None:
+        budget = {'used': False, 'attempts': []}
+    import hashlib
+    request_hash = hashlib.sha256(json.dumps({'messages': messages, 'max_tokens': max_tokens,
+        'temperature': temperature, 'json_mode': json_mode}, sort_keys=True).encode()).hexdigest()
+    if budget.get('resuming') and request_hash in budget.get('completed_requests', {}):
+        from copy import deepcopy
+        cached = deepcopy(budget['completed_requests'][request_hash])
+        cached['usage'] = None
+        cached['_baseline'].update(cache_hit=True, api_attempts=[], extra_attempts=0, latency_s=0)
+        return cached
+    if budget.pop('manual_resume_pending', False):
+        failure = budget.get('failed_request', {})
+        if failure.get('hash') != request_hash or not retryable(failure.get('diagnostic', {})):
+            raise QwenAPIError('Saved failed request is not eligible for stage recovery')
+        budget['used'] = True
+        budget['attempts'].append({'reason': 'stage_resume', 'context_compressed': False})
+        persist_api_recovery(budget)
+    attempts = []
+    started = time.perf_counter()
+    while True:
+        attempt_start = time.perf_counter()
+        try:
+            data = _chat_once(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, json_mode=json_mode)
+            attempts.append({'status': 'success', 'latency_s': round(time.perf_counter() - attempt_start, 4),
+                             'usage': data.get('usage')})
+            data['_baseline'].update(api_attempts=attempts, extra_attempts=len(attempts) - 1,
+                                      latency_s=round(time.perf_counter() - started, 4))
+            if budget.get('api_checkpoint'):
+                budget.setdefault('completed_requests', {})[request_hash] = data
+                persist_api_recovery(budget)
+            return data
+        except QwenAPIError as exc:
+            diagnostic = exc.diagnostic
+            attempts.append({'status': 'failed', 'latency_s': round(time.perf_counter() - attempt_start, 4),
+                             'diagnostic': dict(diagnostic)})
+            context_error = diagnostic.get('http_status') == 400 and any(marker in
+                str(diagnostic.get('response_body', '')).lower() for marker in
+                ('context window', 'context_length_exceeded', 'maximum context length'))
+            retry_messages = messages
+            if context_error:
+                from react_decision import compress_planner_messages
+                retry_messages = compress_planner_messages(messages)
+            changed = retry_messages != messages
+            if not budget['used'] and (retryable(diagnostic) or context_error and changed):
+                budget['used'] = True
+                budget['attempts'].append({'reason': diagnostic.get('failure_kind'), 'context_compressed': changed})
+                persist_api_recovery(budget)
+                messages = retry_messages
+                continue
+            diagnostic.update(api_attempts=attempts, extra_attempts=len(attempts) - 1,
+                              latency_s=round(time.perf_counter() - started, 4))
+            budget['failed_request'] = {'hash': request_hash, 'diagnostic': dict(diagnostic)}
+            persist_api_recovery(budget)
+            raise
 
 
 def parse_predicted_id(content: str, valid_ids: set[int]) -> int:

@@ -1,5 +1,6 @@
 """Resumable Nr3D trial; optional annotated OLT, query answers are evaluation-only."""
 import argparse
+from contextlib import redirect_stderr, redirect_stdout
 import csv
 import hashlib
 import html
@@ -51,14 +52,37 @@ def summarize(results):
     if any('final_review' in r for r in results):
         stats['backtrack_count'] = sum(r.get('backtrack_count', 0) for r in results)
         stats['review_status_counts'] = {s: sum((r.get('final_review') or {}).get('status') == s for r in results)
-                                         for s in ('consistent', 'contradiction', 'unknown', 'not_applicable', 'disabled')}
+                                         for s in ('consistent', 'contradiction', 'unknown', 'not_applicable', 'disabled', 'review_failed')}
         changed = [r for r in results if r.get('review_predictions')]
         stats['review_wrong_to_correct'] = sum(r['review_predictions'][0]['correct'] is False and r.get('correct') is True for r in changed)
         stats['review_correct_to_wrong'] = sum(r['review_predictions'][0]['correct'] is True and r.get('correct') is False for r in changed)
+        stats['review_correct_to_abstained'] = sum(r['review_predictions'][0]['correct'] is True and r.get('predicted_id') is None for r in changed)
+        stats['review_correct_to_incorrect_answer'] = sum(r['review_predictions'][0]['correct'] is True and
+            r.get('predicted_id') is not None and r.get('correct') is False for r in changed)
+        stats['review_target_restored_but_abstained'] = sum(r.get('backtrack_target_restored') is True and
+            r.get('predicted_id') is None for r in results)
+        stats['review_confirms_exclusion'] = sum(f.get('finding') == 'confirms_exclusion'
+            for r in results for f in r.get('review_findings', []))
+        stats['historical_review_status_counts'] = {s: sum(v.get('status') == s for r in results
+            for v in r.get('historical_reviews', [])) for s in ('consistent', 'contradiction', 'unknown', 'review_failed')}
+        stats['review_errors'] = sum(r.get('review_failed') is True for r in results)
+        stats['inference_errors'] = sum(bool(r.get('error')) for r in results)
+        stats['actual_api_attempts'] = sum(r.get('api_attempts') or r.get('api_calls') or 0 for r in results)
         stats['internal_v4_calls'] = sum(sum((r.get('internal_budget_usage') or {}).values()) for r in results)
         stats['review_trigger_count'] = sum(r.get('review_triggered') is True for r in results)
         stats['v4_api_calls'] = sum(r.get('v4_api_calls', 0) for r in results)
         stats['v4_latency_s'] = sum(r.get('v4_latency_s', 0) for r in results)
+    from v4_policy import v5_enabled
+    if v5_enabled():
+        stats['incorrect_answers'] = sum(r.get('predicted_id') is not None and not r.get('correct') for r in results)
+        stats['abstained'] = sum(r.get('predicted_id') is None and not r.get('error') for r in results)
+        stats['inference_errors'] = sum(bool(r.get('error')) for r in results)
+        stats['review_errors'] = sum(r.get('review_failed') is True for r in results)
+        stats['actual_api_attempts'] = sum(r.get('api_attempts') or r.get('api_calls') or 0 for r in results)
+        stats['extra_api_attempts'] = sum(len(r.get('recovery_attempts', [])) for r in results)
+        stats['api_stage_attempts'] = {stage: sum(len(c.get('api_attempts') or (c.get('api_diagnostic') or {}).get('api_attempts', []))
+            or (0 if c.get('cache_hit') else 1) for r in results for c in r.get('api_stage_calls', []) if c.get('stage') == stage)
+            for stage in sorted({c['stage'] for r in results for c in r.get('api_stage_calls', []) if c.get('stage')})}
     return stats
 
 def experiment_settings(scene_dir, mode, review_limit=6, object_table='pred'):
@@ -125,15 +149,23 @@ def run_batch(csv_path, scene, rows, available, output, mode='baseline', review_
     if mp.exists() and json.loads(mp.read_text())!=manifest:raise ValueError('输出目录已有不同实验，请更换目录')
     mp.write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
     results=[]
+    from batch_progress import BatchProgress
+    progress = BatchProgress(len(rows))
     for i,row in enumerate(rows):
         out=output/f'q{i+1:03d}';pred=out/'prediction.json';result={**row,'object_table':object_table}
         try:
-            if not pred.exists():run_query(scene_dir,row['query'],out,'official Nr3D utterance; CSV row '+str(row['csv_row']),mode=mode,review_limit=review_limit,object_table=object_table)
+            if not pred.exists():
+                out.mkdir(parents=True, exist_ok=True)
+                with (out/'console.log').open('a') as log, redirect_stdout(log), redirect_stderr(log):
+                    run_query(scene_dir,row['query'],out,'official Nr3D utterance; CSV row '+str(row['csv_row']),mode=mode,review_limit=review_limit,object_table=object_table)
             prediction=json.loads(pred.read_text())
             if prediction['query']!=row['query']:raise ValueError('缓存查询不一致')
             if prediction.get('object_table')!=object_table:raise ValueError('缓存物体表来源不一致')
             result.update(predicted_id=prediction['predicted_id'],response=prediction['response'],model=prediction['model'],
                           prediction_source=prediction.get('prediction_source'),
+                          review_failed=prediction.get('review_failed',False),
+                          api_attempts=prediction.get('api_attempts'),
+                          recovery_attempts=prediction.get('recovery_attempts',[]),
                           final_review=prediction.get('final_review'), backtrack_count=prediction.get('backtrack_count', 0),
                           internal_budget_usage=prediction.get('internal_budget_usage'),
                           latency_s=prediction.get('latency_s'),pipeline_latency_s=prediction.get('pipeline_latency_s'),
@@ -159,11 +191,8 @@ def run_batch(csv_path, scene, rows, available, output, mode='baseline', review_
                                       api_calls=len(failure.get('calls',[])))
                 except (ValueError,OSError):
                     pass
-        results.append(result);stats=report(output,results,manifest)
-        print(f'{i+1}/{len(rows)}: predicted={result.get("predicted_id")} expected={row["target_id"]} correct={result["correct"]}',flush=True)
-        if 'error' in result:
-            print(f'  ERROR [{result.get("error_stage") or "unknown"}/{result["error_type"]}]: {result["error"]}',flush=True)
-    print(json.dumps(stats),flush=True)
+        results.append(result);report(output,results,manifest)
+        progress.update(result)
     return results
 
 def main():

@@ -18,7 +18,7 @@ import test_real_scene
 class OpenAIAPITests(unittest.TestCase):
     def setUp(self):
         env = patch.dict('os.environ', {
-            'SEEGROUND_API_PROVIDER': 'openai', 'SEEGROUND_REACT_BACKEND': 'openai',
+            'SEEGROUND_V5': '0', 'SEEGROUND_API_PROVIDER': 'openai', 'SEEGROUND_REACT_BACKEND': 'openai',
             'SEEGROUND_BASE_URL': 'http://relay.invalid:3000/v1',
             'SEEGROUND_ALLOW_HTTP': '1', 'SEEGROUND_MODEL': 'gpt-6.1-sol',
             'SEEGROUND_API_KEY': 'mock-relay-key',

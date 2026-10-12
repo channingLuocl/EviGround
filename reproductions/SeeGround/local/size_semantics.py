@@ -139,7 +139,8 @@ def _usable(row, metric, legacy_superlative=False):
         entry = reliability.get(metric, {})
         return entry.get('status') == 'usable' if isinstance(entry, dict) else entry == 'usable'
     if metric in {'horizontal_oriented_long_extent_m', 'vertical_face_area_m2',
-                  'oriented_volume_m3', 'oriented_footprint_m2'}:
+                  'oriented_volume_m3', 'oriented_footprint_m2', 'body_plane_area_m2',
+                  'body_plane_long_extent_m', 'body_plane_short_extent_m', 'body_plane_thickness_m'}:
         return False
     return row.get('measurement_reliability', 'usable' if legacy_superlative else 'unknown') == 'usable'
 
@@ -185,6 +186,29 @@ def _height_structure_ambiguity(rows):
                     abs(bounds[0][0] - bounds[1][0]) > _margin('height_m', 'comparative', a, b)):
                 return {'status': 'unknown', 'candidate_ids': sorted([first['id'], second['id']]),
                         'reason': 'common observed top and shifted bottoms leave full-height measurement ambiguous'}
+    return None
+
+
+def _tabletop_floor_ambiguity(rows):
+    """A height comparison needs supported, mutually comparable floor planes."""
+    planes = []
+    for row in rows:
+        plane = row.get('tabletop_evidence', {}).get('floor_plane', {})
+        normal, point = plane.get('normal_xyz'), plane.get('point_xyz')
+        if (plane.get('status') != 'usable' or not isinstance(normal, (list, tuple))
+                or not isinstance(point, (list, tuple)) or len(normal) != 3 or len(point) != 3):
+            return {'status': 'unknown', 'candidate_ids': [r['id'] for r in rows],
+                    'reason': 'tabletop comparison lacks audited local floor plane support'}
+        planes.append((normal, point))
+    first_normal, first_point = planes[0]
+    for normal, point in planes[1:]:
+        agreement = sum(a * b for a, b in zip(first_normal, normal))
+        offset = abs(sum(n * (b - a) for n, a, b in zip(first_normal, first_point, point)))
+        if agreement < math.cos(math.radians(5)) or offset > .04:
+            return {'status': 'unknown', 'candidate_ids': [r['id'] for r in rows],
+                    'reason': 'different supported local floor planes are not comparable at declared tolerance',
+                    'normal_cosine': agreement, 'plane_offset_m': offset,
+                    'policy': {'maximum_normal_difference_deg': 5, 'maximum_plane_offset_m': .04}}
     return None
 
 
@@ -271,6 +295,12 @@ def evaluate_size_condition(spec, measurements, comparison_pool_ids, *, scope_bo
         if ambiguity:
             result['measurement_ambiguity'] = ambiguity
             return finish(ambiguity['reason'])
+    from v4_policy import v5_enabled
+    if v5_enabled('measurements') and metric == 'tabletop_height_m':
+        ambiguity = _tabletop_floor_ambiguity(rows)
+        if ambiguity:
+            result['measurement_ambiguity'] = ambiguity
+            return finish(ambiguity['reason'])
     kind = 'adjective' if spec['form'] == 'adjective' else 'comparative'
     if spec['form'] == 'superlative':
         kind = 'tie'
@@ -316,6 +346,18 @@ def evaluate_size_condition(spec, measurements, comparison_pool_ids, *, scope_bo
         from v4_policy import enabled
         if not enabled('size') and metric.startswith('oriented_') and not all(_usable(row, footprint) for row in rows):
             return finish('overall size footprint proxy is unavailable or unreliable')
+    if (v5_enabled('measurements') and metric == 'body_plane_area_m2'
+            and retrieval_category(spec.get('category', '')) == 'book'):
+        result['alternative_metrics'] = {'oriented_volume_m3': {
+            'unknown_ids': [row['id'] for row in rows if not _usable(row, 'oriented_volume_m3')],
+            'reason': 'book overall size can depend on both body-plane area and observed volume'}}
+        if all(_usable(row, 'oriented_volume_m3') for row in rows):
+            ambiguity = _proxy_ambiguity(rows, spec['direction'], metric, 'oriented_volume_m3')
+            if ambiguity:
+                result['metric_ambiguity'] = {**ambiguity,
+                    'reason': 'book body-plane area and observed volume orderings disagree'}
+                spec = {**spec, 'tentative_metric': True}
+                result['tentative_metric'] = True
     ordered = sorted(rows, key=lambda row: row[metric], reverse=spec['direction'] == 'max')
     best, second = ordered[0][metric], ordered[1][metric]
     gap, margin = abs(best - second), _margin(metric, kind, best, second)

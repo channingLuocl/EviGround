@@ -3,6 +3,7 @@ import re
 import numpy as np
 from evidence import match_retrieval_categories, retrieval_category
 from size_semantics import category_pattern
+from v4_policy import v5_enabled
 
 
 def relation_tasks(query, parsed):
@@ -12,7 +13,9 @@ def relation_tasks(query, parsed):
             tasks.append({**relation, 'kind': 'near', 'source_quote': relation['phrase']})
     phrases = list(parsed.get('Unhandled', []))
     phrases += [m['text'] for c in parsed.get('query_syntax', {}).get('comparisons', [])
-                if c.get('attachment') == 'restrictive_subset' for m in c.get('modifiers', [])]
+                if c.get('attachment') == 'restrictive_subset' or
+                (v5_enabled('scope') and c.get('attachment') == 'ambiguous')
+                for m in c.get('modifiers', [])]
     phrases += [s[len('unsupported relation: '):] for s in parsed.get('diagnostic_missing', [])
                 if s.startswith('unsupported relation: ')]
     for phrase in dict.fromkeys(phrases):
@@ -21,11 +24,14 @@ def relation_tasks(query, parsed):
         kind = ('corner' if re.search(r'\bcorner\b', phrase, re.I) else
                 'attachment' if re.search(r'\b(?:against|attached|hanging)\b', phrase, re.I) else
                 'support' if re.search(r'\b(?:on|on top of)\b', phrase, re.I) else
-                'near' if re.search(r'\bnear\b', phrase, re.I) else None)
+                'near' if re.search(r'\bnear\b', phrase, re.I) or
+                (v5_enabled('scope') and re.search(r'\b(next to|by|beside)\b', phrase, re.I)) else None)
         if not kind:
             continue
-        if kind == 'support' and not re.match(r'^(?:(?:that|which)\s+(?:is|are)\s+)?(?:on\b|(?:sitting|resting|standing)\s+on\b)', phrase, re.I):
-            continue  # "with a plant on top" puts the reference on the target, not vice versa.
+        reverse_support = bool(v5_enabled('scope') and kind == 'support' and
+            re.match(r'^with\b.+\bon(?: top of)?\s+(?:it|this|them)\b', phrase, re.I))
+        if kind == 'support' and not reverse_support and not re.match(r'^(?:(?:that|which)\s+(?:is|are)\s+)?(?:on\b|(?:sitting|resting|standing)\s+on\b)', phrase, re.I):
+            continue  # Unbound support direction remains unknown.
         anchors = [name for name in parsed.get('Anchor', [])
                    if re.search(r'\b' + category_pattern(name) + r'\b', phrase, re.I)]
         if kind == 'corner' and anchors and not any(n in ('wall', 'room') for n in anchors):
@@ -36,7 +42,8 @@ def relation_tasks(query, parsed):
         tasks.append({'kind': kind, 'source_quote': phrase,
                       'target_category': (parsed.get('Target') or [''])[0],
                       'anchor_category': anchors[0] if len(anchors) == 1 else '',
-                      'binding_ambiguous': len(anchors) != 1 and kind != 'corner'})
+                      'binding_ambiguous': len(anchors) != 1 and kind != 'corner',
+                      **({'support_subject': 'reference'} if reverse_support else {})})
     return list({(t['source_quote'], t['target_category']): t for t in tasks}.values())
 
 
@@ -75,7 +82,7 @@ def geometric_relation(task, target, anchors):
                 'reason': 'two nearby intersecting wall instances are not uniquely established'}
     if len(anchors) != 1 or target['bbox_id'] == anchors[0]['bbox_id']:
         return {'status': 'unknown', 'reason': 'reference instance is not uniquely and distinctly bound'}
-    facts = pair_facts(target, anchors[0])
+    facts = pair_facts(anchors[0], target) if task.get('support_subject') == 'reference' else pair_facts(target, anchors[0])
     kind = task['kind']
     if kind == 'near':
         # Declared geometric support band, not nearest, not a universal language calibration.
@@ -100,15 +107,28 @@ def bind_tasks(query, parsed, objects, candidates, checks=()):
     rows = []
     for task in relation_tasks(query, parsed):
         anchors = match_retrieval_categories([task['anchor_category']], objects) if task['anchor_category'] else []
+        scope = None
         if task['kind'] != 'corner':
             anchors, scope = _attribute_comparison_pool(parsed, anchors, task['anchor_category'], checks, 'reference')
-            if scope and scope.get('status') != 'bound':
+            if scope and scope.get('status') != 'bound' and not v5_enabled('scope'):
                 anchors = []
         for obj in candidates:
             if retrieval_category(obj['target']) != retrieval_category(task['target_category']):
                 continue
+            geometry = geometric_relation(task, obj, anchors)
+            if v5_enabled('scope') and task['kind'] != 'corner' and len(anchors) > 1:
+                alternatives = [geometric_relation(task, obj, [anchor]) for anchor in anchors]
+                # Existential reference: one proven matching reference suffices;
+                # exclusion requires every still possible reference to fail.
+                states = [p['status'] for p in alternatives]
+                geometry = {'status': 'pass' if 'pass' in states else 'fail' if all(s == 'fail' for s in states) else 'unknown',
+                    'anchor_ids': [a['bbox_id'] for a in anchors], 'anchor_hypotheses': alternatives,
+                    'reason': 'all supplied reference alternatives retained; visual evidence required per binding'}
+            if v5_enabled('scope') and scope and scope.get('status') != 'bound':
+                geometry.update(status='unknown', reference_binding=scope,
+                    reason='all possible reference instances retained; their quoted appearance binding needs evidence')
             rows.append({**task, 'candidate_id': obj['bbox_id'],
-                         'geometry_evidence': geometric_relation(task, obj, anchors),
+                         'geometry_evidence': geometry,
                          'status': 'unknown'})
     return rows
 

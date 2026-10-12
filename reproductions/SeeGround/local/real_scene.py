@@ -1,6 +1,7 @@
 """Two-stage API + CPU rendering on a prepared real scene. Exploration, not benchmark."""
 import argparse
 import json
+import os
 from time import perf_counter
 from pathlib import Path
 import re
@@ -18,6 +19,8 @@ OBJECT_TABLES={'pred':'objects.json','gt':'objects_gt.json'}
 
 def _recorded_api_failure(calls):
     for call in calls:
+        if call.get('resolved_by_resume'):
+            continue
         diagnostic = call.get('api_diagnostic')
         if diagnostic:
             return {**diagnostic, 'failure_stage': call.get('stage')}
@@ -115,6 +118,11 @@ def parse_query(query, mode='baseline', calls=None):
     except QwenAPIError as exc:
         if calls is not None:
             calls[-1]['json_error']=str(exc)
+        from v4_policy import v5_enabled
+        if v5_enabled():
+            # v5 recovery is reserved for transient transport/context faults.
+            # Malformed parser output is an inference error, not another API try.
+            raise
         if data.get('_finish_reason')!='stop':
             raise
         # Repair syntax once; schema and quoted-condition validation still run below.
@@ -256,12 +264,18 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         raise ValueError('未知实验模式')
     if review_limit<1:raise ValueError('review-limit must be positive')
     started=perf_counter()
+    prior_pipeline_latency = 0
     objects_path=object_table_path(scene_dir,object_table)
     objects=load_objects(objects_path)
     structural=structural_objects(scene_dir,objects) if mode in ('diagnostic','active_diagnostic') else []
     geometry_objects=objects+structural
     out.mkdir(parents=True,exist_ok=True)
     calls=[]
+    from v4_policy import v5_enabled, settings as policy_settings
+    recovery_token = None
+    if v5_enabled():
+        from v5_runtime import sample_recovery
+        recovery_token = sample_recovery.set({'used': False, 'attempts': []})
     record={'query':query,'query_source':query_source,'mode':mode,'calls':calls,
             'api_config':api_config_summary(),
             'object_table':object_table,'objects_file':objects_path.name,
@@ -284,7 +298,55 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             from wall_geometry import attach_wall_geometry
             geometry_objects=attach_wall_geometry(geometry_objects,xyz,ids)
         stage='parse_query'
-        parsed=parse_query(query,mode,calls)
+        resume = None
+        checkpoint_identity = None
+        if v5_enabled() and mode == 'active_diagnostic':
+            from v5_runtime import input_identity, file_identity
+            config = {'api': api_config_summary(), 'model': os.getenv('SEEGROUND_MODEL'),
+                      'base_url': os.getenv('SEEGROUND_BASE_URL'), 'object_table': object_table,
+                      'review_limit': review_limit, 'policy': policy_settings(),
+                      'backend': os.getenv('SEEGROUND_REACT_BACKEND'), 'jev_model': os.getenv('SEEGROUND_JEV_MODEL'),
+                      'environment': {key: value for key, value in os.environ.items() if key.startswith('SEEGROUND_')
+                                      and not any(word in key for word in ('KEY', 'TOKEN', 'SECRET'))},
+                      'scene_sha256': file_identity(scene_dir / name for name in
+                        ('scene.npz', objects_path.name, 'scene_instances.json'))}
+            checkpoint_identity = input_identity(query, geometry_objects, config)
+            pending = out / 'pending_review.json'
+            if not pending.exists():
+                pending = out / 'pending_inference.json'
+            if pending.exists():
+                resume = json.loads(pending.read_text())
+                if resume.get('checkpoint_identity') != checkpoint_identity:
+                    raise ValueError('Pending review has different code, inputs or model configuration')
+                if resume.get('recovery_state', {}).get('used'):
+                    raise ValueError('This sample has exhausted its single extra API attempt; preserve the saved review failure')
+                calls.extend(resume['calls'])
+                for call in calls:
+                    if call.get('api_diagnostic'):
+                        call['resolved_by_resume'] = True
+                if resume.get('recovery_state'):
+                    sample_recovery.get().update(resume['recovery_state'])
+            from v5_runtime import save_checkpoint
+            budget = sample_recovery.get()
+            budget.update(api_checkpoint=str(out / 'api_recovery.json'), checkpoint_identity=checkpoint_identity,
+                          completed_requests={}, resuming=False)
+            if (out / 'api_recovery.json').exists():
+                saved_api = json.loads((out / 'api_recovery.json').read_text())
+                if saved_api.get('checkpoint_identity') != checkpoint_identity:
+                    raise ValueError('Saved API recovery has different code, inputs or model configuration')
+                if saved_api['used']:
+                    raise ValueError('This sample has exhausted its single extra API attempt')
+                budget.update(saved_api, resuming=True, manual_resume_pending=True)
+            if resume and (out / 'run.json').exists():
+                prior = json.loads((out / 'run.json').read_text())
+                prior_pipeline_latency = prior.get('pipeline_latency_s', 0)
+                calls[:] = prior.get('calls', calls)
+                for call in calls:
+                    if call.get('api_diagnostic'):
+                        call['resolved_by_resume'] = True
+            save_checkpoint(out / 'pending_inference.json', resume or {
+                'stage': 'parse', 'checkpoint_identity': checkpoint_identity, 'calls': calls})
+        parsed=resume['parsed_query'] if resume and resume.get('stage') != 'parse' else parse_query(query,mode,calls)
         stage='retrieve_objects'
         matcher=select_objects if mode=='baseline' else match_categories
         if mode in ('ranked_geometry','category_review','diagnostic','active_diagnostic'):
@@ -305,15 +367,20 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             proposed=[] if object_table=='gt' else propose_category_checks(objects,matched_targets,anchors,review_limit)
             candidates=list({obj['bbox_id']:obj for obj in matched_targets+proposed}.values()) or objects
             trace={}
+            if checkpoint_identity:
+                trace['checkpoint_identity'] = checkpoint_identity
             record.update(parsed_query=parsed, active_diagnostic=trace,
                           category_target_ids=[obj['bbox_id'] for obj in matched_targets],
                           category_anchor_ids=[obj['bbox_id'] for obj in matched_anchors],
                           review_proposal={'ids':[obj['bbox_id'] for obj in candidates]},
                           structural_reference_ids=[obj['bbox_id'] for obj in structural])
+            if resume and resume.get('stage') == 'parse':
+                resume = None
             prediction=active_ground(query,parsed,objects,geometry_objects,candidates,xyz,rgb,ids,
-                                     out,calls,trace,review_limit,object_table=='gt')
+                                     out,calls,trace,review_limit,object_table=='gt', **({'resume': resume} if v5_enabled() else {}))
             diagnostic = _recorded_api_failure(calls)
-            if diagnostic:
+            if diagnostic and not (v5_enabled() and prediction.get('final_review', {}).get('status') == 'review_failed'
+                                   and diagnostic.get('failure_stage') == 'final_prediction_review'):
                 raise QwenAPIError('模型调用失败', diagnostic=diagnostic)
             record.update(diagnosis=prediction['diagnosis'],decision_status=prediction['decision_status'],
                           implementation_version=prediction['implementation_version'],
@@ -324,9 +391,19 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                               decision_backend=trace['decision_backend'],planner_input='text_only',
                               visual_backend=api_provider(),
                               gt_categories_supplied_to_model=object_table=='gt',query_target_id_supplied_to_model=False,
-                              pipeline_latency_s=round(perf_counter()-started,4),api_calls=len(calls),
+                              pipeline_latency_s=round(perf_counter()-started+prior_pipeline_latency,4),api_calls=len(calls),
                               call_usage=[call.get('usage') for call in calls])
+            if v5_enabled():
+                prediction['review_failed'] = prediction.get('final_review', {}).get('status') == 'review_failed'
+                from v5_runtime import actual_attempts
+                prediction['api_attempts'] = sum(actual_attempts(c) for c in calls)
+                prediction['recovery_attempts'] = sample_recovery.get()['attempts']
+                prediction['recovery_budget_exhausted'] = sample_recovery.get()['used']
             (out/'prediction.json').write_text(json.dumps(prediction,ensure_ascii=False,indent=2))
+            if v5_enabled() and not prediction.get('review_failed'):
+                (out/'pending_review.json').unlink(missing_ok=True)
+                (out/'pending_inference.json').unlink(missing_ok=True)
+                (out/'api_recovery.json').unlink(missing_ok=True)
             print(f'预测编号：{prediction["predicted_id"]}；主动诊断步骤：{len(trace["steps"])}；结果：{out/"prediction.json"}',flush=True)
             return prediction
         inspection_targets=targets
@@ -448,7 +525,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             record['diagnosis_policy']=prediction['diagnosis_policy']
         prediction.update(mode=mode,object_table=object_table,objects_file=objects_path.name,
                           gt_categories_supplied_to_model=object_table=='gt',query_target_id_supplied_to_model=False,
-                          pipeline_latency_s=round(perf_counter()-started,4),
+                          pipeline_latency_s=round(perf_counter()-started+prior_pipeline_latency,4),
                           api_calls=len(calls),call_usage=[c.get('usage') for c in calls])
         (out/'prediction.json').write_text(json.dumps(prediction,ensure_ascii=False,indent=2))
         return prediction
@@ -470,10 +547,15 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                         'api_diagnostic': diagnostic}
         if diagnostic.get('failure_kind') != 'runtime' and not recorded_stage:
             calls.append(failure_call)
-        (out/'prediction.json').unlink(missing_ok=True)
+        if not (v5_enabled() and (out/'pending_review.json').exists()):
+            (out/'prediction.json').unlink(missing_ok=True)
         raise
     finally:
-        record['pipeline_latency_s']=round(perf_counter()-started,4)
+        if recovery_token is not None:
+            record['recovery_attempts'] = sample_recovery.get()['attempts']
+            record['recovery_budget_exhausted'] = sample_recovery.get()['used']
+            sample_recovery.reset(recovery_token)
+        record['pipeline_latency_s']=round(perf_counter()-started+prior_pipeline_latency,4)
         saved_record = _redact(record, limit=None) if record.get('error') else record
         (out/'run.json').write_text(json.dumps(saved_record,ensure_ascii=False,indent=2))
 

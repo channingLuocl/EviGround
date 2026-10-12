@@ -7,6 +7,11 @@ from qwen_api import chat, QwenAPIError, _redact
 
 
 class QwenAPITests(unittest.TestCase):
+    def setUp(self):
+        env = patch.dict('os.environ', {'SEEGROUND_API_PROVIDER': 'qwen', 'SEEGROUND_V5': '0'})
+        env.start()
+        self.addCleanup(env.stop)
+
     def test_request_and_finish_reason(self):
         response=SimpleNamespace(ok=True,json=lambda:{'choices':[{'finish_reason':'length',
                                   'message':{'content':'Predicted ID: 1'}}],'usage':{'total_tokens':12}})

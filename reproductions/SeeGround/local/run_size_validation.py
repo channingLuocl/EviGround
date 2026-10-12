@@ -11,7 +11,7 @@ import sys
 
 from batch_nr3d import summarize
 from run import ROOT
-from v4_policy import settings as v4_settings
+from v4_policy import settings as v4_settings, v5_enabled
 
 
 def write_json(path, value):
@@ -38,6 +38,16 @@ def evaluate(row, prediction, log):
         raise ValueError(f'Prediction provenance mismatch: {prediction}')
     trace = data.get('active_trace', {})
     return {**row, 'predicted_id': data.get('predicted_id'),
+            'review_failed': data.get('review_failed', False),
+            'api_attempts': data.get('api_attempts', data.get('api_calls')),
+            'call_usage': data.get('call_usage', []),
+            'api_stage_calls': [{k: c.get(k) for k in ('stage', 'api_attempts', 'cache_hit', 'latency_s', 'usage', 'api_diagnostic')}
+                for c in json.loads((prediction.parent / 'run.json').read_text()).get('calls', [])]
+                if (prediction.parent / 'run.json').exists() else [],
+            'recovery_attempts': data.get('recovery_attempts', []),
+            'recovery_budget_exhausted': data.get('recovery_budget_exhausted', False),
+            'review_findings': [f for review in trace.get('final_reviews', []) for f in review.get('findings', [])],
+            'historical_reviews': trace.get('final_reviews', []),
             'prediction_source': data.get('prediction_source'),
             'implementation_version': data.get('implementation_version'),
             'backtrack_count': data.get('backtrack_count', 0), 'final_review': data.get('final_review'),
@@ -63,26 +73,59 @@ def run_case(row, scene_root, output, review_limit, retry_errors=False):
         saved = json.loads(result_path.read_text())
         if any(saved.get(key) != value for key, value in row.items()):
             raise ValueError(f'Cached annotation mismatch: {result_path}')
-        if not (retry_errors and 'error' in saved):
+        if not (retry_errors and (saved.get('error') or saved.get('review_failed'))):
             return saved
     directory.mkdir(parents=True, exist_ok=True)
     prediction = directory / 'prediction.json'
     log = directory / 'console.log'
     try:
-        if not prediction.exists():
+        from v4_policy import v5_enabled
+        resume_review = False
+        if v5_enabled() and retry_errors and result_path.exists():
+            saved = json.loads(result_path.read_text())
+            if saved.get('recovery_budget_exhausted'):
+                return saved
+            if saved.get('error') and not (directory / 'pending_inference.json').exists():
+                return saved
+            if saved.get('review_failed') and (directory / 'pending_review.json').exists():
+                resume_review = True
+        if not prediction.exists() or resume_review:
             # Target/stimulus IDs are deliberately absent from the inference process arguments.
             command = [sys.executable, str(Path(__file__).resolve()), '--worker',
                        '--scene-dir', str(scene_root / row['scene']), '--query', row['query'],
                        '--csv-row', str(row['csv_row']), '--output', str(directory),
                        '--review-limit', str(review_limit)]
-            with log.open('w') as handle:
+            with log.open('a' if retry_errors else 'w') as handle:
                 completed = subprocess.run(command, stdout=handle, stderr=subprocess.STDOUT)
             if completed.returncode:
                 raise ValueError(f'Inference process exit code {completed.returncode}; see {log}')
         result = evaluate(row, prediction, log)
     except (OSError, ValueError, KeyError) as exc:
-        result = {**row, 'correct': False, 'accepted': False, 'error': str(exc),
+        run_path = directory / 'run.json'
+        try:
+            failed_run = json.loads(run_path.read_text()) if run_path.exists() else {}
+        except (OSError, ValueError):
+            failed_run = {}
+        from v5_runtime import actual_attempts
+        from qwen_api import _redact
+        result = {**row, 'predicted_id': None, 'correct': False, 'accepted': False, 'error': _redact(str(exc)),
+                  'inference_error': True, 'error_stage': failed_run.get('error_stage'),
+                  'api_attempts': sum(actual_attempts(c) for c in failed_run.get('calls', [])),
+                  'pipeline_latency_s': failed_run.get('pipeline_latency_s'),
+                  'call_usage': [c.get('usage') for c in failed_run.get('calls', [])],
+                  'api_stage_calls': [{k: c.get(k) for k in ('stage', 'api_attempts', 'cache_hit', 'latency_s', 'usage', 'api_diagnostic')}
+                      for c in failed_run.get('calls', [])],
+                  'recovery_budget_exhausted': failed_run.get('recovery_budget_exhausted', False),
+                  'recovery_attempts': failed_run.get('recovery_attempts', []),
                   'prediction_path': str(prediction), 'log': str(log)}
+        if v5_enabled() and prediction.exists() and (directory / 'pending_review.json').exists():
+            try:
+                # A failed resume or process crash cannot erase an already
+                # saved prediction. Keep the failure visible in evaluation.
+                result = {**evaluate(row, prediction, log), **{key: result[key] for key in
+                    ('error', 'inference_error', 'error_stage')}}
+            except (OSError, ValueError, KeyError):
+                pass
     write_json(result_path, result)
     return result
 
@@ -143,11 +186,6 @@ def main():
     from qwen_api import api_config_summary
     from query_syntax import syntax_settings
     source_check = verify_source(manifest, source)
-    if source_check['status'] == 'missing':
-        print(f'Original NR3D CSV not found at {source}; using the manifest hash for preflight',
-              flush=True)
-    else:
-        print(f'Verified original NR3D CSV: {source}', flush=True)
     output = (args.output or ROOT / 'local_outputs' /
               ('nr3d_size_300_' + datetime.now().strftime('%Y%m%d_%H%M%S'))).resolve()
     settings = {'selection': manifest, 'review_limit': args.review_limit,
@@ -161,7 +199,11 @@ def main():
             'SEEGROUND_BASE_URL')},
         'code_sha256': {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
                         for path in sorted((ROOT / 'local').glob('*.py'))
-                        if not path.name.startswith('test_')}}
+                        if not path.name.startswith(('test_', '._'))}}
+    if v5_enabled():
+        from v5_runtime import file_identity
+        settings['input_sha256'] = {scene: file_identity(args.scene_root / scene / name for name in
+            ('scene.npz', 'objects_gt.json', 'scene_instances.json', 'provenance.json')) for scene in sorted({r['scene'] for r in rows})}
     output.mkdir(parents=True, exist_ok=True)
     settings_path = output / 'manifest.json'
     if settings_path.exists() and json.loads(settings_path.read_text()) != settings:
@@ -169,7 +211,8 @@ def main():
     write_json(output / 'csv_verification.json', source_check)
     write_json(settings_path, settings)
     results = []
-    print(f'Running {len(selected)}/{len(rows)} selected cases; workers={args.workers}; {output}', flush=True)
+    from batch_progress import BatchProgress
+    progress = BatchProgress(len(selected))
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_case, row, args.scene_root.resolve(), output, args.review_limit,
                                args.retry_errors)
@@ -178,11 +221,8 @@ def main():
             result = future.result()
             results.append(result)
             report(output, results, len(rows))
-            print(json.dumps({key: result.get(key) for key in (
-                'csv_row', 'scene', 'predicted_id', 'prediction_source', 'target_id', 'correct', 'accepted',
-                'decision_status', 'missing', 'error')}, ensure_ascii=False), flush=True)
-    print(json.dumps(report(output, results, len(rows)), ensure_ascii=False, indent=2))
-    print(f'Results: {output / "results.json"}')
+            progress.update(result)
+    report(output, results, len(rows))
 
 
 if __name__ == '__main__':

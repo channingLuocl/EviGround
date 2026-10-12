@@ -3,6 +3,7 @@ from itertools import product
 from hashlib import sha256
 from math import prod
 import json
+from copy import deepcopy
 import re
 from math import ceil
 import numpy as np
@@ -1448,6 +1449,11 @@ def size_conditions(parsed, category, role='target'):
                 spec.update(scope_kind='unbound_explicit_scope',
                             scope_relation_quotes=[m['text'] for m in hint['modifiers']],
                             scope_binding_reason='independent condition and comparison-subset attachments remain ambiguous')
+                from v4_policy import v5_enabled
+                if v5_enabled('scope'):
+                    spec['scope_hypotheses'] = [
+                        {'kind': 'full_category', 'interpretation': 'size with independent quoted relation'},
+                        {'kind': 'relation_subset', 'interpretation': 'size within quoted relation members'}]
             if enabled('size') and spec['metric'] == 'volume_m3':
                 if retrieval_category(category) in ('table', 'desk'):
                     spec.update(metric='oriented_footprint_m2',
@@ -1460,6 +1466,11 @@ def size_conditions(parsed, category, role='target'):
             if enabled('size') and spec['metric'] == 'height_m' and retrieval_category(category) in ('desk', 'table'):
                 spec.update(metric='tabletop_height_m',
                             metric_reason='fitted horizontal tabletop above a supplied local floor; total span is not tabletop height')
+            from v4_policy import v5_enabled
+            if v5_enabled('measurements') and retrieval_category(category) in ('mirror', 'whiteboard', 'book') and spec['metric'] in ('volume_m3', 'oriented_volume_m3'):
+                spec.update(metric='body_plane_area_m2', tentative_metric=True,
+                    metric_reason='observed dominant body-plane area; overall-size semantics remain tentative',
+                    metric_choice_source='v5 measured planar structure')
             choice = parsed.get('_v4_metric_choices', {}).get('|'.join((role, retrieval_category(category), spec['word'])))
             if enabled('size') and choice and spec['metric'] in ('oriented_volume_m3', 'oriented_footprint_m2'):
                 spec.update(metric=choice['metric'], metric_reason=choice['reason'], tentative_metric=True,
@@ -1498,6 +1509,114 @@ def appearance_checks_for(checks, parsed, category, role='target'):
             for check in checks]
 
 
+
+def evaluate_scope_hypotheses(parsed, objects, category, spec, checks, measurements, candidate_ids, scope_bound=True):
+    """Every possible attachment keeps its own complete member proof."""
+    hypotheses = []
+    for hypothesis in spec['scope_hypotheses']:
+        alternative = {**spec, 'scope_kind': hypothesis['kind']}
+        alternative.pop('scope_hypotheses', None)
+        if hypothesis['kind'] == 'full_category':
+            alternative['scope_relation_quotes'] = []
+        pool, binding = size_condition_scope(parsed, objects, category, alternative, checks, spec.get('role', 'target'))
+        proof = evaluate_size_condition(alternative, measurements, [o['bbox_id'] for o in pool],
+            scope_bound=scope_bound and binding['status'] == 'bound',
+            candidate_ids=candidate_ids, scope_source=binding['source'],
+            scope_unknown_ids=binding.get('unknown_ids', []))
+        proof.update(interpretation=hypothesis['interpretation'], member_binding=binding)
+        hypotheses.append(proof)
+    combined = deepcopy(hypotheses[0])
+    for item in combined['candidate_evidence']:
+        states = [next((p['status'] for p in h['candidate_evidence'] if p['candidate_id'] == item['candidate_id']),
+                       'unknown') for h in hypotheses]
+        item['status'] = states[0] if len(set(states)) == 1 else 'unknown'
+        item['reason'] = 'all possible scope interpretations agree' if item['status'] != 'unknown' else 'scope interpretations remain unresolved'
+    bound = all(h['scope_status'] == 'bound' for h in hypotheses)
+    known = (bound and all(h['status'] == 'known' for h in hypotheses)
+             and all(e['status'] != 'unknown' for e in combined['candidate_evidence']))
+    combined.update(scope_hypotheses=hypotheses, scope_status='bound' if bound else 'unknown',
+        status='known' if known else 'unknown', selected_ids=[], tentative_selected_ids=[],
+        reason=None if known else 'comparison attachment hypotheses require binding',
+        next_evidence=[{'dimension': 'distance' if re.search(r'\b(near|by|next to|beside)\b', q) else 'position',
+            'source_quote': q, 'reason': 'bind reference and verify every member of quoted comparison subset'}
+            for q in spec.get('scope_relation_quotes', [])])
+    selected = {e['candidate_id'] for e in combined['candidate_evidence'] if e['status'] == 'pass'}
+    if known:
+        combined['selected_ids'] = sorted(selected)
+    else:
+        choices = [set(h.get('tentative_selected_ids') or h.get('selected_ids', [])) for h in hypotheses
+                   if h.get('tentative_selected_ids') or h.get('selected_ids')]
+        if choices and len(set.intersection(*choices)) == 1:
+            combined['tentative_selected_ids'] = sorted(set.intersection(*choices))
+    combined['unknown_measurement_ids'] = sorted({oid for h in hypotheses for oid in h['unknown_measurement_ids']})
+    combined['unresolved_hypotheses'] = [index for index, h in enumerate(hypotheses)
+                                        if h['scope_status'] != 'bound' or h['status'] != 'known']
+    if spec['original_quote'] in parsed.get('_v4_invalidated_conditions', []):
+        combined.update(status='unknown', selected_ids=[], tentative_selected_ids=[],
+                        reason='supported backtrack requires fresh scope or measurement evidence')
+        for proof in combined['candidate_evidence']:
+            proof['status'] = 'unknown'
+    return combined
+
+
+def _v5_relation_subset(parsed, pool, objects, category, quotes, checks):
+    """Keep every supplied member and every quoted predicate until proved false."""
+    from v4_relations import verified_members
+    evidence, by_quote = [], {}
+    for quote in quotes:
+        relation_quote = re.sub(r'^(?:that|which)\s+(?:is|are)\s+', '', quote, flags=re.I)
+        from v4_policy import enabled
+        members = verified_members(parsed, relation_quote, category) if enabled('relations') else {}
+        if members:
+            states = {o['bbox_id']: members.get(o['bbox_id'], {}).get('status', 'unknown') for o in pool}
+            evidence.extend(members.values())
+        else:
+            relations = [r for r in parsed.get('Relations', [])
+                         if r.get('relation') in ('above', 'below')
+                         and retrieval_category(r.get('target_category', '')) == retrieval_category(category)
+                         and relation_quote.casefold() in r.get('phrase', '').casefold()]
+            states = {o['bbox_id']: 'unknown' for o in pool}
+            if len(relations) == 1:
+                relation = relations[0]
+                anchors = match_retrieval_categories([relation['anchor_category']], objects)
+                anchors, anchor_scope = _attribute_comparison_pool(
+                    parsed, anchors, relation['anchor_category'], checks, 'reference')
+                for obj in pool:
+                    alternatives = [{
+                        'anchor_id': anchor['bbox_id'],
+                        'status': _vertical_status(_pair_geometry(obj, anchor), relation['relation'])}
+                        for anchor in anchors]
+                    values = [p['status'] for p in alternatives]
+                    # A definite reference may have several possible bindings.
+                    # All must agree; one failing bed cannot reject its pillow.
+                    states[obj['bbox_id']] = ('fail' if values and all(s == 'fail' for s in values) else
+                        'pass' if values and all(s == 'pass' for s in values)
+                        and (not anchor_scope or anchor_scope['status'] == 'bound') else 'unknown')
+                    evidence.append({'candidate_id': obj['bbox_id'], 'status': states[obj['bbox_id']],
+                        'source_quote': quote, 'anchor_hypotheses': alternatives,
+                        'relation': relation['relation']})
+            else:
+                evidence.extend({'candidate_id': oid, 'status': 'unknown', 'source_quote': quote,
+                                 'reason': 'quoted subset predicate needs reference/member evidence'}
+                                for oid in states)
+        by_quote[quote] = states
+    member_states = {o['bbox_id']: ('fail' if any(states[o['bbox_id']] == 'fail' for states in by_quote.values())
+        else 'pass' if by_quote and all(states[o['bbox_id']] == 'pass' for states in by_quote.values())
+        else 'unknown') for o in pool}
+    members = [o for o in pool if member_states[o['bbox_id']] != 'fail']
+    unknown = sorted(oid for oid, state in member_states.items() if state == 'unknown')
+    return members, {'status': 'unknown' if unknown or not quotes else 'bound',
+        'selected_ids': sorted(o['bbox_id'] for o in members), 'unknown_ids': unknown,
+        'source': 'quoted relation comparison subset', 'member_evidence': evidence,
+        'member_states': {str(oid): state for oid, state in member_states.items()},
+        'predicate_member_states': {quote: {str(oid): state for oid, state in states.items()}
+                                    for quote, states in by_quote.items()},
+        'next_evidence': [{'source_quote': quote, 'candidate_ids': sorted(oid for oid, state in states.items()
+                           if state == 'unknown'), 'reason': 'bind quoted reference and verify unknown subset members'}
+                          for quote, states in by_quote.items() if 'unknown' in states.values()],
+        **({'reason': 'comparison subset contains unresolved relation members'} if unknown else {})}
+
+
 def size_condition_scope(parsed, objects, category, spec, checks=(), role='target'):
     """Every predicate binds its pool from the source, before target filtering."""
     pool = match_retrieval_categories([category], objects)
@@ -1511,7 +1630,17 @@ def size_condition_scope(parsed, objects, category, spec, checks=(), role='targe
         if subset:
             record.update(subset)
         record['source'] = 'explicit quoted appearance subset'
-    if spec.get('scope_kind') == 'relation_subset':
+    from v4_policy import v5_enabled
+    if spec.get('scope_kind') == 'relation_subset' and v5_enabled('scope'):
+        appearance_unknown = set(record['unknown_ids'])
+        pool, subset = _v5_relation_subset(parsed, pool, objects, category,
+                                          spec.get('scope_relation_quotes', []), checks)
+        record.update(subset, required_member_count=spec.get('required_member_count'))
+        record['unknown_ids'] = sorted(set(record['unknown_ids']) |
+                                      (appearance_unknown & set(record['selected_ids'])))
+        if record['unknown_ids']:
+            record['status'] = 'unknown'
+    elif spec.get('scope_kind') == 'relation_subset':
         original_pool = list(pool)
         proofs = []
         for quote in spec.get('scope_relation_quotes', []):
@@ -1563,6 +1692,11 @@ def size_condition_scope(parsed, objects, category, spec, checks=(), role='targe
                           reason='comparison subset has no quoted relation')
         record.update(selected_ids=sorted(o['bbox_id'] for o in pool),
                       source='quoted relation comparison subset', member_evidence=proofs)
+        from v4_policy import v5_enabled
+        if v5_enabled('scope'):
+            record['member_states'] = {str(o['bbox_id']): next((p['status'] for p in proofs
+                if p['candidate_id'] == o['bbox_id']), 'unknown') for o in original_pool}
+            record['required_member_count'] = spec.get('required_member_count')
     category_scope = size_category_scope(pool)
     if category_scope:
         record.update(category_scope)
@@ -2263,9 +2397,11 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
             continue  # Evaluated jointly with its two bound references below.
         pool, scope_record = size_condition_scope(parsed, objects, category, spec, checks)
         geometry['candidate_removal_audit'].extend(scope_record.get('candidate_removal_audit', []))
-        record = evaluate_size_condition(spec, measurements, [o['bbox_id'] for o in pool],
+        record = (evaluate_scope_hypotheses(parsed, objects, category, spec, checks, measurements,
+                    [o['bbox_id'] for o in candidates]) if spec.get('scope_hypotheses') else
+                  evaluate_size_condition(spec, measurements, [o['bbox_id'] for o in pool],
             scope_bound=scope_record['status'] == 'bound', candidate_ids=[o['bbox_id'] for o in candidates],
-            scope_source=scope_record['source'], scope_unknown_ids=scope_record.get('unknown_ids', []))
+            scope_source=scope_record['source'], scope_unknown_ids=scope_record.get('unknown_ids', [])))
         geometry['size_constraints'].append(record)
         if apply_size_constraints:
             gated_evidence = []
@@ -2495,9 +2631,11 @@ def diagnose(parsed, objects, candidates, room_center, checks=(), trusted_catego
                         'phrase': spec['original_quote'], 'role': 'reference', 'category': name})
                     missing.append('reference size conditions lack complete evidence')
                     continue
-                record = evaluate_size_condition(spec, measurements, [o['bbox_id'] for o in pool],
+                record = (evaluate_scope_hypotheses(parsed, objects, name, spec, checks, measurements,
+                            [o['bbox_id'] for o in matches]) if spec.get('scope_hypotheses') else
+                          evaluate_size_condition(spec, measurements, [o['bbox_id'] for o in pool],
                     scope_bound=scope_record['status'] == 'bound', candidate_ids=[o['bbox_id'] for o in matches],
-                    scope_source=scope_record['source'], scope_unknown_ids=scope_record.get('unknown_ids', []))
+                    scope_source=scope_record['source'], scope_unknown_ids=scope_record.get('unknown_ids', [])))
                 geometry['size_constraints'].append(record)
                 gated_evidence = []
                 for item in record['candidate_evidence']:

@@ -47,6 +47,7 @@ def measure(objects):
 class V4Tests(unittest.TestCase):
     def setUp(self):
         env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_REACT_BACKEND': 'qwen',
+                         'SEEGROUND_API_PROVIDER': 'qwen', 'SEEGROUND_V5': '0',
                          'SEEGROUND_SYNTAX_BACKEND': 'spacy', 'SEEGROUND_V4_DYNAMIC_THRESHOLD': '0'})
         env.start()
         self.addCleanup(env.stop)

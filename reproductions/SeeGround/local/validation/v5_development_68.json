@@ -1,0 +1,1389 @@
+{
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "purpose": "v5 development regression from diagnosed v3/v4 cases; not held out and not a full benchmark.",
+  "selection": "Unchanged official utterances and scene data. Selected to cover known losses, gains, wrong answers, backtrack direction and API failures. target_id and stimulus_candidate_ids are evaluation-only.",
+  "source_manifest": "/Volumes/KESU/论文/.worktrees/relative-size-evidence-v4/reproductions/SeeGround/local/validation/nr3d_size_300.json",
+  "selection_groups": {
+    "backtrack_direction": [
+      14770,
+      18106,
+      39586
+    ],
+    "scope_loss": [
+      3679,
+      5902,
+      10396,
+      11113,
+      13958,
+      14770,
+      16233,
+      18901,
+      22161,
+      22872,
+      26135,
+      30296,
+      31436,
+      37145,
+      39808,
+      40139,
+      40372
+    ],
+    "measurement_loss": [
+      12367,
+      23331,
+      24048,
+      34551,
+      36632,
+      38240
+    ],
+    "other_normal_loss": [
+      2589
+    ],
+    "v4_new_correct": [
+      3838,
+      9310,
+      10211,
+      10431,
+      10682,
+      12941,
+      19153,
+      21949,
+      22072,
+      23329,
+      23529,
+      28154,
+      30825,
+      31620,
+      39233
+    ],
+    "v4_wrong": [
+      3299,
+      11901,
+      19371,
+      31436,
+      34177
+    ],
+    "v4_api_errors": [
+      3157,
+      4091,
+      4545,
+      7755,
+      10364,
+      12579,
+      13540,
+      15624,
+      16465,
+      20637,
+      21145
+    ],
+    "old_wrong_and_size_cases": [
+      8614,
+      11647,
+      11901,
+      12579,
+      15945,
+      26783,
+      39009,
+      10431,
+      11862,
+      29522,
+      37559,
+      30825
+    ],
+    "preserved_grammar_cases": [
+      4091,
+      7755,
+      7764,
+      29515,
+      30152
+    ],
+    "accepted_upgrade": [
+      27408
+    ]
+  },
+  "summary": {
+    "cases": 68,
+    "scenes": 47
+  },
+  "rows": [
+    {
+      "csv_row": 2589,
+      "scene": "scene0300_00",
+      "query": "The big brown table not the white one",
+      "target_id": 6,
+      "instance_type": "table",
+      "stimulus_id": "scene0300_00-table-2-6-5",
+      "stimulus_candidate_ids": [
+        6,
+        5
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "big"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 3157,
+      "scene": "scene0621_00",
+      "query": "The largest section of table located in a corner.",
+      "target_id": 0,
+      "instance_type": "table",
+      "stimulus_id": "scene0621_00-table-5-0-1-2-3-4",
+      "stimulus_candidate_ids": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 3299,
+      "scene": "scene0535_00",
+      "query": "the small box next to the spotted chair",
+      "target_id": 29,
+      "instance_type": "box",
+      "stimulus_id": "scene0535_00-box-3-29-8-30",
+      "stimulus_candidate_ids": [
+        29,
+        8,
+        30
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 3679,
+      "scene": "scene0685_00",
+      "query": "The smaller trash can to the right of the door underneath the red cannister.",
+      "target_id": 7,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0685_00-trash_can-2-7-0",
+      "stimulus_candidate_ids": [
+        7,
+        0
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 3838,
+      "scene": "scene0645_00",
+      "query": "Its the smaller mirror next to the couch",
+      "target_id": 11,
+      "instance_type": "mirror",
+      "stimulus_id": "scene0645_00-mirror-2-11-72",
+      "stimulus_candidate_ids": [
+        11,
+        72
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 4091,
+      "scene": "scene0647_00",
+      "query": "The largest picture in the room.",
+      "target_id": 17,
+      "instance_type": "picture",
+      "stimulus_id": "scene0647_00-picture-3-17-18-19",
+      "stimulus_candidate_ids": [
+        17,
+        18,
+        19
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 4545,
+      "scene": "scene0246_00",
+      "query": "The smaller picture hanging on the wall",
+      "target_id": 44,
+      "instance_type": "picture",
+      "stimulus_id": "scene0246_00-picture-2-44-46",
+      "stimulus_candidate_ids": [
+        44,
+        46
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 5902,
+      "scene": "scene0307_00",
+      "query": "The largest shelf by the door",
+      "target_id": 15,
+      "instance_type": "shelf",
+      "stimulus_id": "scene0307_00-shelf-3-15-24-26",
+      "stimulus_candidate_ids": [
+        15,
+        24,
+        26
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 7755,
+      "scene": "scene0257_00",
+      "query": "The smaller of the two doors.",
+      "target_id": 34,
+      "instance_type": "door",
+      "stimulus_id": "scene0257_00-door-2-34-6",
+      "stimulus_candidate_ids": [
+        34,
+        6
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 7764,
+      "scene": "scene0193_00",
+      "query": "The smaller door of the two.",
+      "target_id": 13,
+      "instance_type": "door",
+      "stimulus_id": "scene0193_00-door-2-13-2",
+      "stimulus_candidate_ids": [
+        13,
+        2
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 8614,
+      "scene": "scene0300_00",
+      "query": "The smaller table, colored brown, with the backpack on it.",
+      "target_id": 6,
+      "instance_type": "table",
+      "stimulus_id": "scene0300_00-table-2-6-5",
+      "stimulus_candidate_ids": [
+        6,
+        5
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 9310,
+      "scene": "scene0644_00",
+      "query": "the smallest computer tower",
+      "target_id": 50,
+      "instance_type": "computer tower",
+      "stimulus_id": "scene0644_00-computer_tower-5-50-46-48-49-51",
+      "stimulus_candidate_ids": [
+        50,
+        46,
+        48,
+        49,
+        51
+      ],
+      "stage": "simple_superlative",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 10211,
+      "scene": "scene0187_00",
+      "query": "The correct chair is a small blue chair that is farthest from the wall. Directly behind it is a green stool.",
+      "target_id": 14,
+      "instance_type": "chair",
+      "stimulus_id": "scene0187_00-chair-4-14-0-1-13",
+      "stimulus_candidate_ids": [
+        14,
+        0,
+        1,
+        13
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 10364,
+      "scene": "scene0019_00",
+      "query": "the large brown door next to the vending machine",
+      "target_id": 19,
+      "instance_type": "door",
+      "stimulus_id": "scene0019_00-door-2-19-10",
+      "stimulus_candidate_ids": [
+        19,
+        10
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "large"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 10396,
+      "scene": "scene0689_00",
+      "query": "The largest window that makes the wall on the long side of the room.",
+      "target_id": 0,
+      "instance_type": "window",
+      "stimulus_id": "scene0689_00-window-2-0-17",
+      "stimulus_candidate_ids": [
+        0,
+        17
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 10431,
+      "scene": "scene0084_00",
+      "query": "choose the bigger trash can.",
+      "target_id": 10,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0084_00-trash_can-3-10-25-26",
+      "stimulus_candidate_ids": [
+        10,
+        25,
+        26
+      ],
+      "stage": "simple_relative",
+      "size_words": [
+        "bigger"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 10682,
+      "scene": "scene0606_00",
+      "query": "The big plant next to the clock.",
+      "target_id": 20,
+      "instance_type": "plant",
+      "stimulus_id": "scene0606_00-plant-2-20-13",
+      "stimulus_candidate_ids": [
+        20,
+        13
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "big"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 11113,
+      "scene": "scene0598_00",
+      "query": "The smaller window by the monitor",
+      "target_id": 18,
+      "instance_type": "window",
+      "stimulus_id": "scene0598_00-window-2-18-20",
+      "stimulus_candidate_ids": [
+        18,
+        20
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 11647,
+      "scene": "scene0030_00",
+      "query": "the smallest bookshelf in the corner of the room",
+      "target_id": 19,
+      "instance_type": "bookshelf",
+      "stimulus_id": "scene0030_00-bookshelf-5-19-17-18-20-68",
+      "stimulus_candidate_ids": [
+        19,
+        17,
+        18,
+        20,
+        68
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 11862,
+      "scene": "scene0338_00",
+      "query": "small box",
+      "target_id": 21,
+      "instance_type": "box",
+      "stimulus_id": "scene0338_00-box-5-21-0-18-19-20",
+      "stimulus_candidate_ids": [
+        21,
+        0,
+        18,
+        19,
+        20
+      ],
+      "stage": "simple_relative",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 11901,
+      "scene": "scene0693_00",
+      "query": "This small mirror is alongside the white cabinet.",
+      "target_id": 14,
+      "instance_type": "mirror",
+      "stimulus_id": "scene0693_00-mirror-3-14-0-15",
+      "stimulus_candidate_ids": [
+        14,
+        0,
+        15
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 12367,
+      "scene": "scene0608_00",
+      "query": "This is the largest plant, a potted tree perhaps.",
+      "target_id": 18,
+      "instance_type": "plant",
+      "stimulus_id": "scene0608_00-plant-3-18-4-14",
+      "stimulus_candidate_ids": [
+        18,
+        4,
+        14
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 12579,
+      "scene": "scene0633_00",
+      "query": "The tall shelf to the left closest to the wall",
+      "target_id": 18,
+      "instance_type": "shelf",
+      "stimulus_id": "scene0633_00-shelf-2-18-25",
+      "stimulus_candidate_ids": [
+        18,
+        25
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "tall"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 12941,
+      "scene": "scene0095_00",
+      "query": "Pick the larger of the two whiteboards.",
+      "target_id": 40,
+      "instance_type": "whiteboard",
+      "stimulus_id": "scene0095_00-whiteboard-2-40-46",
+      "stimulus_candidate_ids": [
+        40,
+        46
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "larger"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 13540,
+      "scene": "scene0697_00",
+      "query": "The taller dresser across from the bed.",
+      "target_id": 10,
+      "instance_type": "dresser",
+      "stimulus_id": "scene0697_00-dresser-2-10-11",
+      "stimulus_candidate_ids": [
+        10,
+        11
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "taller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 13958,
+      "scene": "scene0458_00",
+      "query": "the largest box in the middle of the stack",
+      "target_id": 0,
+      "instance_type": "box",
+      "stimulus_id": "scene0458_00-box-3-0-27-31",
+      "stimulus_candidate_ids": [
+        0,
+        27,
+        31
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 14770,
+      "scene": "scene0500_00",
+      "query": "The small round table next to the chalk board",
+      "target_id": 17,
+      "instance_type": "table",
+      "stimulus_id": "scene0500_00-table-2-17-18",
+      "stimulus_candidate_ids": [
+        17,
+        18
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 15624,
+      "scene": "scene0063_00",
+      "query": "tall chair near the centre of the room, most directly facing the fridge",
+      "target_id": 6,
+      "instance_type": "chair",
+      "stimulus_id": "scene0063_00-chair-4-6-4-5-7",
+      "stimulus_candidate_ids": [
+        6,
+        4,
+        5,
+        7
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "tall"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 15945,
+      "scene": "scene0535_00",
+      "query": "There are two chairs facing the square white objects.  The target object is the taller chair to the left.",
+      "target_id": 26,
+      "instance_type": "chair",
+      "stimulus_id": "scene0535_00-chair-4-26-9-15-16",
+      "stimulus_candidate_ids": [
+        26,
+        9,
+        15,
+        16
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "taller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 16233,
+      "scene": "scene0378_00",
+      "query": "The smallest desk, which is also the computer desk.",
+      "target_id": 44,
+      "instance_type": "desk",
+      "stimulus_id": "scene0378_00-desk-3-44-0-35",
+      "stimulus_candidate_ids": [
+        44,
+        0,
+        35
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 16465,
+      "scene": "scene0671_00",
+      "query": "smaller book on the table",
+      "target_id": 9,
+      "instance_type": "book",
+      "stimulus_id": "scene0671_00-book-2-9-21",
+      "stimulus_candidate_ids": [
+        9,
+        21
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 18106,
+      "scene": "scene0658_00",
+      "query": "smaller cabinet, on the floor.",
+      "target_id": 4,
+      "instance_type": "cabinet",
+      "stimulus_id": "scene0658_00-cabinet-2-4-8",
+      "stimulus_candidate_ids": [
+        4,
+        8
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 18901,
+      "scene": "scene0552_00",
+      "query": "The bigger trash can, which is not underneath a table.",
+      "target_id": 32,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0552_00-trash_can-2-32-16",
+      "stimulus_candidate_ids": [
+        32,
+        16
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "bigger"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 19153,
+      "scene": "scene0568_00",
+      "query": "Find the small table in front of the curtain.",
+      "target_id": 6,
+      "instance_type": "table",
+      "stimulus_id": "scene0568_00-table-2-6-9",
+      "stimulus_candidate_ids": [
+        6,
+        9
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 19371,
+      "scene": "scene0353_00",
+      "query": "Choose the small book on the table across from the black sofa.",
+      "target_id": 14,
+      "instance_type": "book",
+      "stimulus_id": "scene0353_00-book-4-14-35-36-52",
+      "stimulus_candidate_ids": [
+        14,
+        35,
+        36,
+        52
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 20637,
+      "scene": "scene0645_00",
+      "query": "The larger hallway door not connected to the bathroom.",
+      "target_id": 7,
+      "instance_type": "door",
+      "stimulus_id": "scene0645_00-door-3-7-5-38",
+      "stimulus_candidate_ids": [
+        7,
+        5,
+        38
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "larger"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 21145,
+      "scene": "scene0149_00",
+      "query": "big kitchen counter with the sink",
+      "target_id": 0,
+      "instance_type": "kitchen counter",
+      "stimulus_id": "scene0149_00-kitchen_counter-2-0-19",
+      "stimulus_candidate_ids": [
+        0,
+        19
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "big"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 21949,
+      "scene": "scene0647_00",
+      "query": "The largest picture of a dandelion, closest to the blue ping pong table.",
+      "target_id": 17,
+      "instance_type": "picture",
+      "stimulus_id": "scene0647_00-picture-3-17-18-19",
+      "stimulus_candidate_ids": [
+        17,
+        18,
+        19
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 22072,
+      "scene": "scene0458_00",
+      "query": "Please choose the small soap dish on the very top.",
+      "target_id": 10,
+      "instance_type": "soap dish",
+      "stimulus_id": "scene0458_00-soap_dish-3-10-9-11",
+      "stimulus_candidate_ids": [
+        10,
+        9,
+        11
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 22161,
+      "scene": "scene0652_00",
+      "query": "The smaller picture across from the bed, hung beside a mirror and above a dark dresser.",
+      "target_id": 26,
+      "instance_type": "picture",
+      "stimulus_id": "scene0652_00-picture-2-26-16",
+      "stimulus_candidate_ids": [
+        26,
+        16
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 22872,
+      "scene": "scene0231_00",
+      "query": "Choose the smallest picture on the wall",
+      "target_id": 16,
+      "instance_type": "picture",
+      "stimulus_id": "scene0231_00-picture-3-16-20-45",
+      "stimulus_candidate_ids": [
+        16,
+        20,
+        45
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 23329,
+      "scene": "scene0084_00",
+      "query": "The larger mirror next to the door.",
+      "target_id": 13,
+      "instance_type": "mirror",
+      "stimulus_id": "scene0084_00-mirror-2-13-2",
+      "stimulus_candidate_ids": [
+        13,
+        2
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "larger"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 23331,
+      "scene": "scene0670_00",
+      "query": "When facing the refrigerator it is the largest trash can directly to the left of the refrigerator.",
+      "target_id": 24,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0670_00-trash_can-3-24-3-25",
+      "stimulus_candidate_ids": [
+        24,
+        3,
+        25
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 23529,
+      "scene": "scene0146_00",
+      "query": "the wider of the two rails.",
+      "target_id": 3,
+      "instance_type": "rail",
+      "stimulus_id": "scene0146_00-rail-2-3-10",
+      "stimulus_candidate_ids": [
+        3,
+        10
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "wider"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 24048,
+      "scene": "scene0583_00",
+      "query": "This is the smallest shelf, NOT the one in the bathroom",
+      "target_id": 13,
+      "instance_type": "shelf",
+      "stimulus_id": "scene0583_00-shelf-2-13-32",
+      "stimulus_candidate_ids": [
+        13,
+        32
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 26135,
+      "scene": "scene0249_00",
+      "query": "The largest trash can in the room with a white outlet above it. The trash can has a recycling symbol on it and is to the left of a cardboard box.",
+      "target_id": 23,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0249_00-trash_can-6-23-26-27-28-30-36",
+      "stimulus_candidate_ids": [
+        23,
+        26,
+        27,
+        28,
+        30,
+        36
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 26783,
+      "scene": "scene0328_00",
+      "query": "The biggest set of kitchen cabinets, directly across from the refrigerator and closest to the floor",
+      "target_id": 25,
+      "instance_type": "kitchen cabinets",
+      "stimulus_id": "scene0328_00-kitchen_cabinets-4-25-16-18-19",
+      "stimulus_candidate_ids": [
+        25,
+        16,
+        18,
+        19
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "biggest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 27408,
+      "scene": "scene0685_00",
+      "query": "small trash can by the door.",
+      "target_id": 7,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0685_00-trash_can-2-7-0",
+      "stimulus_candidate_ids": [
+        7,
+        0
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 28154,
+      "scene": "scene0095_00",
+      "query": "Choose the whiteboard that is bigger and is close to the door not the cabinet.",
+      "target_id": 40,
+      "instance_type": "whiteboard",
+      "stimulus_id": "scene0095_00-whiteboard-2-40-46",
+      "stimulus_candidate_ids": [
+        40,
+        46
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "bigger"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 29515,
+      "scene": "scene0658_00",
+      "query": "The tallest shelf in the room",
+      "target_id": 9,
+      "instance_type": "shelf",
+      "stimulus_id": "scene0658_00-shelf-2-9-10",
+      "stimulus_candidate_ids": [
+        9,
+        10
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "tallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 29522,
+      "scene": "scene0535_00",
+      "query": "The taller of the desks.",
+      "target_id": 11,
+      "instance_type": "desk",
+      "stimulus_id": "scene0535_00-desk-2-11-10",
+      "stimulus_candidate_ids": [
+        11,
+        10
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "taller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 30152,
+      "scene": "scene0644_00",
+      "query": "The larger of the two tables.",
+      "target_id": 25,
+      "instance_type": "table",
+      "stimulus_id": "scene0644_00-table-2-25-26",
+      "stimulus_candidate_ids": [
+        25,
+        26
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "larger"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 30296,
+      "scene": "scene0693_00",
+      "query": "Choose the smallest mirror on the wall.",
+      "target_id": 15,
+      "instance_type": "mirror",
+      "stimulus_id": "scene0693_00-mirror-3-15-0-14",
+      "stimulus_candidate_ids": [
+        15,
+        0,
+        14
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 30825,
+      "scene": "scene0500_00",
+      "query": "Choose the smaller table.",
+      "target_id": 17,
+      "instance_type": "table",
+      "stimulus_id": "scene0500_00-table-2-17-18",
+      "stimulus_candidate_ids": [
+        17,
+        18
+      ],
+      "stage": "simple_relative",
+      "size_words": [
+        "smaller"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 31436,
+      "scene": "scene0353_00",
+      "query": "The smallest pillow on a bed.",
+      "target_id": 41,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0353_00-pillow-4-41-27-28-48",
+      "stimulus_candidate_ids": [
+        41,
+        27,
+        28,
+        48
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 31620,
+      "scene": "scene0307_00",
+      "query": "select the tall cabinets near the fridge",
+      "target_id": 22,
+      "instance_type": "cabinet",
+      "stimulus_id": "scene0307_00-cabinet-3-22-23-25",
+      "stimulus_candidate_ids": [
+        22,
+        23,
+        25
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "tall"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 34177,
+      "scene": "scene0671_00",
+      "query": "The book that is smallest.",
+      "target_id": 9,
+      "instance_type": "book",
+      "stimulus_id": "scene0671_00-book-2-9-21",
+      "stimulus_candidate_ids": [
+        9,
+        21
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 34551,
+      "scene": "scene0249_00",
+      "query": "The largest of the trash cans.",
+      "target_id": 23,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0249_00-trash_can-6-23-26-27-28-30-36",
+      "stimulus_candidate_ids": [
+        23,
+        26,
+        27,
+        28,
+        30,
+        36
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 36632,
+      "scene": "scene0222_00",
+      "query": "The shorter of the desks.",
+      "target_id": 13,
+      "instance_type": "desk",
+      "stimulus_id": "scene0222_00-desk-2-13-14",
+      "stimulus_candidate_ids": [
+        13,
+        14
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "shorter"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 37145,
+      "scene": "scene0249_00",
+      "query": "It is the largest trash can with the recycling symbol on it.",
+      "target_id": 23,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0249_00-trash_can-6-23-26-27-28-30-36",
+      "stimulus_candidate_ids": [
+        23,
+        26,
+        27,
+        28,
+        30,
+        36
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 37559,
+      "scene": "scene0064_00",
+      "query": "The shorter bookshelf.",
+      "target_id": 0,
+      "instance_type": "bookshelf",
+      "stimulus_id": "scene0064_00-bookshelf-2-0-10",
+      "stimulus_candidate_ids": [
+        0,
+        10
+      ],
+      "stage": "simple_relative",
+      "size_words": [
+        "shorter"
+      ],
+      "size_form": "comparative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 38240,
+      "scene": "scene0696_00",
+      "query": "The little blue box.",
+      "target_id": 26,
+      "instance_type": "box",
+      "stimulus_id": "scene0696_00-box-2-26-18",
+      "stimulus_candidate_ids": [
+        26,
+        18
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "little"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 39009,
+      "scene": "scene0568_00",
+      "query": "The largest shelf with a shelf above it.",
+      "target_id": 19,
+      "instance_type": "shelf",
+      "stimulus_id": "scene0568_00-shelf-3-19-17-20",
+      "stimulus_candidate_ids": [
+        19,
+        17,
+        20
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "largest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 39233,
+      "scene": "scene0568_00",
+      "query": "Small table with a green top in the corner next to a curtain",
+      "target_id": 6,
+      "instance_type": "table",
+      "stimulus_id": "scene0568_00-table-2-6-9",
+      "stimulus_candidate_ids": [
+        6,
+        9
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 39586,
+      "scene": "scene0084_00",
+      "query": "the small trash can under the sink, located underneath on the right",
+      "target_id": 25,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0084_00-trash_can-3-25-10-26",
+      "stimulus_candidate_ids": [
+        25,
+        10,
+        26
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 39808,
+      "scene": "scene0329_00",
+      "query": "the small black chair not in front of the computer but at the corner of the desk",
+      "target_id": 37,
+      "instance_type": "chair",
+      "stimulus_id": "scene0329_00-chair-3-37-13-34",
+      "stimulus_candidate_ids": [
+        37,
+        13,
+        34
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "small"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 40139,
+      "scene": "scene0593_00",
+      "query": "large trash can to the right of the wood desk.",
+      "target_id": 25,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0593_00-trash_can-2-25-8",
+      "stimulus_candidate_ids": [
+        25,
+        8
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "large"
+      ],
+      "size_form": "adjective",
+      "size_scope": "target_likely"
+    },
+    {
+      "csv_row": 40372,
+      "scene": "scene0565_00",
+      "query": "The smallest box on the left near the dark brown desk",
+      "target_id": 8,
+      "instance_type": "box",
+      "stimulus_id": "scene0565_00-box-3-8-6-7",
+      "stimulus_candidate_ids": [
+        8,
+        6,
+        7
+      ],
+      "stage": "compound_size_language",
+      "size_words": [
+        "smallest"
+      ],
+      "size_form": "superlative",
+      "size_scope": "target_likely"
+    }
+  ]
+}
