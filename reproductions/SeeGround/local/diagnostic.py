@@ -1182,7 +1182,12 @@ def validate_structure(query, parsed):
         missing.append('target category is an unresolved pronoun or generic noun')
     if re.search(r"\b(no|not|nothing|never|without|except)\b|n['’]t\b", query, re.I):
         missing.append('negation/exclusion is unsupported')
-        parsed['Relations'] = []
+        from v4_policy import v6_enabled
+        if v6_enabled():
+            from query_graph import retain_positive_predicates
+            retain_positive_predicates(query, parsed)
+        else:
+            parsed['Relations'] = []
     if any(r['relation'] in ('left', 'right', 'front', 'back') for r in parsed['Relations']):
         observer = parsed['Observer']
         if not observer['origin'] or not observer['facing']:
@@ -1221,7 +1226,22 @@ def validate_structure(query, parsed):
         item.startswith('unsupported relation: ') and
         item[len('unsupported relation: '):].casefold() in covered_nouns)]
     parsed['diagnostic_missing'] = missing
+    from v4_policy import v6_enabled
+    if v6_enabled():
+        from query_graph import retain_positive_predicates
+        retain_positive_predicates(query, parsed)
     parsed['condition_records'] = _condition_records(query, parsed, raw_relations, raw_attrs)
+    if v6_enabled():
+        from query_graph import structure
+        previous = parsed.get('query_structure', {}).get('conditions', [])
+        parsed['query_structure'] = structure(query, parsed)
+        present = {(c.get('condition_type'), c.get('source_quote')) for c in parsed['query_structure']['conditions']}
+        parsed['query_structure']['conditions'] += [c for c in previous
+            if c.get('polarity') != 'positive' and (c.get('condition_type'), c.get('source_quote')) not in present]
+        for index, condition in enumerate(parsed['query_structure']['conditions']):
+            condition['condition_id'] = f'c{index}'
+        parsed['diagnostic_missing'].extend('query modifier not represented: ' + quote
+            for quote in parsed['query_structure']['uncovered_modifiers'])
     return parsed
 
 
@@ -1229,6 +1249,16 @@ def refresh_condition_records(query, parsed):
     """Rebuild the audit ledger after another parser operation updates diagnostics."""
     parsed['condition_records'] = _condition_records(
         query, parsed, parsed.get('Relations') or [], parsed.get('Attributes') or [])
+    from v4_policy import v6_enabled
+    if v6_enabled():
+        from query_graph import structure
+        previous = parsed.get('query_structure', {}).get('conditions', [])
+        parsed['query_structure'] = structure(query, parsed)
+        present = {(c.get('condition_type'), c.get('source_quote')) for c in parsed['query_structure']['conditions']}
+        parsed['query_structure']['conditions'] += [c for c in previous
+            if (c.get('condition_type'), c.get('source_quote')) not in present]
+        for index, condition in enumerate(parsed['query_structure']['conditions']):
+            condition['condition_id'] = f'c{index}'
     return parsed
 
 

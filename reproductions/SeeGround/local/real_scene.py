@@ -101,6 +101,13 @@ def parse_query(query, mode='baseline', calls=None):
                 'appearance modifiers. No observer/category/reference may be invented. '
                 +PARSER_INSTRUCTIONS
                 +(SYNTAX_PARSER_INSTRUCTIONS if syntax['backend'] == 'spacy' else ''))
+        from v4_policy import v6_enabled
+        if v6_enabled():
+            prompt += ('\nBind each modifier to its target or reference category; supply role=target|reference '
+                'on Attributes. Preserve the complete quoted clause for negation/exclusion in Unhandled. '
+                'Never represent a negated predicate as a positive attribute or relation. '
+                'Keep independent positive conditions alongside exclusions. Reference descriptions identify '
+                'categories and properties, never a guessed instance ID. Uncertain attachments stay in Unhandled.')
         messages=[{'role':'system','content':prompt},
                   {'role':'user','content':json.dumps({'description':query,
                       **({'syntax_hints':syntax} if syntax['backend'] == 'spacy' else {})},ensure_ascii=False)}]

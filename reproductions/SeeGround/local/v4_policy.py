@@ -2,8 +2,12 @@
 import os
 
 
+def v6_enabled():
+    return enabled() and os.getenv('SEEGROUND_V6', '0') == '1'
+
+
 def v5_enabled(feature=None):
-    active = enabled() and os.getenv('SEEGROUND_V5', '0') == '1'
+    active = enabled() and (os.getenv('SEEGROUND_V5', '0') == '1' or v6_enabled())
     return active and (feature is None or os.getenv('SEEGROUND_V5_' + feature.upper(), '1') == '1')
 
 
@@ -13,7 +17,8 @@ def enabled(feature=None):
 
 
 def settings():
-    return {'version': 'relative-size-v5' if v5_enabled() else 'relative-size-v4' if enabled() else 'relative-size-v3',
+    return {'version': 'relative-size-v6' if v6_enabled() else 'relative-size-v5' if v5_enabled() else 'relative-size-v4' if enabled() else 'relative-size-v3',
+            'v6': v6_enabled(),
             'v5': v5_enabled(),
             'v5_scope': v5_enabled('scope'), 'v5_measurements': v5_enabled('measurements'),
             'v5_call_economy': v5_enabled('call_economy'),

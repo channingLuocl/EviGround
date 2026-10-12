@@ -3,7 +3,7 @@ import re
 import numpy as np
 from evidence import match_retrieval_categories, retrieval_category
 from size_semantics import category_pattern
-from v4_policy import v5_enabled
+from v4_policy import v5_enabled, v6_enabled
 
 
 def relation_tasks(query, parsed):
@@ -21,6 +21,10 @@ def relation_tasks(query, parsed):
     for phrase in dict.fromkeys(phrases):
         if not phrase or phrase.casefold() not in query.casefold() or re.search(r'\bnot\b', phrase, re.I):
             continue
+        if v6_enabled():
+            from query_graph import exclusion_clauses, polarity
+            if polarity(query, phrase, exclusion_clauses(query, parsed.get('query_syntax', {}))) != 'positive':
+                continue
         kind = ('corner' if re.search(r'\bcorner\b', phrase, re.I) else
                 'attachment' if re.search(r'\b(?:against|attached|hanging)\b', phrase, re.I) else
                 'support' if re.search(r'\b(?:on|on top of)\b', phrase, re.I) else
@@ -109,7 +113,12 @@ def bind_tasks(query, parsed, objects, candidates, checks=()):
         anchors = match_retrieval_categories([task['anchor_category']], objects) if task['anchor_category'] else []
         scope = None
         if task['kind'] != 'corner':
+            reference_pool = list(anchors)
             anchors, scope = _attribute_comparison_pool(parsed, anchors, task['anchor_category'], checks, 'reference')
+            if v6_enabled() and scope and scope.get('status') != 'bound':
+                excluded = {r['candidate_id'] for r in scope.get('candidate_removal_audit', [])
+                            if r.get('removal_allowed')}
+                anchors = [a for a in reference_pool if a['bbox_id'] not in excluded]
             if scope and scope.get('status') != 'bound' and not v5_enabled('scope'):
                 anchors = []
         for obj in candidates:

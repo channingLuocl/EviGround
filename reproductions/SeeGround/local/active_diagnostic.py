@@ -19,7 +19,7 @@ from size_semantics import evaluate_size_condition
 from qwen_api import QwenAPIError, chat, image_part, parse_json_object, api_provider
 from react_decision import jev_action, react_backend, text_state
 from run import render
-from v4_policy import enabled, v5_enabled, settings as v4_settings, evidence_inventory, deletion_events, backtrack_events
+from v4_policy import enabled, v5_enabled, v6_enabled, settings as v4_settings, evidence_inventory, deletion_events, backtrack_events
 from v4_visual import boxed_view, visual_report
 from v4_relations import bind_tasks
 
@@ -1391,6 +1391,13 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
     target_ids = set(category_candidates)
     references = [{'bbox_id': obj['bbox_id'], 'category': obj['target']}
                   for obj in geometry_objects if obj['bbox_id'] not in target_ids]
+    if v6_enabled():
+        from query_graph import local_graph
+        graph = local_graph(parsed, geometry_objects, candidates, diagnosis)
+        relevant_ids = {n['bbox_id'] for n in graph['nodes']}
+        references = [r for r in references if r['bbox_id'] in relevant_ids]
+        trace['query_structure'] = parsed['query_structure']
+        trace['query_graph'] = graph
     attempts = 0
     tool_count = 0
     max_attempts = max(limit * 2 + 3, limit + 3)
@@ -1700,6 +1707,13 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 'internal_visual_budget': dict(parsed['_v4_budget']),
             }
             instructions = INSTRUCTIONS
+            if v6_enabled():
+                from query_graph import local_graph
+                state['query_graph'] = local_graph(parsed, geometry_objects, candidates, diagnosis)
+                instructions += ('\nUse query_structure and query_graph to inspect source quotes, modifier roles '
+                    'and every possible reference binding. The graph is context, not new evidence. '
+                    'Unknown or exclusion conditions are unresolved obligations; never execute them as '
+                    'positive predicates or count them as solved. Size comparison pools remain frozen.')
             if enabled():
                 instructions = instructions.replace('Size selects its own source-bound pools. Supply only action, dimension and reason.',
                     'Size selects its own source-bound pools; optional inspection parameters are described below.')
