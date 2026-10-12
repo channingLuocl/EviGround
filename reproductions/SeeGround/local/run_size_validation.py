@@ -151,6 +151,8 @@ def main():
     parser.add_argument('--scene-root', type=Path, default=ROOT / 'local_outputs')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--workers', type=int, default=10)
+    parser.add_argument('--api-concurrency', type=int,
+                        help='Maximum simultaneous model requests; local workers remain independent')
     parser.add_argument('--review-limit', type=int, default=3)
     parser.add_argument('--limit', type=int, help='Run the first N; omit to resume the whole selection')
     parser.add_argument('--retry-errors', action='store_true', help='Retry cached failed API/process runs')
@@ -159,8 +161,10 @@ def main():
     parser.add_argument('--query', help=argparse.SUPPRESS)
     parser.add_argument('--csv-row', type=int, help=argparse.SUPPRESS)
     args = parser.parse_args()
-    if args.review_limit < 1 or args.workers < 1 or (args.limit is not None and args.limit < 1):
-        parser.error('workers, review-limit and limit must be positive')
+    if (args.review_limit < 1 or args.workers < 1 or
+            (args.limit is not None and args.limit < 1) or
+            (args.api_concurrency is not None and args.api_concurrency < 1)):
+        parser.error('workers, review-limit, api-concurrency and limit must be positive')
     if args.worker:
         from real_scene import run_query
         run_query(args.scene_dir, args.query, args.output,
@@ -183,12 +187,19 @@ def main():
                for r in selected if r['scene'] == scene):
             raise ValueError(f'NR3D candidate IDs missing in {scene}')
     source = ROOT / 'local_outputs/downloads/nr3d_official.csv'
-    from qwen_api import api_config_summary
+    from qwen_api import api_config_summary, api_concurrency
     from query_syntax import syntax_settings
     source_check = verify_source(manifest, source)
     output = (args.output or ROOT / 'local_outputs' /
               ('nr3d_size_300_' + datetime.now().strftime('%Y%m%d_%H%M%S'))).resolve()
+    if args.api_concurrency is not None:
+        os.environ['SEEGROUND_API_CONCURRENCY'] = str(args.api_concurrency)
+    os.environ.setdefault('SEEGROUND_API_SLOT_DIR', str(output / '.api_slots'))
+    output.mkdir(parents=True, exist_ok=True)
+    Path(os.environ['SEEGROUND_API_SLOT_DIR']).mkdir(parents=True, exist_ok=True)
     settings = {'selection': manifest, 'review_limit': args.review_limit,
+        'workers': args.workers, 'api_concurrency': api_concurrency(),
+        'api_slot_dir': os.environ['SEEGROUND_API_SLOT_DIR'],
         'query_syntax': syntax_settings(),
         'api_config': api_config_summary(),
         'scene_root': str(args.scene_root.resolve()), 'object_table': 'gt',
@@ -204,7 +215,6 @@ def main():
         from v5_runtime import file_identity
         settings['input_sha256'] = {scene: file_identity(args.scene_root / scene / name for name in
             ('scene.npz', 'objects_gt.json', 'scene_instances.json', 'provenance.json')) for scene in sorted({r['scene'] for r in rows})}
-    output.mkdir(parents=True, exist_ok=True)
     settings_path = output / 'manifest.json'
     if settings_path.exists() and json.loads(settings_path.read_text()) != settings:
         raise ValueError('Output has different code/settings/selection; choose a fresh output directory')

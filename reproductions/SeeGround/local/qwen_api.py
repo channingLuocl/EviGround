@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import base64
+from contextlib import contextmanager
+import fcntl
 import json
 import os
 import re
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -20,6 +23,51 @@ class QwenAPIError(ValueError):
     def __init__(self, message: str, *, diagnostic: dict[str, Any] | None = None):
         super().__init__(message)
         self.diagnostic = diagnostic or {}
+
+
+def api_concurrency() -> int:
+    """Maximum number of simultaneous outbound model requests per host."""
+    raw = os.getenv('SEEGROUND_API_CONCURRENCY', '4').strip()
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise QwenAPIError('SEEGROUND_API_CONCURRENCY must be a positive integer') from exc
+    if value < 1:
+        raise QwenAPIError('SEEGROUND_API_CONCURRENCY must be a positive integer')
+    return value
+
+
+def api_slot_dir() -> Path:
+    configured = os.getenv('SEEGROUND_API_SLOT_DIR', '').strip()
+    if configured:
+        return Path(configured).expanduser()
+    identity = f"{os.getuid()}-{api_provider()}"
+    return Path(tempfile.gettempdir()) / f'seeground-api-slots-{identity}'
+
+
+@contextmanager
+def api_request_slot():
+    """Acquire one cross-process slot before sending an outbound API request."""
+    slot_dir = api_slot_dir()
+    slot_dir.mkdir(parents=True, exist_ok=True)
+    limit = api_concurrency()
+    started = time.perf_counter()
+    while True:
+        for index in range(limit):
+            path = slot_dir / f'slot-{index}.lock'
+            handle = path.open('a+')
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                handle.close()
+                continue
+            try:
+                yield round(time.perf_counter() - started, 4)
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                handle.close()
+            return
+        time.sleep(0.05)
 
 
 def api_provider() -> str:
@@ -65,7 +113,9 @@ def api_config_summary() -> dict[str, Any]:
     return {'provider': api_provider(), 'request_options': options,
             'token_parameter': ('max_tokens' if api_provider() == 'qwen' else
                 os.getenv('SEEGROUND_OPENAI_TOKEN_PARAMETER', 'max_completion_tokens').strip()),
-            'allow_http': os.getenv('SEEGROUND_ALLOW_HTTP', '') == '1'}
+            'allow_http': os.getenv('SEEGROUND_ALLOW_HTTP', '') == '1',
+            'api_concurrency': api_concurrency(),
+            'api_slot_dir': str(api_slot_dir())}
 
 
 def _settings() -> tuple[str, str, str]:
@@ -194,12 +244,13 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
     label = 'Qwen' if api_provider() == 'qwen' else 'OpenAI-compatible'
     started = time.perf_counter()
     try:
-        response = requests.post(
-            base + "/chat/completions",
-            headers={"Authorization": "Bearer " + key},
-            json=payload,
-            timeout=timeout,
-        )
+        with api_request_slot() as slot_wait_s:
+            response = requests.post(
+                base + "/chat/completions",
+                headers={"Authorization": "Bearer " + key},
+                json=payload,
+                timeout=timeout,
+            )
     except requests.Timeout as exc:
         raise QwenAPIError(f"{label} API 请求超时", diagnostic={
             'failure_kind': 'timeout', 'http_status': None, 'response_body': None,
@@ -248,7 +299,8 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
                 'request_id': _request_id(response), 'model': model, 'request_summary': summary,
                 'stage': 'response_json_parse',
             }) from exc
-    data["_baseline"] = {"latency_s": round(time.perf_counter() - started, 4), "model": model,
+    data["_baseline"] = {"latency_s": round(time.perf_counter() - started, 4), "api_slot_wait_s": slot_wait_s,
+                         "api_concurrency": api_concurrency(), "model": model,
                          'provider': api_provider(), 'request_summary': summary,
                          'http_status': getattr(response, 'status_code', 200),
                          'request_id': _request_id(response)}
