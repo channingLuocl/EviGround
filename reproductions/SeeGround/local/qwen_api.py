@@ -361,6 +361,7 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
         from jsonschema import Draft202012Validator, ValidationError
         payload = None
         parse_error = None
+        salvage_error = None
         try:
             if data['choices'][0]['message'].get('refusal'):
                 raise ValueError('Model refused the structured response')
