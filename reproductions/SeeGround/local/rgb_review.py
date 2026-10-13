@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from PIL import Image
 from qwen_api import chat, image_part, parse_json_object, QwenAPIError
+from response_schemas import RGB_REVIEW, schema_kwargs
 from appearance_evidence import attribute_contexts, normalize_visual_check, required_visual_attributes
 
 
@@ -92,10 +93,12 @@ def review_need(need, crops, calls):
     }
     try:
         data = chat([{'role':'user','content':[image_part(c['image']) for c in selected]+[{'type':'text','text':prompt}]}],
-                    max_tokens=min(2048, 400 + 140 * len(expected)), json_mode=True)
+                    max_tokens=min(2048, 400 + 140 * len(expected)), json_mode=True,
+                    **schema_kwargs('rgb_review', RGB_REVIEW))
         calls.append({'stage':'rgb_review','object_id':oid,'category':need['category'],
                       'response':data['_content'],'usage':data.get('usage'),
-                      'latency_s':data['_baseline']['latency_s'],'finish_reason':data.get('_finish_reason')})
+                      'latency_s':data['_baseline']['latency_s'],'finish_reason':data.get('_finish_reason'),
+                      **data['_baseline']})
         if data.get('_finish_reason') != 'stop':
             raise QwenAPIError('RGB review did not complete normally: ' +
                                str(data.get('_finish_reason')))

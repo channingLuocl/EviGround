@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from run import render, project
 from qwen_api import chat, image_part, parse_json_object
+from response_schemas import VISUAL_REPORT, schema_kwargs
 from size_semantics import evaluate_size_condition
 from v4_policy import v5_enabled
 
@@ -96,8 +97,11 @@ def boxed_view(objects, focus_ids, xyz, rgb, ids, out, name, measurements=(), az
 
 
 def visual_report(stage, query, view, payload, calls, chat_fn=None):
+    output_schema = schema_kwargs('visual_report', VISUAL_REPORT)
     call = {'stage': stage, 'role': 'visual_verifier', 'image': view['image'],
             'focus_ids': view['focus_ids'], 'response_format': {'type': 'json_object'}}
+    if output_schema:
+        call['response_format'] = {'type': 'json_schema', 'json_schema': output_schema['response_schema']}
     calls.append(call)
     instructions = '''Inspect the original query and the numbered instances in this common-camera point-cloud view.
 All boxes have the same color. Box and point cloud are the same scan evidence, not independent confirmations.
@@ -125,11 +129,14 @@ Link visible evidence to observations with condition_checks=[{source_quote,statu
 Measurement findings must include comparison={key,operator:lt|gt,value,reference_id,reference_key};
 The comparison must reproduce a bound, known, non-tentative size_constraints predicate; provide reference_id and reference_key.
 Unknown completeness is not a contradiction of a reliable measurement. Body-plane area does not require a bottom view.'''
+    if output_schema:
+        instructions += '\nReturn every schema field; use empty arrays for unused fields and null for inapplicable comparison or anchor_id.'
     try:
         data = (chat_fn or chat)([{'role': 'system', 'content': instructions},
             {'role': 'user', 'content': [{'type': 'text', 'text': json.dumps(
                 {'query': query, 'view': {k: v for k, v in view.items() if k != 'image'}, 'task': payload}, ensure_ascii=False)},
-                image_part(view['image'])]}], max_tokens=1600, json_mode=True)
+                image_part(view['image'])]}], max_tokens=1600, json_mode=True,
+                **output_schema)
         call.update(response=data['_content'], usage=data.get('usage'), **data.get('_baseline', {}))
         if data.get('_finish_reason') != 'stop':
             raise ValueError('visual report did not complete normally')

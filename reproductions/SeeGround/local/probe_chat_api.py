@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image
 
 from qwen_api import QwenAPIError, _redact, chat, image_part, parse_json_object
+from response_schemas import TEXT, obj, schema_kwargs
 
 
 def probe(output, image=None):
@@ -29,7 +30,12 @@ def probe(output, image=None):
                      'with keys ok (boolean), kind ("image"), dominant_color (string).'}]}]),
             ]
             for stage, request in messages:
-                data = chat(request, max_tokens=1024, json_mode=True)
+                fields = {'ok': {'type': 'boolean', 'enum': [True]},
+                          'kind': {'type': 'string', 'enum': [stage.split('_')[0]]}}
+                if stage == 'image_json':
+                    fields['dominant_color'] = TEXT
+                data = chat(request, max_tokens=1024, json_mode=True,
+                            **schema_kwargs(stage, obj(fields)))
                 call = {'stage': stage, **data['_baseline'],
                         'response': data['_content'], 'finish_reason': data.get('_finish_reason'),
                         'usage': data.get('usage')}

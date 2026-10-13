@@ -1,0 +1,283 @@
+{
+  "endpoint": "http://106.14.25.135:3000/v1",
+  "model": "gpt-6.1-sol",
+  "requests": [
+    {
+      "name": "simple_json",
+      "request": {
+        "model": "gpt-6.1-sol",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return only the JSON object {\"ok\":true,\"kind\":\"text\"}."
+          }
+        ],
+        "max_completion_tokens": 512,
+        "response_format": {
+          "type": "json_object"
+        }
+      },
+      "http_status": 200,
+      "request_id": "b0e788c5-578e-4319-aaec-eafd9d8721b7",
+      "response_body": "{\"id\":\"resp_0ce92057ec7d48ad016acd93a1f0008199b112a20761eaaeb5\",\"object\":\"chat.completion\",\"created\":1791857572,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true,\\\"kind\\\":\\\"text\\\"}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":4237,\"completion_tokens\":16,\"total_tokens\":4253,\"prompt_tokens_details\":{\"cached_tokens\":4096}},\"service_tier\":\"default\"}",
+      "content": "{\"ok\":true,\"kind\":\"text\"}",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4237,
+        "completion_tokens": 16,
+        "total_tokens": 4253,
+        "prompt_tokens_details": {
+          "cached_tokens": 4096
+        }
+      },
+      "valid_json_object": true,
+      "expected_fields_match": true,
+      "latency_s": 4.532
+    },
+    {
+      "name": "plain_text_control",
+      "request": {
+        "model": "gpt-6.1-sol",
+        "messages": [
+          {
+            "role": "user",
+            "content": "This is a JSON mode interface test. Reply with exactly the plain text PROBE_COMPLETE. Do not use JSON, quotes, braces, or code fences."
+          }
+        ],
+        "max_completion_tokens": 512
+      },
+      "http_status": 200,
+      "request_id": "4e518561-b5f1-4395-b711-2b1c890222c5",
+      "response_body": "{\"id\":\"resp_0f29f2e51987c7cb016acd93a6458487d19d00434aaa4d0007\",\"object\":\"chat.completion\",\"created\":1791857576,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"PROBE_COMPLETE\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":37,\"completion_tokens\":7,\"total_tokens\":44},\"service_tier\":\"default\"}",
+      "content": "PROBE_COMPLETE",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 37,
+        "completion_tokens": 7,
+        "total_tokens": 44
+      },
+      "valid_json_object": false,
+      "latency_s": 3.716
+    },
+    {
+      "name": "json_mode_enforcement",
+      "request": {
+        "model": "gpt-6.1-sol",
+        "messages": [
+          {
+            "role": "user",
+            "content": "This is a JSON mode interface test. Reply with exactly the plain text PROBE_COMPLETE. Do not use JSON, quotes, braces, or code fences."
+          }
+        ],
+        "max_completion_tokens": 512,
+        "response_format": {
+          "type": "json_object"
+        }
+      },
+      "http_status": 200,
+      "request_id": "3140cd7f-2681-4382-b09a-002cb994a188",
+      "response_body": "{\"id\":\"resp_0742e4cd6242a97d016acd93a9b13887d18cbb7b524297b7dc\",\"object\":\"chat.completion\",\"created\":1791857580,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":\\\"PROBE_COMPLETE\\\"}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":37,\"completion_tokens\":14,\"total_tokens\":51},\"service_tier\":\"default\"}",
+      "content": "{\"response\":\"PROBE_COMPLETE\"}",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 37,
+        "completion_tokens": 14,
+        "total_tokens": 51
+      },
+      "valid_json_object": true,
+      "latency_s": 4.066
+    },
+    {
+      "name": "strict_schema_enforcement",
+      "request": {
+        "model": "gpt-6.1-sol",
+        "messages": [
+          {
+            "role": "user",
+            "content": "This is a JSON mode interface test. Reply with exactly the plain text PROBE_COMPLETE. Do not use JSON, quotes, braces, or code fences."
+          }
+        ],
+        "max_completion_tokens": 512,
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "relay_probe",
+            "strict": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
+                "marker": {
+                  "type": "string",
+                  "enum": [
+                    "seeground_json_probe"
+                  ]
+                }
+              },
+              "required": [
+                "ok",
+                "marker"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      },
+      "http_status": 200,
+      "request_id": "3b9b329d-d278-44de-8987-fe3efb96077d",
+      "response_body": "{\"id\":\"resp_0ffa091c8b7d2431016acd93ad1a8c87d1a26e1c27c7808cb1\",\"object\":\"chat.completion\",\"created\":1791857583,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"marker\\\":\\\"seeground_json_probe\\\",\\\"ok\\\":true}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":79,\"completion_tokens\":54,\"total_tokens\":133,\"completion_tokens_details\":{\"reasoning_tokens\":31}},\"service_tier\":\"default\"}",
+      "content": "{\"marker\":\"seeground_json_probe\",\"ok\":true}",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 79,
+        "completion_tokens": 54,
+        "total_tokens": 133,
+        "completion_tokens_details": {
+          "reasoning_tokens": 31
+        }
+      },
+      "valid_json_object": true,
+      "expected_fields_match": true,
+      "latency_s": 3.493
+    },
+    {
+      "name": "invalid_format_validation",
+      "request": {
+        "model": "gpt-6.1-sol",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return only JSON {\"ok\":true}."
+          }
+        ],
+        "max_completion_tokens": 512,
+        "response_format": {
+          "type": "invalid_seeground_probe"
+        }
+      },
+      "http_status": 400,
+      "request_id": null,
+      "response_body": "{\"error\":{\"message\":\"The request could not be processed. Please check the request parameters.\",\"type\":\"invalid_request_error\",\"param\":\"\",\"code\":\"invalid_request\"}}",
+      "valid_completion_response": false,
+      "latency_s": 1.72
+    },
+    {
+      "name": "production_parser_The largest picture in the room.",
+      "request": {
+        "model": "gpt-6.1-sol",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Parse only the object description in the user JSON. Return one JSON object. Do not copy conditions from these instructions. Extract actual category names; resolve anaphoric targets from the description when possible, otherwise Target=[]. Return exactly this JSON shape (arrays may be empty): {\"Target\":[\"category\"],\"Anchor\":[\"category\"],\"Relations\":[{\"target_category\":\"category\",\"anchor_category\":\"category\",\"anchor_categories\":[\"category\",\"category\"],\"relation\":\"near\",\"scope\":\"\",\"phrase\":\"exact quote\"}],\"Viewpoint\":\"\",\"Observer\":{\"origin\":{\"kind\":\"unspecified\",\"category\":\"\",\"phrase\":\"\"},\"facing\":{\"category\":\"\",\"group\":false,\"phrase\":\"\"}},\"Attributes\":[{\"category\":\"category\",\"phrase\":\"exact appearance/size quote\"}],\"Unhandled\":[]}. Return Target and Anchor as arrays, Relations as an array, and Viewpoint as a string. Each relation has target_category, anchor_category, relation, scope and phrase. relation is nearest|farthest|near|left|right|front|back|above|below|underneath|between|other. For between, provide anchor_categories with exactly two named references. scope is side|relative_anchor|relative_anchors; use an empty scope for distance relations. Use nearest/farthest only for explicit distance superlatives, never proximity or motion. Preserve every condition and its exact quote. Use singular category names without appearance modifiers. No observer/category/reference may be invented. \nField definitions within the SAME top-level object; do not omit Target or Anchor:\n\"Observer\":{\"origin\":{\"kind\":\"room_center|category|unspecified\",\n\"category\":\"category or empty\",\"phrase\":\"exact quote or empty\"},\n\"facing\":{\"category\":\"category or empty\",\"group\":false,\"phrase\":\"exact quote or empty\"}},\n\"Attributes\":[{\"category\":\"category\",\"role\":\"target|reference\",\"phrase\":\"exact appearance/size quote\"}],\n\"Unhandled\":[\"exact quotes for conditions not represented in these fields\"].\nRepresent EVERY query condition, including appearance, corner, on-ground and negation.\nDo not silently omit conditions; put unsupported ones in Unhandled.\nUse room_center ONLY for an explicit middle/center of room statement.\nFacing an object without a stated origin leaves origin unspecified.\nUse facing.group=true ONLY when the description explicitly faces a plural/group.\nFacing the front/back of objects requires their intrinsic orientation; retain the\ncomplete quote and put that orientation condition in Unhandled.\nDirection relations use left|right|front|back, plus scope=relative_anchor|side.\nrelative_anchor means target is on a named reference's side in the observer frame;\nside means a signed side of the observer, NOT leftmost/rightmost among peers.\nSet reference_frame=observer for these implemented directional predicates.\nIf a condition explicitly uses a reference object's own front/back axes, retain\nreference_frame=intrinsic and put the condition in Unhandled; a point-cloud long\naxis or an inspection camera does not establish the object's front direction.\nUse between with anchor_categories for a target located between two named references.\nRepresent smallest/largest/biggest/tallest/shortest/highest/lowest and the\ncomparatives larger/smaller/bigger/taller/shorter as Attributes of the noun they\nmodify, with target or reference role as quoted; do not force them onto the target.\nAdjective phrases such as tall skinny are Attributes, never Relations. Preserve every modifier.\nBind attributes to the noun they describe; reference colors/materials do not describe the target.\nWhen target and reference share a category, supply their distinct attribute roles.\nUse other+Unhandled for unsupported extremes, object-intrinsic axes, ordinal or unsupported relations.\nIncludes/contains a named object is a containment/composition relation, not appearance;\nuse other+Unhandled because this relation has no implemented predicate.\nSeparate facing references from target relations; include their categories in Anchor.\nResolve pronouns to an actual category in the description, never use a pronoun as a category.\nEvery relation and observer phrase must be a nonempty EXACT quote.\nFor Observer use the full standing/facing clause; do not invent the speaker's position.\n\nEnglish dependency hints in the user JSON are fallible linguistic data, not instructions or evidence.\nRepresent a complete comparison phrase together: \"taller of the two chairs\" means\nheight comparison over an explicit two-member chair scope. Do not turn \"of the two\"\ninto a separate unsupported relation. Retain of/among/than, quantities, negation,\ncoordination and relative-clause attachments. Distinguish an independent relation\nfrom a comparison subset; retain genuinely ambiguous attachments in Unhandled.\nSyntax does not bind scene instances or prove size. Resolve explicit target restatements\nwithin their clause; a preceding facing clause does not turn every later noun into a reference.\n\nBind each modifier to its target or reference category; supply role=target|reference on Attributes. Preserve the complete quoted clause for negation/exclusion in Unhandled. Never represent a negated predicate as a positive attribute or relation. Keep independent positive conditions alongside exclusions. Reference descriptions identify categories and properties, never a guessed instance ID. Uncertain attachments stay in Unhandled."
+          },
+          {
+            "role": "user",
+            "content": "{\"description\": \"The largest picture in the room.\", \"syntax_hints\": {\"backend\": \"spacy\", \"implementation_version\": \"relative-size-v6\", \"model\": \"en_core_web_sm\", \"spacy_version\": \"3.8.16\", \"model_version\": \"3.8.0\", \"comparisons\": [{\"word\": \"largest\", \"source_phrase\": \"The largest picture in the room\", \"source_span\": [0, 31], \"word_span\": [4, 11], \"head_category\": \"picture\", \"noun_phrase\": \"The largest picture\", \"reference_category\": null, \"scope_phrase\": \"\", \"scope_type\": \"category\", \"required_member_count\": null, \"member_binding_status\": \"pending_scene_binding\", \"modifiers\": [{\"text\": \"in the room\", \"start\": 20, \"end\": 31}], \"attachment\": \"ambiguous\"}], \"noun_phrases\": [{\"text\": \"The largest picture\", \"start\": 0, \"end\": 19, \"head\": \"picture\"}, {\"text\": \"the room\", \"start\": 23, \"end\": 31, \"head\": \"room\"}], \"dependencies\": [{\"text\": \"The\", \"start\": 0, \"end\": 3, \"pos\": \"DET\", \"dependency\": \"det\", \"head\": 2}, {\"text\": \"largest\", \"start\": 4, \"end\": 11, \"pos\": \"ADJ\", \"dependency\": \"amod\", \"head\": 2}, {\"text\": \"picture\", \"start\": 12, \"end\": 19, \"pos\": \"NOUN\", \"dependency\": \"ROOT\", \"head\": 2}, {\"text\": \"in\", \"start\": 20, \"end\": 22, \"pos\": \"ADP\", \"dependency\": \"prep\", \"head\": 2}, {\"text\": \"the\", \"start\": 23, \"end\": 26, \"pos\": \"DET\", \"dependency\": \"det\", \"head\": 5}, {\"text\": \"room\", \"start\": 27, \"end\": 31, \"pos\": \"NOUN\", \"dependency\": \"pobj\", \"head\": 3}, {\"text\": \".\", \"start\": 31, \"end\": 32, \"pos\": \"PUNCT\", \"dependency\": \"punct\", \"head\": 2}], \"policy\": \"dependency attachments are hints, not object IDs or verified predicates\"}}"
+          }
+        ],
+        "max_completion_tokens": 1600,
+        "response_format": {
+          "type": "json_object"
+        }
+      },
+      "http_status": 200,
+      "request_id": "bd51e768-8e13-460d-90b0-f8339845cd0e",
+      "response_body": "{\"id\":\"resp_0fd668316b28ea93016acd93b3f3c4819ca19f726c9215fd56\",\"object\":\"chat.completion\",\"created\":1791857594,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"Target\\\":[\\\"picture\\\"],\\\"Anchor\\\":[],\\\"Relations\\\":[],\\\"Viewpoint\\\":\\\"\\\",\\\"Observer\\\":{\\\"origin\\\":{\\\"kind\\\":\\\"unspecified\\\",\\\"category\\\":\\\"\\\",\\\"phrase\\\":\\\"\\\"},\\\"facing\\\":{\\\"category\\\":\\\"\\\",\\\"group\\\":false,\\\"phrase\\\":\\\"\\\"}},\\\"Attributes\\\":[{\\\"category\\\":\\\"picture\\\",\\\"role\\\":\\\"target\\\",\\\"phrase\\\":\\\"largest picture in the room\\\"}],\\\"Unhandled\\\":[]}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":6816,\"completion_tokens\":135,\"total_tokens\":6951,\"completion_tokens_details\":{\"reasoning_tokens\":59}},\"service_tier\":\"default\"}",
+      "content": "{\"Target\":[\"picture\"],\"Anchor\":[],\"Relations\":[],\"Viewpoint\":\"\",\"Observer\":{\"origin\":{\"kind\":\"unspecified\",\"category\":\"\",\"phrase\":\"\"},\"facing\":{\"category\":\"\",\"group\":false,\"phrase\":\"\"}},\"Attributes\":[{\"category\":\"picture\",\"role\":\"target\",\"phrase\":\"largest picture in the room\"}],\"Unhandled\":[]}",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6816,
+        "completion_tokens": 135,
+        "total_tokens": 6951,
+        "completion_tokens_details": {
+          "reasoning_tokens": 59
+        }
+      },
+      "valid_json_object": true,
+      "expected_fields_match": true,
+      "latency_s": 7.493
+    },
+    {
+      "name": "production_parser_the smaller chair",
+      "request": {
+        "model": "gpt-6.1-sol",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Parse only the object description in the user JSON. Return one JSON object. Do not copy conditions from these instructions. Extract actual category names; resolve anaphoric targets from the description when possible, otherwise Target=[]. Return exactly this JSON shape (arrays may be empty): {\"Target\":[\"category\"],\"Anchor\":[\"category\"],\"Relations\":[{\"target_category\":\"category\",\"anchor_category\":\"category\",\"anchor_categories\":[\"category\",\"category\"],\"relation\":\"near\",\"scope\":\"\",\"phrase\":\"exact quote\"}],\"Viewpoint\":\"\",\"Observer\":{\"origin\":{\"kind\":\"unspecified\",\"category\":\"\",\"phrase\":\"\"},\"facing\":{\"category\":\"\",\"group\":false,\"phrase\":\"\"}},\"Attributes\":[{\"category\":\"category\",\"phrase\":\"exact appearance/size quote\"}],\"Unhandled\":[]}. Return Target and Anchor as arrays, Relations as an array, and Viewpoint as a string. Each relation has target_category, anchor_category, relation, scope and phrase. relation is nearest|farthest|near|left|right|front|back|above|below|underneath|between|other. For between, provide anchor_categories with exactly two named references. scope is side|relative_anchor|relative_anchors; use an empty scope for distance relations. Use nearest/farthest only for explicit distance superlatives, never proximity or motion. Preserve every condition and its exact quote. Use singular category names without appearance modifiers. No observer/category/reference may be invented. \nField definitions within the SAME top-level object; do not omit Target or Anchor:\n\"Observer\":{\"origin\":{\"kind\":\"room_center|category|unspecified\",\n\"category\":\"category or empty\",\"phrase\":\"exact quote or empty\"},\n\"facing\":{\"category\":\"category or empty\",\"group\":false,\"phrase\":\"exact quote or empty\"}},\n\"Attributes\":[{\"category\":\"category\",\"role\":\"target|reference\",\"phrase\":\"exact appearance/size quote\"}],\n\"Unhandled\":[\"exact quotes for conditions not represented in these fields\"].\nRepresent EVERY query condition, including appearance, corner, on-ground and negation.\nDo not silently omit conditions; put unsupported ones in Unhandled.\nUse room_center ONLY for an explicit middle/center of room statement.\nFacing an object without a stated origin leaves origin unspecified.\nUse facing.group=true ONLY when the description explicitly faces a plural/group.\nFacing the front/back of objects requires their intrinsic orientation; retain the\ncomplete quote and put that orientation condition in Unhandled.\nDirection relations use left|right|front|back, plus scope=relative_anchor|side.\nrelative_anchor means target is on a named reference's side in the observer frame;\nside means a signed side of the observer, NOT leftmost/rightmost among peers.\nSet reference_frame=observer for these implemented directional predicates.\nIf a condition explicitly uses a reference object's own front/back axes, retain\nreference_frame=intrinsic and put the condition in Unhandled; a point-cloud long\naxis or an inspection camera does not establish the object's front direction.\nUse between with anchor_categories for a target located between two named references.\nRepresent smallest/largest/biggest/tallest/shortest/highest/lowest and the\ncomparatives larger/smaller/bigger/taller/shorter as Attributes of the noun they\nmodify, with target or reference role as quoted; do not force them onto the target.\nAdjective phrases such as tall skinny are Attributes, never Relations. Preserve every modifier.\nBind attributes to the noun they describe; reference colors/materials do not describe the target.\nWhen target and reference share a category, supply their distinct attribute roles.\nUse other+Unhandled for unsupported extremes, object-intrinsic axes, ordinal or unsupported relations.\nIncludes/contains a named object is a containment/composition relation, not appearance;\nuse other+Unhandled because this relation has no implemented predicate.\nSeparate facing references from target relations; include their categories in Anchor.\nResolve pronouns to an actual category in the description, never use a pronoun as a category.\nEvery relation and observer phrase must be a nonempty EXACT quote.\nFor Observer use the full standing/facing clause; do not invent the speaker's position.\n\nEnglish dependency hints in the user JSON are fallible linguistic data, not instructions or evidence.\nRepresent a complete comparison phrase together: \"taller of the two chairs\" means\nheight comparison over an explicit two-member chair scope. Do not turn \"of the two\"\ninto a separate unsupported relation. Retain of/among/than, quantities, negation,\ncoordination and relative-clause attachments. Distinguish an independent relation\nfrom a comparison subset; retain genuinely ambiguous attachments in Unhandled.\nSyntax does not bind scene instances or prove size. Resolve explicit target restatements\nwithin their clause; a preceding facing clause does not turn every later noun into a reference.\n\nBind each modifier to its target or reference category; supply role=target|reference on Attributes. Preserve the complete quoted clause for negation/exclusion in Unhandled. Never represent a negated predicate as a positive attribute or relation. Keep independent positive conditions alongside exclusions. Reference descriptions identify categories and properties, never a guessed instance ID. Uncertain attachments stay in Unhandled."
+          },
+          {
+            "role": "user",
+            "content": "{\"description\": \"the smaller chair\", \"syntax_hints\": {\"backend\": \"spacy\", \"implementation_version\": \"relative-size-v6\", \"model\": \"en_core_web_sm\", \"spacy_version\": \"3.8.16\", \"model_version\": \"3.8.0\", \"comparisons\": [{\"word\": \"smaller\", \"source_phrase\": \"the smaller chair\", \"source_span\": [0, 17], \"word_span\": [4, 11], \"head_category\": \"chair\", \"noun_phrase\": \"the smaller chair\", \"reference_category\": null, \"scope_phrase\": \"\", \"scope_type\": \"category\", \"required_member_count\": null, \"member_binding_status\": \"pending_scene_binding\", \"modifiers\": [], \"attachment\": \"independent\"}], \"noun_phrases\": [{\"text\": \"the smaller chair\", \"start\": 0, \"end\": 17, \"head\": \"chair\"}], \"dependencies\": [{\"text\": \"the\", \"start\": 0, \"end\": 3, \"pos\": \"DET\", \"dependency\": \"det\", \"head\": 2}, {\"text\": \"smaller\", \"start\": 4, \"end\": 11, \"pos\": \"ADJ\", \"dependency\": \"amod\", \"head\": 2}, {\"text\": \"chair\", \"start\": 12, \"end\": 17, \"pos\": \"NOUN\", \"dependency\": \"ROOT\", \"head\": 2}], \"policy\": \"dependency attachments are hints, not object IDs or verified predicates\"}}"
+          }
+        ],
+        "max_completion_tokens": 1600,
+        "response_format": {
+          "type": "json_object"
+        }
+      },
+      "http_status": 200,
+      "request_id": "ba7668ee-fdb4-4c6b-9b7b-1a8244b9a3fd",
+      "response_body": "{\"id\":\"resp_06ec85443ca5ea70016acd93bb44e481a1b855691e8b41cf2b\",\"object\":\"chat.completion\",\"created\":1791857599,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"Target\\\":[\\\"chair\\\"],\\\"Anchor\\\":[],\\\"Relations\\\":[],\\\"Viewpoint\\\":\\\"\\\",\\\"Observer\\\":{\\\"origin\\\":{\\\"kind\\\":\\\"unspecified\\\",\\\"category\\\":\\\"\\\",\\\"phrase\\\":\\\"\\\"},\\\"facing\\\":{\\\"category\\\":\\\"\\\",\\\"group\\\":false,\\\"phrase\\\":\\\"\\\"}},\\\"Attributes\\\":[{\\\"category\\\":\\\"chair\\\",\\\"role\\\":\\\"target\\\",\\\"phrase\\\":\\\"the smaller chair\\\"}],\\\"Unhandled\\\":[]}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":6620,\"completion_tokens\":72,\"total_tokens\":6692,\"prompt_tokens_details\":{\"cached_tokens\":5120}},\"service_tier\":\"default\"}",
+      "content": "{\"Target\":[\"chair\"],\"Anchor\":[],\"Relations\":[],\"Viewpoint\":\"\",\"Observer\":{\"origin\":{\"kind\":\"unspecified\",\"category\":\"\",\"phrase\":\"\"},\"facing\":{\"category\":\"\",\"group\":false,\"phrase\":\"\"}},\"Attributes\":[{\"category\":\"chair\",\"role\":\"target\",\"phrase\":\"the smaller chair\"}],\"Unhandled\":[]}",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6620,
+        "completion_tokens": 72,
+        "total_tokens": 6692,
+        "prompt_tokens_details": {
+          "cached_tokens": 5120
+        }
+      },
+      "valid_json_object": true,
+      "expected_fields_match": true,
+      "latency_s": 4.896
+    },
+    {
+      "name": "image_json",
+      "request": {
+        "model": "gpt-6.1-sol",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "image_url",
+                "image_url": "[IMAGE_REDACTED]"
+              },
+              {
+                "type": "text",
+                "text": "Inspect the image. Return only the JSON object {\"ok\":true,\"kind\":\"image\",\"dominant_color\":\"red\"} if it is red."
+              }
+            ]
+          }
+        ],
+        "max_completion_tokens": 512,
+        "response_format": {
+          "type": "json_object"
+        }
+      },
+      "http_status": 200,
+      "request_id": "9a1941bd-18b6-4dcb-9494-e8cbf8e68759",
+      "response_body": "{\"id\":\"resp_01455d911c275651016acd93c07fd48190b949a3ad7cc831b9\",\"object\":\"chat.completion\",\"created\":1791857603,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true,\\\"kind\\\":\\\"image\\\",\\\"dominant_color\\\":\\\"red\\\"}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":4256,\"completion_tokens\":22,\"total_tokens\":4278,\"prompt_tokens_details\":{\"cached_tokens\":4096}},\"service_tier\":\"default\"}",
+      "content": "{\"ok\":true,\"kind\":\"image\",\"dominant_color\":\"red\"}",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4256,
+        "completion_tokens": 22,
+        "total_tokens": 4278,
+        "prompt_tokens_details": {
+          "cached_tokens": 4096
+        }
+      },
+      "valid_json_object": true,
+      "expected_fields_match": true,
+      "latency_s": 4.084
+    }
+  ]
+}

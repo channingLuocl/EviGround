@@ -17,6 +17,7 @@ from appearance_evidence import (aggregate_visual_checks, attribute_contexts, at
 from object_geometry import build_geometry, point_cloud_measurements
 from size_semantics import evaluate_size_condition
 from qwen_api import QwenAPIError, chat, image_part, parse_json_object, api_provider
+from response_schemas import APPEARANCE, planner_schema, schema_kwargs
 from react_decision import jev_action, react_backend, text_state
 from run import render
 from v4_policy import enabled, v5_enabled, v6_enabled, settings as v4_settings, evidence_inventory, deletion_events, backtrack_events
@@ -1103,11 +1104,14 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
             groups = [[item for item in visible_requirements
                        if (item['category'], item['role']) == key] for key in keys]
         for group in groups:
+            output_schema = schema_kwargs('appearance_checks', APPEARANCE)
             call = {'stage': 'active_evidence_visual_check', 'dimension': dimension,
                 'backend': api_provider(), 'role': 'visual_verifier',
                 'step': index, 'image': view['image'], 'focus_ids': view['focus_ids'],
                 'review_requirements': group,
                 'response_format': {'type': 'json_object'}}
+            if output_schema:
+                call['response_format'] = {'type': 'json_schema', 'json_schema': output_schema['response_schema']}
             result['internal_steps'].append({'tool': 'visual_check', 'call': call})
             if not group:
                 call.update(skipped=True, reason='no marked instance has a visual review requirement')
@@ -1161,7 +1165,7 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
                             'render': view}, ensure_ascii=False)}]},
                 ], max_tokens=min(4096, 400 + 180 * len(group) +
                                   140 * sum(len(item['attributes']) for item in group)),
-                   json_mode=True)
+                   json_mode=True, **output_schema)
                 call.update(response=data['_content'], usage=data.get('usage'),
                             finish_reason=data.get('_finish_reason'), **data['_baseline'])
                 if data.get('_finish_reason') != 'stop':
@@ -1742,6 +1746,10 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             calls.append(call)
             if context_audit:
                 call['context_audit'] = context_audit
+            output_schema = schema_kwargs('planner_action', planner_schema(
+                [obj['bbox_id'] for obj in geometry_objects], remaining or category_candidates))
+            if output_schema and backend != 'jev':
+                call['response_format'] = {'type': 'json_schema', 'json_schema': output_schema['response_schema']}
             trace['action_attempts'] += 1
             try:
                 if backend == 'jev':
@@ -1749,7 +1757,8 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 else:
                     data = chat([{'role': 'system', 'content': instructions},
                                  {'role': 'user', 'content': [{'type': 'text', 'text':
-                                     json.dumps(state, ensure_ascii=False, separators=(',', ':'))}]}], max_tokens=900, json_mode=True)
+                                     json.dumps(state, ensure_ascii=False, separators=(',', ':'))}]}], max_tokens=900, json_mode=True,
+                                **output_schema)
                 call.update(response=data['_content'], usage=data.get('usage'),
                             finish_reason=data.get('_finish_reason'), **data['_baseline'])
                 if data.get('_finish_reason') == 'length':
@@ -1769,6 +1778,8 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                     raise QwenAPIError('active decision did not complete normally')
                 try:
                     action = parse_json_object(data['_content'])
+                    if output_schema and backend != 'jev':
+                        action = {key: value for key, value in action.items() if value is not None}
                     if not isinstance(action.get('reason'), str) or not action['reason'].strip():
                         raise QwenAPIError('active decision requires a brief evidence-based reason')
                 except ValueError as exc:

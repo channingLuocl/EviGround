@@ -10,6 +10,7 @@ import numpy as np
 from run import ROOT, load_objects, render, ground
 from qwen_api import (chat, parse_json_object, QwenAPIError, _redact, api_provider,
                       api_config_summary, request_options)
+from response_schemas import ATTRIBUTES, parser_schema, schema_kwargs
 from evidence import (match_categories, distance_evidence, match_retrieval_categories,
                       distance_rankings, propose_category_checks, validate_distance_relations)
 
@@ -114,11 +115,12 @@ def parse_query(query, mode='baseline', calls=None):
     else:
         messages=[{'role':'user','content':prompt}]
     max_tokens=200 if mode=='baseline' else (1600 if mode=='diagnostic' else 700)
-    data=chat(messages,max_tokens=max_tokens,json_mode=True)
+    output_schema = schema_kwargs('query_parser', parser_schema(mode))
+    data=chat(messages,max_tokens=max_tokens,json_mode=True,**output_schema)
     if calls is not None:
         calls.append({'stage':'parse_query','response':data['_content'],'usage':data.get('usage'),
                       'latency_s':data['_baseline']['latency_s'],'finish_reason':data.get('_finish_reason'),
-                      **request_options(max_tokens,None,True),
+                      **request_options(max_tokens,None,True,**output_schema),
                       **data['_baseline']})
     try:
         obj=parse_json_object(data['_content'])
@@ -140,14 +142,14 @@ def parse_query(query, mode='baseline', calls=None):
             'the description. Do not fill in a truncated response.'},
             {'role':'user','content':json.dumps({'description':query,'model_response':data['_content']},ensure_ascii=False)}]
         try:
-            data=chat(repair_messages,max_tokens=max_tokens,json_mode=True)
+            data=chat(repair_messages,max_tokens=max_tokens,json_mode=True,**output_schema)
         except QwenAPIError as repair_exc:
             repair_exc.diagnostic['failure_stage']='parse_query_json_repair'
             raise
         if calls is not None:
             calls.append({'stage':'parse_query_json_repair','response':data['_content'],'usage':data.get('usage'),
                           'latency_s':data['_baseline']['latency_s'],'finish_reason':data.get('_finish_reason'),
-                          'trigger_error':str(exc),**request_options(max_tokens,None,True),
+                          'trigger_error':str(exc),**request_options(max_tokens,None,True,**output_schema),
                           **data['_baseline']})
         if data.get('_finish_reason')!='stop':
             raise QwenAPIError('JSON repair did not complete normally')
@@ -201,15 +203,16 @@ def repair_missing_attributes(query, parsed, calls):
         {'role':'user','content':json.dumps({
             'description':query,'categories':categories,
             'existing_attributes':parsed['Attributes'],'missing':missing},ensure_ascii=False)}]
+    output_schema = schema_kwargs('query_attributes', ATTRIBUTES)
     try:
-        data=chat(messages,max_tokens=600,json_mode=True)
+        data=chat(messages,max_tokens=600,json_mode=True,**output_schema)
     except QwenAPIError as exc:
         exc.diagnostic['failure_stage']='parse_query_attribute_repair'
         raise
     call={'stage':'parse_query_attribute_repair','response':data['_content'],
           'usage':data.get('usage'),'latency_s':data['_baseline']['latency_s'],
           'finish_reason':data.get('_finish_reason'),'trigger_missing':missing,
-          **request_options(600,None,True),**data['_baseline']}
+          **request_options(600,None,True,**output_schema),**data['_baseline']}
     if calls is not None:
         calls.append(call)
     try:

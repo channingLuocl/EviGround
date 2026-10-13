@@ -1,0 +1,211 @@
+{
+  "status": "passed",
+  "calls": [
+    {
+      "stage": "text_json",
+      "latency_s": 5.2294,
+      "api_slot_wait_s": 0.0002,
+      "api_concurrency": 2,
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "request_summary": {
+        "endpoint": "http://106.14.25.135:3000/v1/chat/completions",
+        "model": "gpt-6.1-sol",
+        "provider": "openai",
+        "message_roles": [
+          "user"
+        ],
+        "message_count": 1,
+        "message_chars": 88,
+        "contains_images": false,
+        "max_completion_tokens": 1024,
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "text_json",
+            "strict": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "text"
+                  ]
+                }
+              },
+              "required": [
+                "ok",
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      },
+      "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+          "name": "text_json",
+          "strict": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "text"
+                ]
+              }
+            },
+            "required": [
+              "ok",
+              "kind"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "http_status": 200,
+      "request_id": "7bb3733c-0949-4910-89ce-e8043aba5a1a",
+      "api_attempts": [
+        {
+          "status": "success",
+          "latency_s": 5.2294,
+          "usage": {
+            "prompt_tokens": 4274,
+            "completion_tokens": 17,
+            "total_tokens": 4291
+          }
+        }
+      ],
+      "extra_attempts": 0,
+      "response": "{\"kind\":\"text\",\"ok\":true}",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4274,
+        "completion_tokens": 17,
+        "total_tokens": 4291
+      }
+    },
+    {
+      "stage": "image_json",
+      "latency_s": 6.0603,
+      "api_slot_wait_s": 0.0001,
+      "api_concurrency": 2,
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "request_summary": {
+        "endpoint": "http://106.14.25.135:3000/v1/chat/completions",
+        "model": "gpt-6.1-sol",
+        "provider": "openai",
+        "message_roles": [
+          "user"
+        ],
+        "message_count": 1,
+        "message_chars": 226,
+        "contains_images": true,
+        "max_completion_tokens": 1024,
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "image_json",
+            "strict": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "image"
+                  ]
+                },
+                "dominant_color": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ok",
+                "kind",
+                "dominant_color"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      },
+      "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+          "name": "image_json",
+          "strict": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "image"
+                ]
+              },
+              "dominant_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ok",
+              "kind",
+              "dominant_color"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "http_status": 200,
+      "request_id": "e6c1df1b-c658-4649-974b-53136e37832d",
+      "api_attempts": [
+        {
+          "status": "success",
+          "latency_s": 6.0603,
+          "usage": {
+            "prompt_tokens": 4297,
+            "completion_tokens": 23,
+            "total_tokens": 4320
+          }
+        }
+      ],
+      "extra_attempts": 0,
+      "response": "{\"dominant_color\":\"red\",\"kind\":\"image\",\"ok\":true}",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4297,
+        "completion_tokens": 23,
+        "total_tokens": 4320
+      }
+    }
+  ]
+}

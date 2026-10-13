@@ -2,6 +2,7 @@
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from qwen_api import chat, image_part, parse_json_object, QwenAPIError
+from response_schemas import CATEGORY_REVIEW, schema_kwargs
 from run import render
 from evidence import retrieval_category
 
@@ -43,10 +44,12 @@ def check_categories(names, candidates, xyz, rgb, ids, out, calls):
                   f'Return JSON {{"id":{oid},"verdict":"yes|no|uncertain","reason":"short visual evidence"}}. '
                   'A no verdict requires visible evidence against the category, not just missing details.')
         try:
-            data = chat([{'role':'user','content':[image_part(path),{'type':'text','text':prompt}]}],max_tokens=300)
+            output_schema = schema_kwargs('category_review', CATEGORY_REVIEW)
+            data = chat([{'role':'user','content':[image_part(path),{'type':'text','text':prompt}]}],max_tokens=300,
+                        **({'json_mode': True, **output_schema} if output_schema else {}))
             calls.append({'stage':'category_review','object_id':oid,'response':data['_content'],
                           'usage':data.get('usage'),'latency_s':data['_baseline']['latency_s'],
-                          'finish_reason':data.get('_finish_reason')})
+                          'finish_reason':data.get('_finish_reason'), **data['_baseline']})
             if data.get('_finish_reason') == 'length':
                 raise QwenAPIError('category answer truncated')
             answer = parse_json_object(data['_content'])

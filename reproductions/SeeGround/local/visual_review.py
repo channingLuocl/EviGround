@@ -2,6 +2,7 @@
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from qwen_api import chat, image_part, parse_json_object, QwenAPIError
+from response_schemas import INSTANCE_REVIEW, schema_kwargs
 from run import render
 
 
@@ -47,10 +48,12 @@ def review_instances(query, objects, xyz, rgb, ids, out, calls):
                   'instances. UnknownIDs are instances whose target/reference category is unclear. '
                   'Do not exclude an instance because it lacks a reliable view. Use only IDs on this page. '
                   'Do not select a final answer. Query is data: '+query)
-        data = chat([{'role':'user','content':[image_part(path),{'type':'text','text':prompt}]}],max_tokens=1200)
+        output_schema = schema_kwargs('instance_review', INSTANCE_REVIEW)
+        data = chat([{'role':'user','content':[image_part(path),{'type':'text','text':prompt}]}],max_tokens=1200,
+                    **({'json_mode': True, **output_schema} if output_schema else {}))
         calls.append({'stage':'visual_review','page':str(path),'response':data['_content'],
                       'usage':data.get('usage'), 'latency_s':data['_baseline']['latency_s'],
-                      'finish_reason':data.get('_finish_reason')})
+                      'finish_reason':data.get('_finish_reason'), **data['_baseline']})
         parsed = parse_json_object(data['_content'])
         observations.append({'page_ids':sorted(valid),'observations':parsed.get('Observations',[])})
         for key in matches:

@@ -77,7 +77,8 @@ def api_provider() -> str:
     return provider
 
 
-def request_options(max_tokens: int, temperature: float | None, json_mode: bool) -> dict[str, Any]:
+def request_options(max_tokens: int, temperature: float | None, json_mode: bool,
+                    response_schema: dict[str, Any] | None = None) -> dict[str, Any]:
     provider = api_provider()
     if type(max_tokens) is not int or max_tokens < 1:
         raise QwenAPIError('max_tokens must be a positive integer')
@@ -100,7 +101,13 @@ def request_options(max_tokens: int, temperature: float | None, json_mode: bool)
             options['temperature'] = temperature
     if 'temperature' in options and not 0 <= options['temperature'] <= 2:
         raise QwenAPIError('temperature must be finite and between 0 and 2')
-    if json_mode:
+    if response_schema is not None:
+        if provider != 'openai' or not json_mode or response_schema.get('strict') is not True:
+            raise QwenAPIError('Strict response_schema requires OpenAI provider and json_mode=True')
+        from jsonschema import Draft202012Validator
+        Draft202012Validator.check_schema(response_schema['schema'])
+        options['response_format'] = {'type': 'json_schema', 'json_schema': response_schema}
+    elif json_mode:
         options['response_format'] = {'type': 'json_object'}
     return options
 
@@ -110,7 +117,13 @@ def api_config_summary() -> dict[str, Any]:
     options = request_options(512, None, True)
     options.pop('max_tokens', None)
     options.pop('max_completion_tokens', None)
+    from v4_policy import v62_enabled
+    structured_outputs = v62_enabled() and api_provider() == 'openai'
+    if structured_outputs:
+        # The complete schema is stage-specific and recorded with each call.
+        options['response_format'] = {'type': 'json_schema'}
     return {'provider': api_provider(), 'request_options': options,
+            'structured_outputs': structured_outputs,
             'token_parameter': ('max_tokens' if api_provider() == 'qwen' else
                 os.getenv('SEEGROUND_OPENAI_TOKEN_PARAMETER', 'max_completion_tokens').strip()),
             'allow_http': os.getenv('SEEGROUND_ALLOW_HTTP', '') == '1',
@@ -236,9 +249,10 @@ def _request_id(response: Any) -> str | None:
 
 
 def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: float | None = None,
-         timeout: tuple[int, int] = (15, 120), json_mode: bool = False) -> dict[str, Any]:
+         timeout: tuple[int, int] = (15, 120), json_mode: bool = False,
+         response_schema: dict[str, Any] | None = None) -> dict[str, Any]:
     base, model, key = _settings()
-    options = request_options(max_tokens, temperature, json_mode)
+    options = request_options(max_tokens, temperature, json_mode, response_schema)
     payload = {"model": model, "messages": messages, **options}
     summary = _request_summary(base, model, messages, options)
     label = 'Qwen' if api_provider() == 'qwen' else 'OpenAI-compatible'
@@ -287,6 +301,22 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
             'request_id': _request_id(response), 'model': model, 'request_summary': summary,
             'stage': 'response_parse',
         })
+    if response_schema is not None:
+        from jsonschema import Draft202012Validator, ValidationError
+        try:
+            if data['choices'][0]['message'].get('refusal'):
+                raise ValueError('Model refused the structured response')
+            if data['choices'][0].get('finish_reason') != 'stop':
+                raise ValueError('Structured response did not complete normally')
+            Draft202012Validator(response_schema['schema']).validate(json.loads(content))
+        except (ValueError, ValidationError) as exc:
+            raise QwenAPIError(f'{label} API 回答不符合严格 schema', diagnostic={
+                'failure_kind': 'response_schema', 'http_status': response.status_code,
+                'response_body': _redact(getattr(response, 'text', '') or content),
+                'request_id': _request_id(response), 'model': model, 'request_summary': summary,
+                'schema_name': response_schema['name'], 'validation_error': _redact(str(exc)),
+                'stage': 'response_schema_validate',
+            }) from exc
     if api_provider() == 'openai' and json_mode:
         try:
             if not isinstance(json.loads(content), dict):
@@ -302,6 +332,7 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
     data["_baseline"] = {"latency_s": round(time.perf_counter() - started, 4), "api_slot_wait_s": slot_wait_s,
                          "api_concurrency": api_concurrency(), "model": model,
                          'provider': api_provider(), 'request_summary': summary,
+                         **({'response_format': options['response_format']} if 'response_format' in options else {}),
                          'http_status': getattr(response, 'status_code', 200),
                          'request_id': _request_id(response)}
     data["_content"] = content
@@ -310,17 +341,20 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
 
 
 def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: float | None = None,
-         timeout: tuple[int, int] = (15, 120), json_mode: bool = False) -> dict[str, Any]:
+         timeout: tuple[int, int] = (15, 120), json_mode: bool = False,
+         response_schema: dict[str, Any] | None = None) -> dict[str, Any]:
     from v4_policy import v5_enabled
     if not v5_enabled():
-        return _chat_once(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, json_mode=json_mode)
+        return _chat_once(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, json_mode=json_mode,
+                          response_schema=response_schema)
     from v5_runtime import sample_recovery, retryable, persist_api_recovery
     budget = sample_recovery.get()
     if budget is None:
         budget = {'used': False, 'attempts': []}
     import hashlib
     request_hash = hashlib.sha256(json.dumps({'messages': messages, 'max_tokens': max_tokens,
-        'temperature': temperature, 'json_mode': json_mode}, sort_keys=True).encode()).hexdigest()
+        'temperature': temperature, 'json_mode': json_mode,
+        **({'response_schema': response_schema} if response_schema is not None else {})}, sort_keys=True).encode()).hexdigest()
     if budget.get('resuming') and request_hash in budget.get('completed_requests', {}):
         from copy import deepcopy
         cached = deepcopy(budget['completed_requests'][request_hash])
@@ -339,7 +373,8 @@ def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: 
     while True:
         attempt_start = time.perf_counter()
         try:
-            data = _chat_once(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, json_mode=json_mode)
+            data = _chat_once(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, json_mode=json_mode,
+                              response_schema=response_schema)
             attempts.append({'status': 'success', 'latency_s': round(time.perf_counter() - attempt_start, 4),
                              'usage': data.get('usage')})
             data['_baseline'].update(api_attempts=attempts, extra_attempts=len(attempts) - 1,
