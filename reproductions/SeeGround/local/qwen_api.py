@@ -382,7 +382,13 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
                 try:
                     payload = json.loads(_match.group(0))
                 except ValueError:
-                    payload = None
+                    try:
+                        from json_repair import repair_json
+                        payload = json_repair.loads(_match.group(0))
+                        if not isinstance(payload, dict):
+                            payload = None
+                    except Exception:
+                        payload = None
         if payload is None:
             raise QwenAPIError(f'{label} API 回答不符合严格 schema', diagnostic={
                 'failure_kind': 'response_schema', 'http_status': response.status_code,

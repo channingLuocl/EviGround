@@ -140,7 +140,7 @@ Unknown completeness is not a contradiction of a reliable measurement. Body-plan
         data = (chat_fn or chat)([{'role': 'system', 'content': instructions},
             {'role': 'user', 'content': [{'type': 'text', 'text': json.dumps(
                 {'query': query, 'view': {k: v for k, v in view.items() if k != 'image'}, 'task': payload}, ensure_ascii=False)},
-                image_part(view['image'])]}], max_tokens=1600, json_mode=True,
+                image_part(view['image'])]}], max_tokens=2400, json_mode=True,
                 **output_schema)
         call.update(response=data['_content'], usage=data.get('usage'), **data.get('_baseline', {}))
         if data.get('_finish_reason') != 'stop':
