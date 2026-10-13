@@ -18,7 +18,7 @@ export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
 export NUMEXPR_NUM_THREADS="${NUMEXPR_NUM_THREADS:-1}"
 export VECLIB_MAXIMUM_THREADS="${VECLIB_MAXIMUM_THREADS:-1}"
 
-workers="${SEEGROUND_WORKERS:-2}"
+workers="${SEEGROUND_WORKERS:-4}"
 api_concurrency="${SEEGROUND_API_CONCURRENCY:-2}"
 run_dir="${SEEGROUND_RUN_DIR:-$ROOT/local_outputs/v6_1_local_$(date +%Y%m%d_%H%M%S)}"
 

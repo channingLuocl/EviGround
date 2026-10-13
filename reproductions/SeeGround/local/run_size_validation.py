@@ -66,14 +66,30 @@ def evaluate(row, prediction, log):
             'prediction_path': str(prediction), 'log': str(log)}
 
 
-def run_case(row, scene_root, output, review_limit, retry_errors=False):
+def run_case(row, scene_root, output, review_limit, retry_errors=False, retry_null=False):
     directory = output / f"q{row['csv_row']:05d}"
     result_path = directory / 'evaluation.json'
+    latest_result_path = None
     if result_path.exists():
         saved = json.loads(result_path.read_text())
         if any(saved.get(key) != value for key, value in row.items()):
             raise ValueError(f'Cached annotation mismatch: {result_path}')
-        if not (retry_errors and (saved.get('error') or saved.get('review_failed'))):
+        if retry_null:
+            if saved.get('predicted_id') is not None:
+                return saved
+            # A manual null retry gets a fresh recovery budget and keeps all
+            # earlier artifacts, including checkpoints from failed attempts.
+            latest_result_path = result_path
+            retries = directory / 'null_retries'
+            retries.mkdir(exist_ok=True)
+            attempt = 1
+            while (retries / f'attempt_{attempt:03d}').exists():
+                attempt += 1
+            directory = retries / f'attempt_{attempt:03d}'
+            directory.mkdir()
+            write_json(directory / 'previous_evaluation.json', saved)
+            result_path = directory / 'evaluation.json'
+        elif not (retry_errors and (saved.get('error') or saved.get('review_failed'))):
             return saved
     directory.mkdir(parents=True, exist_ok=True)
     prediction = directory / 'prediction.json'
@@ -127,6 +143,8 @@ def run_case(row, scene_root, output, review_limit, retry_errors=False):
             except (OSError, ValueError, KeyError):
                 pass
     write_json(result_path, result)
+    if latest_result_path is not None:
+        write_json(latest_result_path, result)
     return result
 
 
@@ -156,6 +174,8 @@ def main():
     parser.add_argument('--review-limit', type=int, default=3)
     parser.add_argument('--limit', type=int, help='Run the first N; omit to resume the whole selection')
     parser.add_argument('--retry-errors', action='store_true', help='Retry cached failed API/process runs')
+    parser.add_argument('--retry-null', action='store_true',
+                        help='Rerun cached null predictions from scratch, preserving earlier attempts; skip existing IDs')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--scene-dir', type=Path, help=argparse.SUPPRESS)
     parser.add_argument('--query', help=argparse.SUPPRESS)
@@ -165,6 +185,10 @@ def main():
             (args.limit is not None and args.limit < 1) or
             (args.api_concurrency is not None and args.api_concurrency < 1)):
         parser.error('workers, review-limit, api-concurrency and limit must be positive')
+    if args.retry_null and args.retry_errors:
+        parser.error('Choose --retry-null or --retry-errors, not both')
+    if args.retry_null and args.output is None:
+        parser.error('--retry-null requires --output pointing to an existing run')
     if args.worker:
         from real_scene import run_query
         run_query(args.scene_dir, args.query, args.output,
@@ -192,6 +216,8 @@ def main():
     source_check = verify_source(manifest, source)
     output = (args.output or ROOT / 'local_outputs' /
               ('nr3d_size_300_' + datetime.now().strftime('%Y%m%d_%H%M%S'))).resolve()
+    if args.retry_null and not (output / 'manifest.json').exists():
+        parser.error('--retry-null requires an existing run with manifest.json')
     if args.api_concurrency is not None:
         os.environ['SEEGROUND_API_CONCURRENCY'] = str(args.api_concurrency)
     os.environ.setdefault('SEEGROUND_API_SLOT_DIR', str(output / '.api_slots'))
@@ -216,19 +242,55 @@ def main():
         settings['input_sha256'] = {scene: file_identity(args.scene_root / scene / name for name in
             ('scene.npz', 'objects_gt.json', 'scene_instances.json', 'provenance.json')) for scene in sorted({r['scene'] for r in rows})}
     settings_path = output / 'manifest.json'
-    if settings_path.exists() and json.loads(settings_path.read_text()) != settings:
-        raise ValueError('Output has different code/settings/selection; choose a fresh output directory')
+    if settings_path.exists():
+        previous_settings = json.loads(settings_path.read_text())
+        if args.retry_null:
+            # Only the batch orchestrator may differ when adding null retries
+            # to an existing run. Inference code, inputs and settings must match.
+            previous_compare = {**previous_settings, 'code_sha256': {
+                k: v for k, v in previous_settings['code_sha256'].items() if k != Path(__file__).name}}
+            current_compare = {**settings, 'code_sha256': {
+                k: v for k, v in settings['code_sha256'].items() if k != Path(__file__).name}}
+            compatible = previous_compare == current_compare
+        else:
+            compatible = previous_settings == settings
+        if not compatible:
+            raise ValueError('Output has different code/settings/selection; choose a fresh output directory')
     write_json(output / 'csv_verification.json', source_check)
-    write_json(settings_path, settings)
+    if args.retry_null:
+        audit = output / 'null_retry_runs' / datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        audit.mkdir(parents=True)
+        write_json(audit / 'manifest.json', settings)
+    else:
+        write_json(settings_path, settings)
     results = []
+    pending = selected
+    if args.retry_null:
+        pending = []
+        selected_ids = {r['csv_row'] for r in selected}
+        for row in rows:
+            cached = output / f"q{row['csv_row']:05d}" / 'evaluation.json'
+            if not cached.exists():
+                continue
+            saved = json.loads(cached.read_text())
+            if any(saved.get(key) != value for key, value in row.items()):
+                raise ValueError(f'Cached annotation mismatch: {cached}')
+            results.append(saved)
+            if saved.get('predicted_id') is None and row['csv_row'] in selected_ids:
+                pending.append(row)
+    if args.retry_null:
+        write_json(audit / 'selection.json', {'csv_rows': [r['csv_row'] for r in pending]})
+        report(output, results, len(rows))
     from batch_progress import BatchProgress
-    progress = BatchProgress(len(selected))
+    progress = BatchProgress(len(pending))
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_case, row, args.scene_root.resolve(), output, args.review_limit,
-                               args.retry_errors)
-                   for row in selected]
+                               args.retry_errors, args.retry_null)
+                   for row in pending]
         for future in as_completed(futures):
             result = future.result()
+            if args.retry_null:
+                results = [r for r in results if r['csv_row'] != result['csv_row']]
             results.append(result)
             report(output, results, len(rows))
             progress.update(result)
