@@ -93,6 +93,7 @@ VISUAL_REPORT = obj({
         'target_role': enum('target'), 'predicate_status': STATUS,
         'evidence_type': enum('visible_geometry', 'measurement'), 'reason': REASON,
         'observation_ids': array(INTEGER), 'measurement_keys': array(TEXT),
+        'condition_checks': array(obj({'source_quote': TEXT, 'status': STATUS, 'reason': REASON})),
         'comparison': nullable(obj({'key': TEXT, 'operator': enum('lt', 'gt'),
             'value': NUMBER, 'reference_id': INTEGER, 'reference_key': TEXT}))}))})
 

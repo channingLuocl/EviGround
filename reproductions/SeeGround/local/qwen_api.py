@@ -359,6 +359,8 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
         })
     if response_schema is not None:
         from jsonschema import Draft202012Validator, ValidationError
+        payload = None
+        parse_error = None
         try:
             if data['choices'][0]['message'].get('refusal'):
                 raise ValueError('Model refused the structured response')
@@ -366,35 +368,39 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
                 raise ValueError('Structured response did not complete normally')
             payload = json.loads(content)
         except (ValueError, ValidationError) as exc:
-            raise QwenAPIError(f'{label} API 回答不符合严格 schema', diagnostic={
-                'failure_kind': 'response_schema', 'http_status': response.status_code,
-                'response_body': _redact(getattr(response, 'text', '') or content),
-                'request_id': _request_id(response),
-                'schema_name': response_schema['name'], 'validation_error': _redact(str(exc)),
-                'stage': 'response_schema_parse',
-            }) from exc
-        if not isinstance(payload, dict):
             payload = None
+            parse_error = str(exc)
         if payload is None:
             import re as _re
             _match = _re.search(r'\{.*\}', content, _re.DOTALL)
             if _match:
                 try:
                     payload = json.loads(_match.group(0))
+                    if not isinstance(payload, dict):
+                        payload = None
                 except ValueError:
                     try:
-                        from json_repair import repair_json
+                        from json_repair import loads as json_repair_loads
                         payload = json_repair.loads(_match.group(0))
                         if not isinstance(payload, dict):
                             payload = None
                     except Exception:
                         payload = None
+            if payload is None and parse_error and ('refused' in parse_error or 'did not complete' in parse_error):
+                raise QwenAPIError(f'{label} API 回答不符合严格 schema', diagnostic={
+                    'failure_kind': 'response_schema', 'http_status': response.status_code,
+                    'response_body': _redact(getattr(response, 'text', '') or content),
+                    'request_id': _request_id(response),
+                    'schema_name': response_schema['name'], 'validation_error': parse_error,
+                    'stage': 'response_schema_parse',
+                })
         if payload is None:
             raise QwenAPIError(f'{label} API 回答不符合严格 schema', diagnostic={
                 'failure_kind': 'response_schema', 'http_status': response.status_code,
                 'response_body': _redact(getattr(response, 'text', '') or content),
                 'request_id': _request_id(response),
-                'schema_name': response_schema['name'], 'validation_error': 'content is not a JSON object',
+                'schema_name': response_schema['name'],
+                'validation_error': parse_error or 'content is not a JSON object',
                 'stage': 'response_schema_parse',
             })
         try:
