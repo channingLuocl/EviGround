@@ -116,6 +116,9 @@ def experiment_settings(scene_dir, mode, review_limit=6, object_table='pred'):
         settings.update(decision_backend=react_backend(),planner_input='text_only',visual_backend=api_provider())
         if settings['decision_backend']=='jev':
             settings.update(jev_model=jev_model(),jev_url=JEV_URL)
+        from v4_policy import v7_enabled
+        if v7_enabled():
+            settings['code_sha256']['v7_evidence.py'] = hashlib.sha256((code_dir/'v7_evidence.py').read_bytes()).hexdigest()
         for name in ('react_decision.py','decision_api.py'):
             settings['code_sha256'][name]=hashlib.sha256((code_dir/name).read_bytes()).hexdigest()
     return settings

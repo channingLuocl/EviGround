@@ -20,7 +20,7 @@ from qwen_api import QwenAPIError, chat, image_part, parse_json_object, api_prov
 from response_schemas import APPEARANCE, planner_schema, schema_kwargs
 from react_decision import jev_action, react_backend, text_state
 from run import render
-from v4_policy import enabled, v5_enabled, v6_enabled, settings as v4_settings, evidence_inventory, deletion_events, backtrack_events
+from v4_policy import enabled, v5_enabled, v6_enabled, v7_enabled, settings as v4_settings, evidence_inventory, deletion_events, backtrack_events
 from v4_visual import boxed_view, visual_report
 from v4_relations import bind_tasks
 
@@ -335,6 +335,9 @@ def size_candidate_evidence(parsed, candidates, measurements, comparison_pool_id
             source, unknown = scope_record['source'], scope_record.get('unknown_ids', [])
         elif spec.get('scope_kind') == 'attribute_subset':
             bound = False
+        if v7_enabled() and not bound and spec.get('measurement_policy') == 'provided_instance_box':
+            scoped_ids = pool_ids
+            source = 'diagnostic full-category box ordering; quoted modifier scope unresolved'
         if parsed.get('_v4_relax_once'):
             spec = {**spec, 'relax_once': True}
         constraints.append(evaluate_size_condition(spec, measurements, scoped_ids,
@@ -645,12 +648,17 @@ def compute_observation(dimension, query, parsed, diagnosis, candidates, geometr
             parsed, diagnosis, candidates)
         reference_size_categories = {retrieval_category(obj['target']) for obj in geometry_objects
                                     if size_conditions(parsed, obj['target'], role='reference')}
+        if v7_enabled() and not comparison_scope_bound:
+            comparison_pool_ids = list(diagnosis.get('size_comparison_pool_ids', [o['bbox_id'] for o in candidates]))
         measurement_scope = [obj for obj in geometry_objects
                              if obj['bbox_id'] in set(comparison_pool_ids or [])
                              or retrieval_category(obj['target']) in reference_size_categories
                              or (parsed.get('relative_height_binding') and
                                  retrieval_category(obj['target']) == retrieval_category(parsed['Target'][0]))]
         measurements = point_cloud_measurements(measurement_scope, xyz, ids, scene_objects=geometry_objects)
+        if v7_enabled():
+            from v7_evidence import box_rows
+            measurements = box_rows(measurement_scope, measurements)
         if v5_enabled():
             for row in measurements:
                 previous = parsed.get('_v5_measurement_observations', {}).get(str(row['id']))
@@ -973,7 +981,8 @@ def execute_v4_inspection(action, query, parsed, diagnosis, candidates, objects,
             specs = size_conditions(parsed, category)
             spec = next((s for s in specs if s['word'] == choice.get('word') and
                          s['original_quote'].casefold() in choice['source_quote'].casefold() and
-                         s['metric'] in ('oriented_volume_m3', 'oriented_footprint_m2', 'body_plane_area_m2')), None)
+                         (s['metric'] in ('oriented_volume_m3', 'oriented_footprint_m2', 'body_plane_area_m2') or
+                          (v7_enabled() and category == 'book'))), None)
             if spec:
                 parsed.setdefault('_v4_metric_choices', {})['|'.join(('target', category, spec['word']))] = choice
                 parsed['_v4_invalidated_conditions'] = [q for q in parsed.get('_v4_invalidated_conditions', [])
@@ -1131,6 +1140,8 @@ def execute_evidence(action, query, parsed, diagnosis, candidates, geometry_obje
                         '"reason":"visible evidence"}]}]}. category_verdict and top-level verdict check category only; '
                         'a failed color does not make the annotated object a different category. '
                         'Check EACH per-instance supplied attribute separately, including every modifier. '
+                        + ('For not-color, yes means visibly incompatible with that color, no means visibly that color; '
+                           'uncertain or missing visibility never establishes not-color. ' if v7_enabled() else '') +
                         'Interpret fragments in their source_quotes; a color on a stripe or panel is not a whole-body color. '
                         'A bare color does not require every part or a predominant fraction to share that color. '
                         'Do not add purity, uniformity, exact shade, or whole-object coverage absent from the quotes. '
@@ -1557,7 +1568,17 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         oid, fallback = singleton_prediction(oid, remaining, objects)
         if fallback:
             prediction_source = 'singleton_fallback'
-        if oid is None and tentative_id in remaining:
+        if v7_enabled():
+            from v7_evidence import supported_choice
+            choice = supported_choice(query, parsed, geometry_objects, candidates, diagnosis, checks)
+            trace['v7_decision'] = choice
+            # A planner's unsupported budget-end ID cannot bypass the evidence gate.
+            if len(remaining) > 1 or oid in choice['contradicted_ids']:
+                oid = choice['selected_id']
+                prediction_source = 'v7_supported_tentative' if oid is not None else 'abstained'
+                fallback = True
+                status = 'missing'
+        elif oid is None and tentative_id in remaining:
             oid, prediction_source, fallback = tentative_id, tentative_source, True
         if v5_enabled() and oid is not None:
             from v5_runtime import save_checkpoint
@@ -1639,6 +1660,10 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                                     proof.update(status='unknown', invalidated_by='final_review')
                         diagnosis['missing'].append('final review refuted a quoted selected-target condition')
                         diagnosis['status'] = status = 'missing'
+                if v7_enabled() and review.get('selected_contradicted'):
+                    oid = None
+                    prediction_source = 'v7_review_contradiction'
+                    fallback = True
                 if (review.get('restore_supported') if v5_enabled() else review['supported']):
                     problem = {'supported': True,
                         'candidate_ids': sorted({i for c in review['contradictions'] for i in c['candidate_ids']}),
@@ -1711,6 +1736,14 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 'internal_visual_budget': dict(parsed['_v4_budget']),
             }
             instructions = INSTRUCTIONS
+            if v7_enabled():
+                from v7_evidence import supported_choice
+                state['v7_preview'] = supported_choice(query, parsed, geometry_objects, candidates, diagnosis, checks)
+                instructions += ('\nV7 preview is tentative box/context evidence, not completed predicates. '
+                    'Use it to schedule useful checks. Negative color attributes are executed as stated; '
+                    'unknown visibility never proves absence. Multiple references agreeing on a preference '
+                    'support a tentative answer. Inspect contradicted or unknown conditions when informative. '
+                    'Prefer an unchecked useful dimension over a third attempt at an unchanged unknown.')
             if v6_enabled():
                 from query_graph import local_graph
                 state['query_graph'] = local_graph(parsed, geometry_objects, candidates, diagnosis)
@@ -1731,6 +1764,10 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                     'size': 'Source-bound metric quality, completeness risk, appropriate proxy interpretation; optional common-camera VLM inspection, tentative outputs preserve unknown constraints.',
                     'position': 'Existing geometry and quoted support/attachment/corner tasks; uniquely bound anchors and visible confirmation required.',
                     'distance': 'Nearest/farthest as before; near uses an explicit box support band plus visible confirmation, with an unknown intermediate band. Near never means nearest.'}
+            if v7_enabled():
+                instructions = instructions.replace(
+                    'Unknown or exclusion conditions are unresolved obligations; never execute them as positive predicates or count them as solved.',
+                    'Source-bound negative colors have their own appearance checks; unsupported negations remain unresolved. Unknown is never evidence of absence.')
             if controller_feedback:
                 instructions += '\nController correction: ' + controller_feedback
             if tool_count >= limit:
@@ -1800,6 +1837,16 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 if getattr(exc, 'diagnostic', None):
                     call['api_diagnostic'] = dict(exc.diagnostic)
                 raise
+        if v7_enabled() and tool_count < limit:
+            # Keep the existing budget; prevent repeated unknown geometry from
+            # consuming the final operation while a quoted size is unchecked.
+            has_size = any(size_conditions(parsed, name) for name in parsed.get('Target', []))
+            repeats = sum(e.get('action', {}).get('dimension') == action.get('dimension') for e in history)
+            if has_size and 'size' not in used_dimensions and (action.get('action') in ('stop', 'finish') or repeats >= 2):
+                trace.setdefault('v7_schedule_corrections', []).append({'original_action': deepcopy(action),
+                    'reason': 'unchecked quoted size before stop or third repeated dimension', 'tool_count': tool_count})
+                action = {'action': 'evidence', 'dimension': 'size',
+                          'reason': 'Measure the unchecked quoted size before stopping or repeating unknown evidence'}
         if action.get('action') == 'stop':
             pending_keys = {(item.get('attribute'), item.get('role', 'target'))
                             for item in diagnosis.get('pending_size_conditions', [])}
@@ -1962,6 +2009,8 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             if v5_enabled():
                 details = observation.get('details', {})
                 if dimension == 'size':
+                    if v7_enabled():
+                        parsed['_v7_measurement_rows'] = details.get('comparison_metrics', [])
                     current_evidence['measurements'] = details.get('comparison_metrics', [])
                     current_evidence['size_constraints'] = details.get('size_constraints', [])
                 if details.get('relation_tasks'):

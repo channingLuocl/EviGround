@@ -265,7 +265,9 @@ def normalize_visual_check(check, expected, source_phrases=None):
             item['verdict'] = 'uncertain'
             item['evidence_limit'] = 'artificial annotation is not object attribute evidence'
             item['reason'] = 'Invalid annotation evidence: ' + item['reason']
-        if item['verdict'] in ('yes', 'no') and _UNSUPPORTED_NEGATION.search(name):
+        from v4_policy import v7_enabled
+        supported_negative = v7_enabled() and re.fullmatch(r'not (?:' + '|'.join(sorted(_COLORS)) + r')', name, re.I)
+        if item['verdict'] in ('yes', 'no') and _UNSUPPORTED_NEGATION.search(name) and not supported_negative:
             # An unsupported predicate can remain inside a quoted appearance
             # conjunction; neither visual verdict implements that predicate.
             item['visual_verdict'] = item.get('visual_verdict', item['verdict'])

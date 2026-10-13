@@ -151,7 +151,7 @@ def planner_state(state, tighter=False, instruction_bytes=0):
     drop.update({'_v5_visual_cache', '_v4_metric_choices', '_size_scope_bindings', '_v4_binding_changes',
                  'query_syntax', 'query_rewrite', 'active_computed_evidence', 'candidate_shape_evidence',
                  'render_provenance', 'checks', 'relation_pairs', 'visual_inspection', 'history',
-                 'deletion_provenance', 'deletion_events'})
+                 'deletion_provenance', 'deletion_events', '_v7_measurement_rows'})
     removed = set()
     def proofs(rows):
         groups = {}
@@ -208,7 +208,7 @@ def planner_state(state, tighter=False, instruction_bytes=0):
                     if 'geometry' in item:
                         result[key]['measured_geometry_fields'] = list(item['geometry'])
                 elif key == 'anchor_hypotheses' and isinstance(item, list):
-                    result[key] = [{k: compact(binding[k]) for k in ('status', 'anchor_ids', 'reason') if k in binding}
+                    result[key] = [{k: compact(binding[k]) for k in ('status', 'anchor_ids', 'anchor_id', 'preferred_ids', 'plausible_band_m', 'reason') if k in binding}
                                    for binding in item]
                 else:
                     result[key] = compact(item)

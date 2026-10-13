@@ -67,6 +67,10 @@ def geometric_relation(task, target, anchors):
     if task.get('binding_ambiguous') or not anchors:
         return {'status': 'unknown', 'reason': 'quoted reference is not uniquely bound'}
     if task['kind'] == 'corner':
+        from v4_policy import v7_enabled
+        if v7_enabled() and any(a.get('wall_geometry', {}).get('valid') for a in anchors):
+            from v7_evidence import fitted_corner
+            return fitted_corner(target, anchors)
         # A global scene bounding rectangle is not a room-corner annotation.
         walls = [a for a in anchors if min(a['bbox_3d'][3:5]) < .25]
         pairs = []

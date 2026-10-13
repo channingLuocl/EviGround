@@ -28,6 +28,11 @@ def exclusion_clauses(query, syntax):
         noun = head if head.pos_ in ('NOUN', 'PROPN') else head.head
         category = noun.lemma_ if noun.pos_ in ('NOUN', 'PROPN') else None
         predicate = [head, token] + [t for t in head.children if t.dep_ in ('amod', 'acomp', 'attr')]
+        from v4_policy import v7_enabled
+        if v7_enabled():
+            # Postnominal contrast (table not the white one) does not negate
+            # the earlier adjectives of the syntactic head.
+            predicate = tokens if head.pos_ in ('NOUN', 'PROPN', 'NUM') or head.lower_ in ('without', 'except') else predicate
         clauses.append({'source_quote': span['text'], 'source_span': [span['start'], span['end']],
                         'predicate_spans': [[t.idx, t.idx + len(t)] for t in predicate],
                         'polarity': 'exclude', 'modified_category': category})
@@ -58,6 +63,13 @@ def polarity(query, quote, exclusions, attribute=False):
 def retain_positive_predicates(query, parsed):
     """Keep exclusions in the ledger, outside the existing positive executors."""
     exclusions = exclusion_clauses(query, parsed.get('query_syntax', {}))
+    from v4_policy import v7_enabled
+    if v7_enabled():
+        from v7_evidence import bind_negative_attributes
+        bind_negative_attributes(query, parsed, exclusions)
+        parsed['Relations'] = [r for r in parsed.get('Relations', [])
+            if polarity(query, r.get('phrase', ''), exclusions) == 'positive']
+        return exclusions
     for field in ('Attributes', 'Relations'):
         parsed[field] = [row for row in parsed.get(field, [])
                          if polarity(query, row.get('phrase', ''), exclusions,
@@ -72,20 +84,27 @@ def structure(query, parsed):
         quote = record.get('source_quote')
         value = polarity(query, quote, exclusions, attribute=record['condition_type'] in ('appearance', 'size'))
         role = record.get('target_role') or record.get('reference_role') or record.get('other_role')
-        bound = record.get('binding_status') == 'bound' and value == 'positive'
+        from v4_policy import v7_enabled
+        negative_attribute = (v7_enabled() and record['condition_type'] == 'appearance' and
+            any(a['phrase'] == quote and a.get('polarity') == 'exclude' for a in parsed.get('Attributes', [])))
+        bound = record.get('binding_status') == 'bound' and (value == 'positive' or negative_attribute)
         conditions.append({**record, 'condition_id': f'c{len(conditions)}',
             'source_spans': quote_spans(query, quote), 'polarity': value,
             'modified_role': role, 'parse_status': 'bound' if bound else 'unknown',
-            **({'evidence_status': 'unsupported', 'binding_status': 'unknown'} if value != 'positive' else {})})
+            **({'evidence_status': 'unsupported', 'binding_status': 'unknown'} if value != 'positive' and not negative_attribute else {}),
+            **({'executor': 'negative_color', 'evidence_status': 'pending'} if negative_attribute else {})})
     for clause in exclusions:
         category = retrieval_category(clause.get('modified_category') or '')
         roles = [role for role, names in (('target', parsed.get('Target', [])),
                                           ('reference', parsed.get('Anchor', [])))
                  if category and category in {retrieval_category(n) for n in names}]
+        executed = v7_enabled() and clause['source_quote'] in parsed.get('_v7_executed_negations', [])
         conditions.append({**clause, 'condition_id': f'c{len(conditions)}',
             'condition_type': 'exclusion', 'parse_status': 'unknown', 'evidence_status': 'unsupported',
             'modified_role': {'role': roles[0], 'category': category} if len(roles) == 1 else None,
-            'reason': 'exclusion requires a source-bound predicate; positive evidence cannot execute it'})
+            'reason': 'exclusion requires a source-bound predicate; positive evidence cannot execute it',
+            **({'parse_status': 'bound', 'evidence_status': 'pending', 'executor': 'negative_color',
+                'reason': 'source-bound negative color is sent to appearance verification'} if executed else {})})
     # Unrepresented language is visible to the planner instead of being dropped.
     covered = {i for c in conditions for start, end in c.get('source_spans', [c.get('source_span', [0, 0])])
                for i in range(start, end)}

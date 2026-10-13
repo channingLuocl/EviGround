@@ -129,6 +129,11 @@ Link visible evidence to observations with condition_checks=[{source_quote,statu
 Measurement findings must include comparison={key,operator:lt|gt,value,reference_id,reference_key};
 The comparison must reproduce a bound, known, non-tentative size_constraints predicate; provide reference_id and reference_key.
 Unknown completeness is not a contradiction of a reliable measurement. Body-plane area does not require a bottom view.'''
+    from v4_policy import v7_enabled
+    if v7_enabled():
+        instructions += ('\nV7 box metrics describe supplied observed instance bounds. Scan incompleteness or unknown '
+            'alone cannot refute their ordering. Ordinary taller/shorter compares total instance dz; '
+            'tabletop elevation is a different predicate. Provisional ordering does not certify missing conditions.')
     if output_schema:
         instructions += '\nReturn every schema field; use empty arrays for unused fields and null for inapplicable comparison or anchor_id.'
     try:

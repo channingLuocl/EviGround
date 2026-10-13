@@ -49,7 +49,7 @@ def select_objects(names, objects):
     return [obj for obj in objects if words & {w.lower().rstrip('s') for w in re.findall(r'[A-Za-z]+',obj['target'])}]
 
 
-def parse_query(query, mode='baseline', calls=None):
+def parse_query(query, mode='baseline', calls=None, scene_categories=None):
     active_mode=mode=='active_diagnostic'
     if mode=='active_diagnostic':
         mode='diagnostic'
@@ -109,9 +109,18 @@ def parse_query(query, mode='baseline', calls=None):
                 'Never represent a negated predicate as a positive attribute or relation. '
                 'Keep independent positive conditions alongside exclusions. Reference descriptions identify '
                 'categories and properties, never a guessed instance ID. Uncertain attachments stay in Unhandled.')
+        from v4_policy import v7_enabled
+        if v7_enabled():
+            prompt += ('\nV7: preserve negated COLOR predicates as exact quoted color Attributes with the same '
+                'target/reference role; put the complete negation clause in Unhandled for scope validation. '
+                'For table not the white one: big/brown stay positive, white modifies the same target. '
+                'For section/part of a category, Target is the mother category; retain the part quote. '
+                'Map synonyms to available scene categories only when semantically equivalent. '
+                'Do not merge whiteboard and blackboard or invent a nearest relation.')
         messages=[{'role':'system','content':prompt},
                   {'role':'user','content':json.dumps({'description':query,
-                      **({'syntax_hints':syntax} if syntax['backend'] == 'spacy' else {})},ensure_ascii=False)}]
+                      **({'syntax_hints':syntax} if syntax['backend'] == 'spacy' else {}),
+                      **({'scene_categories': sorted(set(scene_categories))} if v7_enabled() and scene_categories else {})},ensure_ascii=False)}]
     else:
         messages=[{'role':'user','content':prompt}]
     max_tokens=200 if mode=='baseline' else (1600 if mode=='diagnostic' else 700)
@@ -356,7 +365,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                         call['resolved_by_resume'] = True
             save_checkpoint(out / 'pending_inference.json', resume or {
                 'stage': 'parse', 'checkpoint_identity': checkpoint_identity, 'calls': calls})
-        parsed=resume['parsed_query'] if resume and resume.get('stage') != 'parse' else parse_query(query,mode,calls)
+        parsed=resume['parsed_query'] if resume and resume.get('stage') != 'parse' else parse_query(query,mode,calls, scene_categories=[o['target'] for o in objects])
         stage='retrieve_objects'
         matcher=select_objects if mode=='baseline' else match_categories
         if mode in ('ranked_geometry','category_review','diagnostic','active_diagnostic'):

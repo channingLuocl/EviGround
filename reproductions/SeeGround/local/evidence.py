@@ -133,8 +133,11 @@ def distance_pair_metrics(target, anchor, viewpoint=None):
 
 def canonical_category(name):
     text = ' '.join(re.findall(r'[a-z]+', name.lower()))
-    for source in sorted(ALIASES, key=len, reverse=True):
-        text = re.sub(r'\b' + re.escape(source) + r'\b', ALIASES[source], text)
+    from v4_policy import v7_enabled
+    aliases = {**ALIASES, **({'chalk board': 'blackboard', 'chalk boards': 'blackboard',
+        'chalkboard': 'blackboard', 'chalkboards': 'blackboard'} if v7_enabled() else {})}
+    for source in sorted(aliases, key=len, reverse=True):
+        text = re.sub(r'\b' + re.escape(source) + r'\b', aliases[source], text)
     return text
 
 

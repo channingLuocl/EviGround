@@ -215,6 +215,11 @@ def _tabletop_floor_ambiguity(rows):
 def evaluate_size_condition(spec, measurements, comparison_pool_ids, *, scope_bound,
                             candidate_ids=None, scope_source='full_category', scope_unknown_ids=()):
     """Return per-condition proof states for one frozen comparison set."""
+    from v4_policy import v7_enabled
+    if v7_enabled() and spec.get('measurement_policy') == 'provided_instance_box':
+        from v7_evidence import evaluate_box_size
+        return evaluate_box_size(spec, measurements, comparison_pool_ids, scope_bound=scope_bound,
+            candidate_ids=candidate_ids, scope_source=scope_source, scope_unknown_ids=scope_unknown_ids)
     pool_ids = sorted(set(comparison_pool_ids))
     candidate_ids = pool_ids if candidate_ids is None else list(dict.fromkeys(candidate_ids))
     by_id = {row['id']: row for row in measurements}

@@ -359,6 +359,15 @@ def _source_attribute_bindings(query, parsed, phrase):
     """Find direct noun attachments without collapsing repeated language roles."""
     if not quoted(query, phrase):
         return set()
+    from v4_policy import v7_enabled
+    recovery = parsed.get('category_recovery') if v7_enabled() else None
+    if recovery:
+        part = re.search(r'\b' + re.escape(recovery['source_quote']) + r'\b', query, re.I)
+        occurrences = list(re.finditer(re.escape(phrase), query, re.I))
+        if part and len(occurrences) == 1 and occurrences[0].end() <= part.start() and re.fullmatch(
+                r'(?:\s+(?:big|small|large|largest|smallest|brown|white|round))*\s*',
+                query[occurrences[0].end():part.start()], re.I):
+            return {(recovery['canonical'], 'target')}
     target_names = parsed.get('Target', [])
     target_names = [target_names] if isinstance(target_names, str) else target_names
     anchor_names = parsed.get('Anchor', [])
@@ -799,6 +808,10 @@ def validate_structure(query, parsed):
     parsed.pop('_size_scope_bindings', None)
     parsed.pop('_verified_reference_bindings', None)
     parsed['source_query'] = query
+    from v4_policy import v7_enabled
+    if v7_enabled():
+        from v7_evidence import recover_part_category
+        recover_part_category(query, parsed)
     input_relations = parsed.get('Relations', [])
     preflight_missing = []
     malformed_relations = []
@@ -1434,6 +1447,8 @@ def size_conditions(parsed, category, role='target'):
         if (retrieval_category(attribute.get('category', '')) != retrieval_category(category)
                 or attribute_role(parsed, attribute) != role):
             continue
+        if attribute.get('polarity') == 'exclude':
+            continue
         for spec in size_specs(attribute.get('phrase', ''), category, query=query,
                                role=role, source=attribute):
             from query_syntax import comparison_hint
@@ -1505,6 +1520,18 @@ def size_conditions(parsed, category, role='target'):
             if enabled('size') and choice and spec['metric'] in ('oriented_volume_m3', 'oriented_footprint_m2'):
                 spec.update(metric=choice['metric'], metric_reason=choice['reason'], tentative_metric=True,
                             metric_choice_source='structured internal visual observation')
+            from v4_policy import v7_enabled
+            if v7_enabled():
+                from v7_evidence import box_size_spec
+                spec = box_size_spec(spec, category, query)
+                if retrieval_category(category) == 'book' and choice and choice['metric'] == 'body_plane_area_m2':
+                    spec.update(metric='box_plane_area_m2', metric_choice_source='visual single-book plane interpretation',
+                                metric_reason=choice['reason'])
+                if parsed.get('category_recovery'):
+                    corner = re.search(r'(?:located\s+)?in\s+(?:a|the)\s+corner\b', query, re.I)
+                    if corner:
+                        spec.update(scope_kind='relation_subset', scope_relation_quotes=[corner[0]],
+                                    scope_phrase=corner[0])
             if not any(c['word'] == spec['word'] and c['role'] == role for c in conditions):
                 conditions.append(spec)
     return conditions
@@ -1513,7 +1540,14 @@ def size_conditions(parsed, category, role='target'):
 def appearance_attributes_for(parsed, category, role='target'):
     """Size has its own measured obligation; keep the other quoted modifiers."""
     result = []
+    from v4_policy import v7_enabled
     for phrase in attributes_for(parsed, category, role=role):
+        negative = next((a for a in parsed['Attributes'] if a['phrase'] == phrase
+            and retrieval_category(a['category']) == retrieval_category(category)
+            and attribute_role(parsed, a) == role and a.get('polarity') == 'exclude'), None)
+        if v7_enabled() and negative:
+            result.append('not ' + phrase)
+            continue
         specs = size_specs(phrase, category, role=role)
         if not specs:
             result.append(phrase)

@@ -250,6 +250,12 @@ def rewrite_query(query, parsed):
             continue
         compiled = _attribute_constraint(attribute, query, target_category)
         if compiled:
+            from v4_policy import v7_enabled
+            if v7_enabled():
+                compiled['polarity'] = attribute.get('polarity', 'positive')
+                if attribute.get('negation_quote'):
+                    compiled['negation_quote'] = attribute['negation_quote']
+                    compiled['executor'] = 'negative_color'
             if compiled.get('size_conditions') and parsed.get('query_syntax', {}).get('backend') == 'spacy':
                 from diagnostic import size_conditions
                 words = {spec['word'] for spec in compiled['size_conditions']}
