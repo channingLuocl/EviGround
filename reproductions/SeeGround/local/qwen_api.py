@@ -248,6 +248,40 @@ def _request_id(response: Any) -> str | None:
     return None
 
 
+def repair_missing_nullable_fields(payload: dict[str, Any], schema: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Fill required fields the gateway dropped when the model returns a
+    partial object. Only fields the schema explicitly allows to be null get
+    defaults, so no decision content is invented here."""
+    repaired = []
+    for field in schema.get('required', []):
+        if field in payload:
+            continue
+        field_schema = schema.get('properties', {}).get(field)
+        if field_schema is None:
+            continue
+        allows_null = field_schema.get('nullable') is True or 'null' in field_schema.get('type', []) \
+            or any(sub.get('type') == 'null' for sub in field_schema.get('anyOf', []))
+        if not allows_null:
+            continue
+        payload[field] = None
+        repaired.append(field)
+    return payload, repaired
+
+
+def _chat_schema_retry(messages: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
+    """One bounded retry for strict-schema failures: the compatible gateway
+    sometimes ignores response_format and returns a partial JSON object,
+    which a plain re-request usually fixes."""
+    try:
+        return _chat_once(messages, **kwargs)
+    except QwenAPIError as exc:
+        if exc.diagnostic.get('failure_kind') != 'response_schema':
+            raise
+        retry = _chat_once(messages, **kwargs)
+        retry.setdefault('_baseline', {})['schema_retry'] = True
+        return retry
+
+
 def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: float | None = None,
          timeout: tuple[int, int] = (15, 120), json_mode: bool = False,
          response_schema: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -308,7 +342,11 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
                 raise ValueError('Model refused the structured response')
             if data['choices'][0].get('finish_reason') != 'stop':
                 raise ValueError('Structured response did not complete normally')
-            Draft202012Validator(response_schema['schema']).validate(json.loads(content))
+            payload = json.loads(content)
+            if isinstance(payload, dict):
+                payload, _repaired = repair_missing_nullable_fields(payload, response_schema['schema'])
+                content = json.dumps(payload, ensure_ascii=False)
+            Draft202012Validator(response_schema['schema']).validate(payload)
         except (ValueError, ValidationError) as exc:
             raise QwenAPIError(f'{label} API 回答不符合严格 schema', diagnostic={
                 'failure_kind': 'response_schema', 'http_status': response.status_code,
@@ -345,7 +383,7 @@ def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: 
          response_schema: dict[str, Any] | None = None) -> dict[str, Any]:
     from v4_policy import v5_enabled
     if not v5_enabled():
-        return _chat_once(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, json_mode=json_mode,
+        return _chat_schema_retry(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, json_mode=json_mode,
                           response_schema=response_schema)
     from v5_runtime import sample_recovery, retryable, persist_api_recovery
     budget = sample_recovery.get()
@@ -373,7 +411,7 @@ def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: 
     while True:
         attempt_start = time.perf_counter()
         try:
-            data = _chat_once(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, json_mode=json_mode,
+            data = _chat_schema_retry(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, json_mode=json_mode,
                               response_schema=response_schema)
             attempts.append({'status': 'success', 'latency_s': round(time.perf_counter() - attempt_start, 4),
                              'usage': data.get('usage')})
