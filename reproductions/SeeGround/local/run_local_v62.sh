@@ -24,7 +24,7 @@ export VECLIB_MAXIMUM_THREADS="${VECLIB_MAXIMUM_THREADS:-1}"
 workers="${SEEGROUND_WORKERS:-2}"
 api_concurrency="${SEEGROUND_API_CONCURRENCY:-2}"
 run_dir="${SEEGROUND_RUN_DIR:-$ROOT/local_outputs/v6_2_local_$(date +%Y%m%d_%H%M%S)}"
-if [[ " ${*} " == *" --retry-null "* && -z "${SEEGROUND_RUN_DIR:-}" ]]; then
+if [[ " ${*:-} " == *" --retry-null "* && -z "${SEEGROUND_RUN_DIR:-}" ]]; then
   echo 'Set SEEGROUND_RUN_DIR to the completed run directory when using --retry-null.' >&2
   exit 2
 fi
