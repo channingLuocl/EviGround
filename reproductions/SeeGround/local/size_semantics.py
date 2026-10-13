@@ -11,13 +11,15 @@ COMPARATIVE_RELATIVE_MARGIN = .10
 ADJECTIVE_RELATIVE_MARGIN = .20
 _LENGTH_ABSOLUTE_MARGINS = {'tie': .02, 'comparative': .03, 'adjective': .05}
 _SUPERLATIVES = {'smallest', 'largest', 'biggest', 'tallest', 'highest',
-                 'shortest', 'lowest'}
-_COMPARATIVES = {'smaller', 'larger', 'bigger', 'taller', 'shorter', 'longer'}
+                 'shortest', 'lowest', 'widest', 'narrowest'}
+_COMPARATIVES = {'smaller', 'larger', 'bigger', 'taller', 'shorter', 'longer',
+                 'wider', 'narrower'}
 _MIN_WORDS = {'small', 'little', 'smaller', 'smallest', 'short', 'shorter',
-              'shortest', 'low', 'lowest'}
+              'shortest', 'low', 'lowest', 'narrower', 'narrowest'}
 SIZE_WORDS = (_SUPERLATIVES | _COMPARATIVES |
               {'small', 'large', 'big', 'little', 'tall', 'short', 'high',
                'low'})
+_WIDTH_WORDS = {'wider', 'widest', 'narrower', 'narrowest'}
 
 
 def category_pattern(category):
@@ -75,6 +77,10 @@ def size_specs(phrase, category, *, query='', role='target', source=None):
     for word in words:
         if word not in SIZE_WORDS:
             continue
+        if word in _WIDTH_WORDS:
+            from v4_policy import v71_enabled
+            if not v71_enabled():
+                continue
         form = ('superlative' if word in _SUPERLATIVES else
                 'comparative' if word in _COMPARATIVES else 'adjective')
         if word in {'tall', 'tallest', 'taller', 'high', 'highest',
@@ -83,6 +89,9 @@ def size_specs(phrase, category, *, query='', role='target', source=None):
         elif word == 'longer':
             metric, reason = ('horizontal_oriented_long_extent_m',
                               'gravity-aligned horizontal oriented extent, not world X')
+        elif word in {'wider', 'widest', 'narrower', 'narrowest'}:
+            metric, reason = ('horizontal_short_extent_m',
+                              'horizontal width of the annotated instance box, orientation from the box axes; not world X')
         elif category_name in {'door', 'window'}:
             metric, reason = ('vertical_face_area_m2',
                               'door/window face width times height; thickness does not govern size')
@@ -142,6 +151,8 @@ def _usable(row, metric, legacy_superlative=False):
                   'oriented_volume_m3', 'oriented_footprint_m2', 'body_plane_area_m2',
                   'body_plane_long_extent_m', 'body_plane_short_extent_m', 'body_plane_thickness_m'}:
         return False
+    if metric == 'horizontal_short_extent_m':
+        return row.get('source') == 'annotated_box'
     return row.get('measurement_reliability', 'usable' if legacy_superlative else 'unknown') == 'usable'
 
 

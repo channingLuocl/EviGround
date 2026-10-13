@@ -89,6 +89,8 @@ def box_size_spec(spec, category, query):
             spec.pop('measurement_policy')  # retain the existing local-floor executor
     elif spec['word'] == 'longer':
         metric = 'horizontal_long_extent_m'
+    elif spec['word'] in {'wider', 'widest', 'narrower', 'narrowest'}:
+        metric = 'horizontal_short_extent_m'
     elif category in ('door', 'window'):
         metric = 'vertical_box_face_area_m2'
     elif category in ('whiteboard', 'blackboard', 'mirror'):

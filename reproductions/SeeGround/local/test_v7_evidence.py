@@ -44,11 +44,25 @@ class V7Tests(unittest.TestCase):
         self.addCleanup(env.stop)
 
     def test_version_and_strict_contract_inherited(self):
-        self.assertEqual(settings()['version'], 'relative-size-v7')
+        self.assertEqual(settings()['version'], 'relative-size-v7.1')
         self.assertTrue(v62_enabled())
         from response_schemas import schema_kwargs, parser_schema
         with patch('qwen_api.api_provider', return_value='openai'):
             self.assertTrue(schema_kwargs('parser', parser_schema('diagnostic'))['response_schema']['strict'])
+
+    def test_width_comparatives_use_horizontal_short_extent(self):
+        objects = [obj(3, 'rail', dims=(.16, .08, .1)), obj(10, 'rail', dims=(.09, .07, .1))]
+        parsed = parse('the wider of the two rails', 'rail', ['wider'])
+        spec = size_conditions(parsed, 'rail')[0]
+        self.assertEqual(spec['metric'], 'horizontal_short_extent_m')
+        self.assertEqual(spec['direction'], 'max')
+        self.assertEqual(spec['required_member_count'], 2)
+        result = evaluate_size_condition(spec, box_rows(objects), [3, 10], scope_bound=True)
+        self.assertEqual(result['tentative_selected_ids'], [3])
+        parsed = parse('the narrower of the two rails', 'rail', ['narrower'])
+        spec = size_conditions(parsed, 'rail')[0]
+        result = evaluate_size_condition(spec, box_rows(objects), [3, 10], scope_bound=True)
+        self.assertEqual(result['tentative_selected_ids'], [10])
 
     def test_synonyms_and_distinct_categories(self):
         objects = [obj(81, 'blackboard'), obj(23, 'whiteboard')]
@@ -252,7 +266,7 @@ class V7Tests(unittest.TestCase):
                 Path(tmp), [], {}, 0, True)
         self.assertEqual(result['predicted_id'], 45)
         self.assertFalse(result['accepted'])
-        self.assertEqual(result['implementation_version'], 'relative-size-v7')
+        self.assertEqual(result['implementation_version'], 'relative-size-v7.1')
         self.assertEqual(result['active_trace']['tool_budget'], 0)
 
 

@@ -66,7 +66,8 @@ def evaluate(row, prediction, log):
             'prediction_path': str(prediction), 'log': str(log)}
 
 
-def run_case(row, scene_root, output, review_limit, retry_errors=False, retry_null=False):
+def run_case(row, scene_root, output, review_limit, retry_errors=False, retry_null=False,
+             retry_false=False):
     directory = output / f"q{row['csv_row']:05d}"
     result_path = directory / 'evaluation.json'
     latest_result_path = None
@@ -74,13 +75,13 @@ def run_case(row, scene_root, output, review_limit, retry_errors=False, retry_nu
         saved = json.loads(result_path.read_text())
         if any(saved.get(key) != value for key, value in row.items()):
             raise ValueError(f'Cached annotation mismatch: {result_path}')
-        if retry_null:
-            if saved.get('predicted_id') is not None:
+        if retry_null or retry_false:
+            if saved.get('predicted_id') is not None and not retry_false:
                 return saved
-            # A manual null retry gets a fresh recovery budget and keeps all
-            # earlier artifacts, including checkpoints from failed attempts.
+            # Manual retries get a fresh recovery budget and keep all earlier
+            # artifacts, including checkpoints from failed attempts.
             latest_result_path = result_path
-            retries = directory / 'null_retries'
+            retries = directory / ('false_retries' if retry_false else 'null_retries')
             retries.mkdir(exist_ok=True)
             attempt = 1
             while (retries / f'attempt_{attempt:03d}').exists():
@@ -176,6 +177,8 @@ def main():
     parser.add_argument('--retry-errors', action='store_true', help='Retry cached failed API/process runs')
     parser.add_argument('--retry-null', action='store_true',
                         help='Rerun cached null predictions from scratch, preserving earlier attempts; skip existing IDs')
+    parser.add_argument('--retry-false', action='store_true',
+                        help='Rerun every cached incorrect evaluation, including nulls and wrong IDs; latest result wins')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--scene-dir', type=Path, help=argparse.SUPPRESS)
     parser.add_argument('--query', help=argparse.SUPPRESS)
@@ -185,10 +188,10 @@ def main():
             (args.limit is not None and args.limit < 1) or
             (args.api_concurrency is not None and args.api_concurrency < 1)):
         parser.error('workers, review-limit, api-concurrency and limit must be positive')
-    if args.retry_null and args.retry_errors:
-        parser.error('Choose --retry-null or --retry-errors, not both')
-    if args.retry_null and args.output is None:
-        parser.error('--retry-null requires --output pointing to an existing run')
+    if sum(bool(flag) for flag in (args.retry_null, args.retry_errors, args.retry_false)) > 1:
+        parser.error('Choose one of --retry-null, --retry-errors or --retry-false')
+    if (args.retry_null or args.retry_false) and args.output is None:
+        parser.error('--retry-null/--retry-false require --output pointing to an existing run')
     if args.worker:
         from real_scene import run_query
         run_query(args.scene_dir, args.query, args.output,
@@ -216,8 +219,8 @@ def main():
     source_check = verify_source(manifest, source)
     output = (args.output or ROOT / 'local_outputs' /
               ('nr3d_size_300_' + datetime.now().strftime('%Y%m%d_%H%M%S'))).resolve()
-    if args.retry_null and not (output / 'manifest.json').exists():
-        parser.error('--retry-null requires an existing run with manifest.json')
+    if (args.retry_null or args.retry_false) and not (output / 'manifest.json').exists():
+        parser.error('--retry-null/--retry-false require an existing run with manifest.json')
     if args.api_concurrency is not None:
         os.environ['SEEGROUND_API_CONCURRENCY'] = str(args.api_concurrency)
     os.environ.setdefault('SEEGROUND_API_SLOT_DIR', str(output / '.api_slots'))
@@ -244,7 +247,7 @@ def main():
     settings_path = output / 'manifest.json'
     if settings_path.exists():
         previous_settings = json.loads(settings_path.read_text())
-        if args.retry_null:
+        if args.retry_null or args.retry_false:
             # Only the batch orchestrator may differ when adding null retries
             # to an existing run. Inference code, inputs and settings must match.
             previous_compare = {**previous_settings, 'code_sha256': {
@@ -257,15 +260,15 @@ def main():
         if not compatible:
             raise ValueError('Output has different code/settings/selection; choose a fresh output directory')
     write_json(output / 'csv_verification.json', source_check)
-    if args.retry_null:
-        audit = output / 'null_retry_runs' / datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    if args.retry_null or args.retry_false:
+        audit = output / ('false_retry_runs' if args.retry_false else 'null_retry_runs') / datetime.now().strftime('%Y%m%d_%H%M%S_%f')
         audit.mkdir(parents=True)
         write_json(audit / 'manifest.json', settings)
     else:
         write_json(settings_path, settings)
     results = []
     pending = selected
-    if args.retry_null:
+    if args.retry_null or args.retry_false:
         pending = []
         selected_ids = {r['csv_row'] for r in selected}
         for row in rows:
@@ -276,20 +279,22 @@ def main():
             if any(saved.get(key) != value for key, value in row.items()):
                 raise ValueError(f'Cached annotation mismatch: {cached}')
             results.append(saved)
-            if saved.get('predicted_id') is None and row['csv_row'] in selected_ids:
+            if row['csv_row'] in selected_ids and (
+                    (args.retry_false and saved.get('correct') is False) or
+                    (args.retry_null and saved.get('predicted_id') is None)):
                 pending.append(row)
-    if args.retry_null:
+    if args.retry_null or args.retry_false:
         write_json(audit / 'selection.json', {'csv_rows': [r['csv_row'] for r in pending]})
         report(output, results, len(rows))
     from batch_progress import BatchProgress
     progress = BatchProgress(len(pending))
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_case, row, args.scene_root.resolve(), output, args.review_limit,
-                               args.retry_errors, args.retry_null)
+                               args.retry_errors, args.retry_null, args.retry_false)
                    for row in pending]
         for future in as_completed(futures):
             result = future.result()
-            if args.retry_null:
+            if args.retry_null or args.retry_false:
                 results = [r for r in results if r['csv_row'] != result['csv_row']]
             results.append(result)
             report(output, results, len(rows))

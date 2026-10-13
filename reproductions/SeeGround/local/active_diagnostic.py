@@ -30,7 +30,7 @@ SIZE_WORDS = {
     'small', 'smallest', 'smaller', 'large', 'largest', 'larger', 'big',
     'biggest', 'bigger', 'little', 'skinny', 'narrow', 'thin', 'tall',
     'tallest', 'taller', 'high', 'highest', 'short', 'shortest', 'shorter',
-    'low', 'lowest',
+    'low', 'lowest', 'wider', 'widest', 'narrower', 'narrowest',
 }
 SIZE_EXTREMES = {'smallest', 'largest', 'biggest', 'tallest', 'highest', 'shortest', 'lowest'}
 EVIDENCE_CAPABILITIES = {

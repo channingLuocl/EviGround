@@ -26,6 +26,14 @@ class RetryNullTests(unittest.TestCase):
         return {'csv_row': index, 'scene': 'scene0010_00', 'query': 'the chair',
                 'target_id': 13, 'stimulus_candidate_ids': [13, 5]}
 
+    def row_wrong(self, index=11):
+        return {'csv_row': index, 'scene': 'scene0011_00', 'query': 'the wider rail',
+                'target_id': 13, 'stimulus_candidate_ids': [13, 5]}
+
+    def row_null(self, index=12):
+        return {'csv_row': index, 'scene': 'scene0010_00', 'query': 'the chair',
+                'target_id': 13, 'stimulus_candidate_ids': [13, 5]}
+
     def prediction(self, oid):
         return {'query': 'the chair', 'mode': 'active_diagnostic', 'object_table': 'gt',
                 'predicted_id': oid, 'api_attempts': 1}
@@ -96,11 +104,12 @@ class RetryNullTests(unittest.TestCase):
             self.assertEqual(json.loads((original / 'evaluation.json').read_text()), second)
 
     def fixture(self, root):
-        scene = root / 'scenes/scene0010_00'
-        scene.mkdir(parents=True)
-        for name in ('scene.npz', 'scene_instances.json', 'provenance.json'):
-            (scene / name).write_text('{}')
-        (scene / 'objects_gt.json').write_text('[{"bbox_id":13},{"bbox_id":5}]')
+        for scene_name in ('scene0010_00', 'scene0011_00'):
+            scene = root / 'scenes' / scene_name
+            scene.mkdir(parents=True)
+            for name in ('scene.npz', 'scene_instances.json', 'provenance.json'):
+                (scene / name).write_text('{}')
+            (scene / 'objects_gt.json').write_text('[{"bbox_id":13},{"bbox_id":5}]')
         selection = root / 'selection.json'
         selection.write_text(json.dumps({'rows': [self.row(10), self.row(11), self.row(12)], 'csv_sha256': 'offline'}))
         return ['run_size_validation.py', '--manifest', str(selection), '--scene-root', str(root / 'scenes'),
@@ -108,10 +117,12 @@ class RetryNullTests(unittest.TestCase):
 
     def call_main(self, root, argv, worker):
         with patch('sys.argv', argv), patch('run_size_validation.ROOT', root), \
-                patch('run_size_validation.subprocess.run', side_effect=worker), \
+                patch('run_size_validation.subprocess.run', side_effect=worker) as mocked_run, \
                 redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()):
             main()
-        return stdout.getvalue()
+        worker_calls = [call.args[0] for call in mocked_run.call_args_list
+                        if '--csv-row' in call.args[0]]
+        return stdout.getvalue(), worker_calls
 
     def test_main_retries_only_completed_nulls_preserves_summary_and_accepts_runner_only_change(self):
         with tempfile.TemporaryDirectory() as td:
@@ -134,7 +145,7 @@ class RetryNullTests(unittest.TestCase):
             def retry(command, **kwargs):
                 seen.append(command[command.index('--csv-row') + 1])
                 return self.worker(13)(command, **kwargs)
-            stdout = self.call_main(root, retry_argv, retry)
+            stdout, _ = self.call_main(root, retry_argv, retry)
             self.assertEqual(seen, ['11'])
             self.assertEqual(len(stdout.splitlines()), 1)
             self.assertEqual(manifest.read_text(), original_manifest)
@@ -149,10 +160,61 @@ class RetryNullTests(unittest.TestCase):
                 main()
             worker.assert_not_called()
 
+    def test_retry_false_reruns_wrong_ids_and_nulls_skips_correct(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            rows = [self.row(10), self.row_wrong(11), self.row_null(12)]
+            selection = root / 'selection.json'
+            selection.write_text(json.dumps({'rows': rows, 'csv_sha256': 'offline'}))
+            argv = ['run_size_validation.py', '--manifest', str(selection),
+                    '--scene-root', str(root / 'scenes'), '--output', str(root / 'output'),
+                    '--workers', '1', '--limit', '3']
+            scene_root = root / 'scenes'
+            for scene_name in ('scene0010_00', 'scene0011_00'):
+                scene = scene_root / scene_name
+                scene.mkdir(parents=True)
+                for name in ('scene.npz', 'scene_instances.json', 'provenance.json'):
+                    (scene / name).write_text('{}')
+                (scene / 'objects_gt.json').write_text('[{"bbox_id":13},{"bbox_id":5}]')
+            def initial(command, **kwargs):
+                directory = Path(command[command.index('--output') + 1])
+                index = int(command[command.index('--csv-row') + 1])
+                oid = 13 if index == 10 else (5 if index == 11 else None)
+                (directory / 'prediction.json').write_text(json.dumps(
+                    {**self.prediction(oid), 'query': next(r['query'] for r in rows if r['csv_row'] == index)}))
+                return SimpleNamespace(returncode=0)
+            self.call_main(root, argv, initial)
+            output = root / 'output'
+            saved = json.loads((output / 'q00011' / 'evaluation.json').read_text())
+            self.assertFalse(saved['correct'])
+            retry_argv = argv + ['--retry-false']
+            def retry(command, **kwargs):
+                directory = Path(command[command.index('--output') + 1])
+                index = int(command[command.index('--csv-row') + 1])
+                query = next(r['query'] for r in rows if r['csv_row'] == index)
+                (directory / 'prediction.json').write_text(json.dumps(
+                    {**self.prediction(13), 'query': query}))
+                return SimpleNamespace(returncode=0)
+            _, retry_calls = self.call_main(root, retry_argv, retry)
+            seen = [int(command[command.index('--csv-row') + 1]) for command in retry_calls]
+            # Wrong ID and normal abstention both rerun; correct ID skips.
+            self.assertEqual(seen, [11, 12])
+            audits = list((output / 'false_retry_runs').glob('*/selection.json'))
+            self.assertEqual([json.loads(p.read_text())['csv_rows'] for p in audits], [[11, 12]])
+            self.assertTrue((output / 'q00011' / 'false_retries' / 'attempt_001' / 'previous_evaluation.json').exists())
+            self.assertTrue((output / 'q00012' / 'false_retries' / 'attempt_001' / 'previous_evaluation.json').exists())
+            result = json.loads((output / 'results.json').read_text())
+            self.assertEqual(result['summary']['correct'], 3)
+            self.assertTrue(result['results'][1]['correct'])
+            self.assertTrue(result['results'][2]['correct'])
+            # A second false retry with no incorrect rows sends no worker requests.
+            _, retry_calls = self.call_main(root, retry_argv, retry)
+            self.assertEqual(retry_calls, [])
+
     def test_main_rejects_changed_inference_code_before_any_retry(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); argv = self.fixture(root)
-            self.call_main(root, argv, self.worker(None))
+            _, _ = self.call_main(root, argv, self.worker(None))
             manifest = root / 'output/manifest.json'
             saved = json.loads(manifest.read_text()); saved['code_sha256']['qwen_api.py'] = 'different inference code'
             manifest.write_text(json.dumps(saved))
