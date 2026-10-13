@@ -249,37 +249,59 @@ def _request_id(response: Any) -> str | None:
 
 
 def repair_missing_nullable_fields(payload: dict[str, Any], schema: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
-    """Fill required fields the gateway dropped when the model returns a
-    partial object. Only fields the schema explicitly allows to be null get
-    defaults, so no decision content is invented here."""
+    """Recursively fill required fields the gateway dropped when the model
+    returns a partial object. Nullable fields get None; array fields get []
+    (matching the prompt instruction to use empty arrays for unused fields);
+    nested objects are repaired recursively. No decision content invented."""
     repaired = []
-    for field in schema.get('required', []):
-        if field in payload:
-            continue
-        field_schema = schema.get('properties', {}).get(field)
-        if field_schema is None:
-            continue
-        allows_null = field_schema.get('nullable') is True or 'null' in field_schema.get('type', []) \
-            or any(sub.get('type') == 'null' for sub in field_schema.get('anyOf', []))
-        if not allows_null:
-            continue
-        payload[field] = None
-        repaired.append(field)
+    def fill(value: Any, sch: dict[str, Any]) -> tuple[Any, bool]:
+        if not isinstance(value, dict):
+            return value, False
+        changed = False
+        for field in sch.get('required', []):
+            if field in value:
+                nested = sch.get('properties', {}).get(field)
+                if nested and nested.get('type') == 'object' and isinstance(value[field], dict):
+                    value[field], sub = fill(value[field], nested)
+                    changed = changed or sub
+                elif nested and nested.get('type') == 'array' and isinstance(value[field], list):
+                    item_schema = nested.get('items', {})
+                    if item_schema.get('type') == 'object':
+                        for item in value[field]:
+                            if isinstance(item, dict):
+                                fill(item, item_schema)
+                continue
+            field_schema = sch.get('properties', {}).get(field)
+            if field_schema is None:
+                continue
+            allows_null = field_schema.get('nullable') is True or 'null' in field_schema.get('type', []) \
+                or any(sub.get('type') == 'null' for sub in field_schema.get('anyOf', []))
+            if allows_null:
+                value[field] = None
+                repaired.append(field)
+                changed = True
+            elif field_schema.get('type') == 'array':
+                value[field] = []
+                repaired.append(field)
+                changed = True
+        return value, changed
+    fill(payload, schema)
     return payload, repaired
 
 
 def _chat_schema_retry(messages: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
-    """One bounded retry for strict-schema failures: the compatible gateway
+    """Bounded retries for strict-schema failures: the compatible gateway
     sometimes ignores response_format and returns a partial JSON object,
     which a plain re-request usually fixes."""
-    try:
-        return _chat_once(messages, **kwargs)
-    except QwenAPIError as exc:
-        if exc.diagnostic.get('failure_kind') != 'response_schema':
-            raise
-        retry = _chat_once(messages, **kwargs)
-        retry.setdefault('_baseline', {})['schema_retry'] = True
-        return retry
+    for attempt in range(3):
+        try:
+            data = _chat_once(messages, **kwargs)
+            if attempt:
+                data.setdefault('_baseline', {})['schema_retry'] = attempt
+            return data
+        except QwenAPIError as exc:
+            if exc.diagnostic.get('failure_kind') != 'response_schema' or attempt == 2:
+                raise
 
 
 def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: float | None = None,
