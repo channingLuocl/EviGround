@@ -365,6 +365,33 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
             if data['choices'][0].get('finish_reason') != 'stop':
                 raise ValueError('Structured response did not complete normally')
             payload = json.loads(content)
+        except (ValueError, ValidationError) as exc:
+            raise QwenAPIError(f'{label} API 回答不符合严格 schema', diagnostic={
+                'failure_kind': 'response_schema', 'http_status': response.status_code,
+                'response_body': _redact(getattr(response, 'text', '') or content),
+                'request_id': _request_id(response),
+                'schema_name': response_schema['name'], 'validation_error': _redact(str(exc)),
+                'stage': 'response_schema_parse',
+            }) from exc
+        if not isinstance(payload, dict):
+            payload = None
+        if payload is None:
+            import re as _re
+            _match = _re.search(r'\{.*\}', content, _re.DOTALL)
+            if _match:
+                try:
+                    payload = json.loads(_match.group(0))
+                except ValueError:
+                    payload = None
+        if payload is None:
+            raise QwenAPIError(f'{label} API 回答不符合严格 schema', diagnostic={
+                'failure_kind': 'response_schema', 'http_status': response.status_code,
+                'response_body': _redact(getattr(response, 'text', '') or content),
+                'request_id': _request_id(response),
+                'schema_name': response_schema['name'], 'validation_error': 'content is not a JSON object',
+                'stage': 'response_schema_parse',
+            })
+        try:
             if isinstance(payload, dict):
                 payload, _repaired = repair_missing_nullable_fields(payload, response_schema['schema'])
                 content = json.dumps(payload, ensure_ascii=False)
