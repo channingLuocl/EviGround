@@ -18,6 +18,7 @@ import numpy as np
 
 from batch_progress import BatchProgress
 from object_classifier_v8 import VERSION, category_vocabulary, classify_instance, normalized_category
+from mesh_renderer_v8 import read_scene_faces
 from qwen_api import api_config_summary, _redact, _settings, QwenAPIError
 from run import ROOT
 from run_storage import ensure_run_writable, write_json
@@ -115,7 +116,8 @@ def run(args):
         vocabulary = category_vocabulary()
         api = api_config_summary()
         sources = ['object_classifier_v8.py', 'run_object_classification.py', 'run.py', 'qwen_api.py',
-                   'run_storage.py', 'response_schemas.py', 'batch_progress.py', 'v4_policy.py']
+                   'run_storage.py', 'response_schemas.py', 'batch_progress.py', 'v4_policy.py',
+                   'mesh_renderer_v8.py']
         identity = {'version': VERSION, 'model': os.getenv('SEEGROUND_MODEL', ''),
                     'api_base_url': os.getenv('SEEGROUND_BASE_URL', '').rstrip('/'),
                     'provider': api['provider'],
@@ -140,6 +142,10 @@ def run(args):
             directory = scene_root/scene
             hashes = {name: file_hash(directory/name) for name in
                       ('scene.npz', 'objects.json', 'objects_gt.json')}
+            mesh_path = scene_root/'downloads'/f'{scene}_vh_clean_2.ply'
+            hashes['mesh_sha256'] = file_hash(mesh_path) if mesh_path.exists() else None
+            hashes['alignment_sha256'] = (file_hash(scene_root/'downloads'/f'{scene}.txt')
+                                         if mesh_path.exists() else None)
             if scene in old_inputs and hashes != old_inputs[scene]:
                 raise ValueError(f'Scene inputs changed: {scene}; choose a new --output')
             inputs[scene] = hashes
@@ -193,6 +199,8 @@ def run(args):
             try:
                 with np.load(scene_root/scene/'scene.npz') as cloud:
                     xyz, rgb, ids = cloud['xyz'], cloud['rgb'], cloud['ids']
+                faces = (read_scene_faces(scene_root, scene, xyz, rgb)
+                         if inputs[scene]['mesh_sha256'] else None)
             except Exception:
                 stop.set()
                 raise
@@ -209,7 +217,8 @@ def run(args):
                         if (directory/name).exists():
                             (directory/name).rename(attempt/name)
                 try:
-                    prediction = classify_instance(xyz, rgb, ids, job['bbox_id'], directory, vocabulary)
+                    prediction = classify_instance(xyz, rgb, ids, job['bbox_id'], directory, vocabulary,
+                                                   faces=faces)
                 except Exception as exc:
                     diagnostic = _redact(getattr(exc, 'diagnostic', {}))
                     prediction = {'bbox_id': job['bbox_id'], 'predicted_object': None, 'status': 'error',
@@ -235,6 +244,7 @@ def run(args):
                       'bbox_3d': job['bbox_3d']} for job in scene_jobs
                      if (scene, job['bbox_id']) in evaluations]
             complete = len(table) == scene_counts[scene] and all(o['target'] is not None for o in table)
+            (output/scene).mkdir(parents=True, exist_ok=True)
             write_json(output/scene/'predicted_objects.json', {'complete': complete, 'objects': table})
         if stop.is_set():
             print('Run stopped; completed predictions are saved. Use --retry-errors to retry API errors.', file=sys.stderr)
@@ -245,7 +255,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--manifest', type=Path, default=ROOT/'local/validation/nr3d_val_full.json')
     parser.add_argument('--scene-root', type=Path, default=ROOT/'local_outputs')
-    parser.add_argument('--output', type=Path, default=ROOT/'local_outputs/v8_category_subset')
+    parser.add_argument('--output', type=Path, default=ROOT/'local_outputs/v8_1_category_subset')
     parser.add_argument('--limit', type=int, default=100, help='Unique objects; 0 selects all instances')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--workers', type=int, default=10)

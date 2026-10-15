@@ -20,5 +20,5 @@ export VECLIB_MAXIMUM_THREADS="${VECLIB_MAXIMUM_THREADS:-1}"
 exec .venv/bin/python -u local/run_object_classification.py \
   --workers "${SEEGROUND_WORKERS:-10}" \
   --api-concurrency "${SEEGROUND_API_CONCURRENCY:-8}" \
-  --output "${SEEGROUND_RUN_DIR:-$ROOT/local_outputs/v8_category_subset}" \
+  --output "${SEEGROUND_RUN_DIR:-$ROOT/local_outputs/v8_1_category_subset}" \
   "$@"

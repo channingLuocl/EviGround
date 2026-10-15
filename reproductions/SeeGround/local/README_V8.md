@@ -3,15 +3,34 @@
 v7.4 代码已保存在 Git 主分支 `master`，提交 `9bce565`，并已推送至 `origin/master`。
 v7.4 的冻结全量运行结果与归档保留原位置。v8 开发分支为 `codex/seeground-v8`。
 
-## 本轮实现
+## v8.1：修复稀疏成像
 
 新增独立实例类别预测，不改变已有定位器。输入是彩色场景点云与已有实例划分，
-每个实例渲染三个独立视角、一个局部上下文视角，拼成四视图，交给 `.env` 中配置的
-视觉模型识别。上下文图只标记待识别实例；GT 类别、作者预测类别和 Nr3D 查询均不进入模型输入。
+每个实例渲染三个独立视角、一个局部上下文视角，作为四张独立图片交给 `.env` 中配置的
+视觉模型识别，同时保存拼图供人工查看。视角按投影覆盖选择并自动取景；上下文相机朝向
+房间内部，提供实测尺寸与估计离地高度。上下文图只标记待识别实例；
+GT 类别、作者预测类别和 Nr3D 查询均不进入模型输入。
+
+有原始 ScanNet `downloads/<scene>_vh_clean_2.ply` 时，额外读取其三角面连接，
+通过深度测试与顶点颜色插值显示实测表面。读取前逐点核对顶点顺序、轴对齐坐标、RGB，
+并保存网格及轴对齐文件哈希。这一模式的输入是 RGB 点云、实例划分和原始网格连接，
+不能描述成严格的“仅点坐标”输入；未使用外部重建或生成纹理。无原始网格时明确记录
+`surface_mode=point_splats`，用有界点圆盘显示，不混淆两种成像方式。
 使用作者相同的 ScanNet200 公共类别词表，排除 wall/floor/ceiling，共 197 类。
 
 模型输出最有依据的类别、其他可能类别、可见性与视觉理由。无法识别时允许 null，
-不通过 GT 答案替换预测。这是第一版多视角识别基线，尚未证明优于作者预测方式。
+不通过 GT 答案替换预测。结构化接口通过共享 schema 定义词表，保留网关重试及本地校验，
+减少重复枚举。模型识别质量仍需实验验证，尚未证明优于作者预测方式。
+
+v8.0 原始 100 个物体为 20/100，作者同子集为 72/100，0 个 API 错误、19 个无法识别。
+该目录 `v8_category_subset` 已添加冻结标记并复制到本地
+`/Users/luocl/Desktop/seeground/archives/v8.0_categories_100_20261016`。
+旧结果不导入 v8.1；新版沿用相同抽样种子、物体顺序与评分规则，独立保存预测。
+
+v8.1 已实测相同 100 个物体：45/100（严格字符串 44/100），无法识别 2 个，最终错误记录 0；
+作者仍为 72/100。该子集参与开发调试，不是独立测试集证据。完整说明见
+`local_diagnostics/v8_1_categories_20261016.md`。
+当前默认目录已保存这 100 条，重复以下命令会直接复用；扩大到 300 时只新增 200 个预测。
 
 ## 运行 100 个物体
 
@@ -37,8 +56,8 @@ local/run_local_v8_categories.sh --limit 100
 已完成数、耗时、ETA 和累计 `True 正确数/已完成数 = 准确率`，与现有批处理风格一致。
 不同场景中的实例 ID 可能重复，完整场景 ID 记录在文件和汇总中。
 
-默认输出：`local_outputs/v8_category_subset`。`local_outputs` 当前指向 KESU，
-实际路径为 `/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v8_category_subset`。
+默认输出：`local_outputs/v8_1_category_subset`。`local_outputs` 当前指向 KESU，
+实际路径为 `/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v8_1_category_subset`。
 
 ## 续跑与扩大子集
 
@@ -67,7 +86,7 @@ local/run_local_v8_categories.sh --limit 100 --retry-errors
 更换模型、代码、输入、随机种子时需指定新目录，避免混合实验：
 
 ```bash
-local/run_local_v8_categories.sh --limit 100 --output local_outputs/v8_category_subset_experiment2
+local/run_local_v8_categories.sh --limit 100 --output local_outputs/v8_1_category_subset_experiment2
 ```
 
 只生成抽样与运行配置，不调用模型：
@@ -103,5 +122,6 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=local OMP_NUM_THREADS=1 OPENBLAS_NUM_THREAD
   test_object_classification_v8 test_category_review test_frozen_run test_v7_4
 ```
 
-测试使用合成点云和模拟接口，不产生模型费用；涵盖真实渲染、请求隔离、输出格式、
+测试使用合成点云／三角面和模拟接口，不产生模型费用；涵盖真实渲染、深度遮挡、网格顶点
+对应、自动取景、四图请求隔离、输出格式、
 错误恢复、子集扩展、模型／输入变化拒绝复用，以及冻结目录保护。

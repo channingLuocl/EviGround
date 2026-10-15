@@ -4,6 +4,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from io import StringIO
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -13,6 +14,7 @@ from PIL import Image
 
 import object_classifier_v8 as classifier
 import run_object_classification as batch
+from mesh_renderer_v8 import read_scene_faces, render_mesh
 from qwen_api import QwenAPIError
 
 
@@ -60,9 +62,13 @@ class ObjectClassificationTests(unittest.TestCase):
                 self.assertNotIn(forbidden, text)
                 self.assertNotIn(forbidden, (Path(td)/'views/request.json').read_text())
             payload = json.loads(messages[1]['content'][0]['text'])
-            self.assertEqual(set(payload), {'bbox_id', 'allowed_categories', 'extent_xyz_m', 'point_count'})
+            self.assertEqual(set(payload), {'bbox_id', 'allowed_categories', 'extent_xyz_m', 'point_count',
+                                           'observed_bottom_above_floor_m'})
             self.assertNotIn('correct', text)
             self.assertEqual(prediction['predicted_object'], 'chair')
+            images = [part for part in messages[1]['content'] if part['type'] == 'image_url']
+            self.assertEqual(len(images), 4)
+            self.assertNotIn('enum', chat.call_args.kwargs['response_schema']['schema']['properties']['predicted_object']['anyOf'][0])
             with Image.open(prediction['image']) as image:
                 self.assertEqual(image.size, (1024, 1088))
             self.assertEqual(len(prediction['geometry']['views']), 4)
@@ -73,12 +79,65 @@ class ObjectClassificationTests(unittest.TestCase):
             with self.subTest(reply=reply), tempfile.TemporaryDirectory() as td, \
                     patch.dict('os.environ', ENV), \
                     patch('object_classifier_v8.render_instance', return_value=(Path(td)/'image.png',
-                          {'extent_xyz_m': [1, 1, 1], 'point_count': 10})), \
+                          {'extent_xyz_m': [1, 1, 1], 'point_count': 10,
+                           'observed_bottom_above_floor_m': 0.,
+                           'views': [{'image': str(Path(td)/'image.png')}]})), \
                     patch('object_classifier_v8.image_part', return_value={'type': 'image_url'}), \
                     patch('object_classifier_v8.chat', return_value=reply):
                 with self.assertRaises(Exception):
                     classifier.classify_instance(None, None, None, 3, Path(td), ['chair', 'stool'])
                 self.assertTrue((Path(td)/'response.json').exists())
+
+    def test_camera_fits_long_flat_and_tall_instances_without_changing_scale_ratios(self):
+        rng = np.random.default_rng(7)
+        for extent in ([6., .3, 1.], [.01, 2., 2.], [.2, .3, .8]):
+            points = rng.uniform(-.5, .5, (800, 3))*extent
+            center = (points.min(0)+points.max(0))/2
+            angles = classifier.instance_angles(points, center)
+            self.assertEqual(len(angles), 3)
+            for angle in angles:
+                eye = classifier.camera_for_instance(points, center, angle)
+                uv, depth = classifier.project(points, eye, center, classifier.VIEW_SIZE)
+                self.assertTrue((depth > 0).all())
+                self.assertGreaterEqual(uv.min(), classifier.VIEW_SIZE*.074)
+                self.assertLessEqual(uv.max(), classifier.VIEW_SIZE*.926)
+                self.assertGreater(np.ptp(uv, axis=0).max(), classifier.VIEW_SIZE*.5)
+                self.assertLessEqual(classifier.point_radius(points, eye, center), 6)
+
+    def test_mesh_depth_test_keeps_nearest_surface_and_instance_marker(self):
+        with tempfile.TemporaryDirectory() as td:
+            # Both triangles overlap in projection; the far triangle must not
+            # overwrite the near triangle's colour or claim its instance ID.
+            xyz = np.array([[-1., -1., 0.], [1., -1., 0.], [0., 1., 0.],
+                            [-1., -1., -1.], [1., -1., -1.], [0., 1., -1.]])
+            rgb = np.array([[200, 20, 30]]*3 + [[20, 20, 200]]*3, dtype=np.uint8)
+            faces = np.array([[0, 1, 2], [3, 4, 5]])
+            stats = render_mesh(xyz, rgb, faces, Path(td)/'surface.png',
+                                eye=[0, 0, 3], at=[0, 0, 0], ids=np.array([3]*3+[9]*3))
+            self.assertEqual(stats['marked_ids'], [3])
+            with Image.open(Path(td)/'surface.png') as image:
+                pixels = np.asarray(image)
+            self.assertFalse(((pixels[:, :, 2] > 150) & (pixels[:, :, 0] < 50)).any())
+            self.assertGreater(stats['visible_pixels'], 1000)
+
+    def test_mesh_vertex_mismatch_is_rejected_before_rendering(self):
+        from plyfile import PlyData, PlyElement
+        with tempfile.TemporaryDirectory() as td:
+            directory = Path(td)/'downloads'
+            directory.mkdir()
+            vertices = np.array([(0., 0., 0., 10, 20, 30), (1., 0., 0., 10, 20, 30),
+                                 (0., 1., 0., 10, 20, 30)],
+                                dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+                                       ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')])
+            faces = np.array([([0, 1, 2],)], dtype=[('vertex_indices', 'i4', (3,))])
+            PlyData([PlyElement.describe(vertices, 'vertex'), PlyElement.describe(faces, 'face')]).write(
+                str(directory/'test_vh_clean_2.ply'))
+            (directory/'test.txt').write_text('axisAlignment = 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1\n')
+            xyz = np.array([[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]])
+            rgb = np.array([[10, 20, 30]]*3, dtype=np.uint8)
+            np.testing.assert_array_equal(read_scene_faces(Path(td), 'test', xyz, rgb), [[0, 1, 2]])
+            with self.assertRaisesRegex(ValueError, 'do not match'):
+                read_scene_faces(Path(td), 'test', xyz[::-1], rgb)
 
     def test_selection_is_unique_reproducible_and_expandable_without_labels(self):
         with tempfile.TemporaryDirectory() as td:
@@ -93,7 +152,7 @@ class ObjectClassificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td, patch.dict('os.environ', ENV), \
                 patch('run_object_classification.classify_instance') as classify:
             args, _, _ = fixture(Path(td))
-            classify.side_effect = lambda xyz, rgb, ids, oid, out, vocab: {
+            classify.side_effect = lambda xyz, rgb, ids, oid, out, vocab, faces=None: {
                 'bbox_id': oid, 'predicted_object': 'stool', 'status': 'completed'}
             with redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as stderr:
                 self.assertEqual(batch.run(args), 0)
@@ -141,7 +200,7 @@ class ObjectClassificationTests(unittest.TestCase):
             classify.side_effect = QwenAPIError('quota', diagnostic={'http_status': 429})
             self.assertEqual(batch.run(args), 1)
             self.assertEqual(classify.call_count, 1)
-            classify.side_effect = lambda xyz, rgb, ids, oid, out, vocab: {
+            classify.side_effect = lambda xyz, rgb, ids, oid, out, vocab, faces=None: {
                 'bbox_id': oid, 'predicted_object': 'chair', 'status': 'completed'}
             args.retry_errors = True
             self.assertEqual(batch.run(args), 0)
@@ -149,6 +208,22 @@ class ObjectClassificationTests(unittest.TestCase):
             summary = json.loads((args.output/'results.json').read_text())['summary']
             self.assertEqual(summary['correct'], 2)
             self.assertEqual(summary['errors'], 0)
+
+    def test_early_service_stop_exports_unstarted_scenes_as_partial(self):
+        with tempfile.TemporaryDirectory() as td, patch.dict('os.environ', ENV), \
+                patch('run_object_classification.classify_instance') as classify, \
+                redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            args, _, _ = fixture(Path(td))
+            shutil.copytree(args.scene_root/'scene0001_00', args.scene_root/'scene0002_00')
+            args.manifest.write_text(json.dumps({'rows': [{'scene': name} for name in
+                                                ['scene0001_00', 'scene0002_00']]}))
+            args.limit = 0
+            classify.side_effect = QwenAPIError('quota', diagnostic={'http_status': 429})
+            self.assertEqual(batch.run(args), 1)
+            tables = [json.loads(path.read_text()) for path in args.output.glob('scene*/predicted_objects.json')]
+            self.assertEqual(len(tables), 2)
+            self.assertTrue(all(table['complete'] is False for table in tables))
+            self.assertEqual(sum(len(table['objects']) for table in tables), 1)
 
     def test_lexical_scoring_does_not_merge_subtypes(self):
         for a, b in [('books', 'book'), ('shoes', 'shoe'), ('shelves', 'shelf'),
