@@ -1,0 +1,160 @@
+{
+  "purpose": "V7.4 regression: eight previously null cases chosen before new inference; includes stack, between, frame, negation and three-token-limit failures.",
+  "selection": "ScanNet validation scenes, mentions_target_class=True; no correct_guess, size-language, deduplication or model-outcome filtering.",
+  "csv_sha256": "5de4f1b47130803c88f7c57903e7b6df5473f1b903c32cf28d06fa9c25996a67",
+  "author_results_url": "https://github.com/user-attachments/files/18056533/seeground_results.zip",
+  "author_results_sha256": "df6a7285e70495e91b72e12e2c725de3b550618fb985b3bf71c33b483a88edd3",
+  "author_queries_match": true,
+  "summary": {
+    "cases": 8,
+    "scenes": 8
+  },
+  "rows": [
+    {
+      "csv_row": 12,
+      "scene": "scene0565_00",
+      "query": "The chair to the far left hand side of the taller  desk with the computer monitor on it",
+      "target_id": 25,
+      "instance_type": "chair",
+      "stimulus_id": "scene0565_00-chair-4-25-0-1-24",
+      "stimulus_candidate_ids": [
+        25,
+        0,
+        1,
+        24
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 20,
+      "scene": "scene0653_00",
+      "query": "The desk beneath the clock on the right hand side of the two desks grouped together",
+      "target_id": 16,
+      "instance_type": "desk",
+      "stimulus_id": "scene0653_00-desk-6-16-13-14-15-17-18",
+      "stimulus_candidate_ids": [
+        16,
+        13,
+        14,
+        15,
+        17,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 21,
+      "scene": "scene0221_00",
+      "query": "The pillow on the bed that is on the far end of the room and is at the rear and right hand side of the bed",
+      "target_id": 46,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0221_00-pillow-6-46-39-40-41-44-45",
+      "stimulus_candidate_ids": [
+        46,
+        39,
+        40,
+        41,
+        44,
+        45
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 34,
+      "scene": "scene0256_00",
+      "query": "The box at the bottom of the stack",
+      "target_id": 4,
+      "instance_type": "box",
+      "stimulus_id": "scene0256_00-box-3-4-3-12",
+      "stimulus_candidate_ids": [
+        4,
+        3,
+        12
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 147,
+      "scene": "scene0435_00",
+      "query": "'The lamp between the two beds.'",
+      "target_id": 38,
+      "instance_type": "lamp",
+      "stimulus_id": "scene0435_00-lamp-2-38-50",
+      "stimulus_candidate_ids": [
+        38,
+        50
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 171,
+      "scene": "scene0645_00",
+      "query": "'The lamp not next to the beds.'",
+      "target_id": 12,
+      "instance_type": "lamp",
+      "stimulus_id": "scene0645_00-lamp-3-12-33-34",
+      "stimulus_candidate_ids": [
+        12,
+        33,
+        34
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 214,
+      "scene": "scene0246_00",
+      "query": "Looking up from the end of the bed, choose the pillow on the very bottom of the left side of the bed.  It is right touching the stool.",
+      "target_id": 43,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0246_00-pillow-6-43-38-39-40-41-42",
+      "stimulus_candidate_ids": [
+        43,
+        38,
+        39,
+        40,
+        41,
+        42
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 219,
+      "scene": "scene0353_00",
+      "query": "shoes are between couch and bed",
+      "target_id": 23,
+      "instance_type": "shoes",
+      "stimulus_id": "scene0353_00-shoes-4-23-1-31-33",
+      "stimulus_candidate_ids": [
+        23,
+        1,
+        31,
+        33
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    }
+  ]
+}

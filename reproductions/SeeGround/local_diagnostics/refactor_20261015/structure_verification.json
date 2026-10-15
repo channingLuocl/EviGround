@@ -1,0 +1,36 @@
+{
+  "active_functions_unchanged": 26,
+  "prompt_constants_unchanged": [
+    "DIMENSIONS",
+    "SIZE_WORDS",
+    "SIZE_EXTREMES",
+    "EVIDENCE_CAPABILITIES",
+    "INSTRUCTIONS"
+  ],
+  "batch_functions_unchanged": [
+    "parse_bool",
+    "check_cached_table",
+    "comparable_settings",
+    "correct_cache_path",
+    "save_correct_cache",
+    "_correct_result",
+    "same_sample",
+    "load_correct_cache",
+    "remember_correct_result",
+    "write_json",
+    "verify_source",
+    "evaluate"
+  ],
+  "batch_functions_only_added_freeze_guard": [
+    "reuse_results",
+    "apply_correct_cache",
+    "run_case",
+    "report"
+  ],
+  "batch_main_changes": "Imports extracted modules and checks frozen output before accessing inputs; all inference arguments unchanged.",
+  "other_inference_functions_unchanged_except_freeze_checks": {
+    "qwen_api.py": 18,
+    "real_scene.py": 8
+  },
+  "batch_main_unchanged_except_freeze_checks": true
+}

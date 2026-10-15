@@ -12,6 +12,8 @@ fi
 
 export SEEGROUND_V4=1
 export SEEGROUND_V7=1
+export SEEGROUND_V7_2=0
+export SEEGROUND_V7_3=0
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH=local
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
@@ -35,4 +37,5 @@ exec .venv/bin/python -u local/run_size_validation.py \
   --review-limit 3 \
   --workers "$workers" \
   --api-concurrency "$api_concurrency" \
+  --gt \
   "$@"

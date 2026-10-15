@@ -134,13 +134,21 @@ Unknown completeness is not a contradiction of a reliable measurement. Body-plan
         instructions += ('\nV7 box metrics describe supplied observed instance bounds. Scan incompleteness or unknown '
             'alone cannot refute their ordering. Ordinary taller/shorter compares total instance dz; '
             'tabletop elevation is a different predicate. Provisional ordering does not certify missing conditions.')
+    from v4_policy import v74_enabled
+    if v74_enabled():
+        instructions += ('\nKeep output compact: at most two condition checks per instance and at most 20 words '
+            'per reason. Do not duplicate observations as findings unless they change the decision.')
     if output_schema:
         instructions += '\nReturn every schema field; use empty arrays for unused fields and null for inapplicable comparison or anchor_id.'
+    instructions += ('\nOUTPUT FORMAT (STRICT): Respond with ONLY one raw JSON object. '
+        'No markdown fences, no prose, no text outside the JSON. '
+        'Start with { and end with }. '
+        'Example: {"observations":[],"metric_choices":[],"relations":[],"contradictions":[],"status":"unknown","reason":"nothing verified"}')
     try:
         data = (chat_fn or chat)([{'role': 'system', 'content': instructions},
             {'role': 'user', 'content': [{'type': 'text', 'text': json.dumps(
                 {'query': query, 'view': {k: v for k, v in view.items() if k != 'image'}, 'task': payload}, ensure_ascii=False)},
-                image_part(view['image'])]}], max_tokens=2400, json_mode=True,
+                image_part(view['image'])]}], max_tokens=4800 if v74_enabled() else 2400, json_mode=True,
                 **output_schema)
         call.update(response=data['_content'], usage=data.get('usage'), **data.get('_baseline', {}))
         if data.get('_finish_reason') != 'stop':

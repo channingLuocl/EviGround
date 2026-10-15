@@ -164,7 +164,7 @@ class V5RuntimeBatchTests(unittest.TestCase):
                 return Mock(returncode=0)
             stdout, stderr = StringIO(), StringIO()
             argv = ['run_size_validation.py', '--manifest', str(manifest), '--scene-root', str(root / 'scenes'),
-                    '--output', str(root / 'results'), '--workers', '10']
+                    '--output', str(root / 'results'), '--gt', '--workers', '10']
             with patch('sys.argv', argv), patch('run_size_validation.ROOT', root), \
                     patch('run_size_validation.subprocess.run', side_effect=completed_worker), \
                     redirect_stdout(stdout), redirect_stderr(stderr):

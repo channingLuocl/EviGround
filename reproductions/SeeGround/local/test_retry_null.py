@@ -113,7 +113,7 @@ class RetryNullTests(unittest.TestCase):
         selection = root / 'selection.json'
         selection.write_text(json.dumps({'rows': [self.row(10), self.row(11), self.row(12)], 'csv_sha256': 'offline'}))
         return ['run_size_validation.py', '--manifest', str(selection), '--scene-root', str(root / 'scenes'),
-                '--output', str(root / 'output'), '--workers', '1', '--limit', '2']
+                '--output', str(root / 'output'), '--gt', '--workers', '1', '--limit', '2']
 
     def call_main(self, root, argv, worker):
         with patch('sys.argv', argv), patch('run_size_validation.ROOT', root), \
@@ -168,7 +168,7 @@ class RetryNullTests(unittest.TestCase):
             selection.write_text(json.dumps({'rows': rows, 'csv_sha256': 'offline'}))
             argv = ['run_size_validation.py', '--manifest', str(selection),
                     '--scene-root', str(root / 'scenes'), '--output', str(root / 'output'),
-                    '--workers', '1', '--limit', '3']
+                    '--gt', '--workers', '1', '--limit', '3']
             scene_root = root / 'scenes'
             for scene_name in ('scene0010_00', 'scene0011_00'):
                 scene = scene_root / scene_name
@@ -220,6 +220,122 @@ class RetryNullTests(unittest.TestCase):
             manifest.write_text(json.dumps(saved))
             with self.assertRaisesRegex(ValueError, 'different code/settings'):
                 self.call_main(root, argv + ['--retry-null'], self.worker(13))
+
+    def test_resume_skips_cached_cases_and_keeps_correct_count(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); argv = self.fixture(root)
+            self.call_main(root, argv, self.worker(13))
+            # Resume without the original two-case limit.
+            stdout, calls = self.call_main(root, argv[:-2], self.worker(13))
+            self.assertEqual([c[c.index('--csv-row') + 1] for c in calls], ['12'])
+            self.assertEqual(len(stdout.splitlines()), 1)
+            summary = json.loads((root / 'output/results.json').read_text())['summary']
+            self.assertEqual((summary['total'], summary['correct']), (3, 3))
+            _, calls = self.call_main(root, argv[:-2], self.worker(13))
+            self.assertEqual(calls, [])
+
+    def test_full_batch_reuses_overlap_including_wrong_and_null_results(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); argv = self.fixture(root)[:-2]
+            def initial(command, **kwargs):
+                index = int(command[command.index('--csv-row') + 1])
+                return self.worker({10: 13, 11: 5, 12: None}[index])(command, **kwargs)
+            self.call_main(root, argv, initial)
+            original = (root / 'output/results.json').read_text()
+            selection = json.loads((root / 'selection.json').read_text())
+            selection['rows'].append(self.row(14))
+            full = root / 'full.json'; full.write_text(json.dumps(selection))
+            full_argv = [*argv]
+            full_argv[full_argv.index('--manifest') + 1] = str(full)
+            full_argv[full_argv.index('--output') + 1] = str(root / 'full_output')
+            full_argv += ['--reuse-from', str(root / 'output')]
+            _, calls = self.call_main(root, full_argv, self.worker(13))
+            self.assertEqual([c[c.index('--csv-row') + 1] for c in calls], ['14'])
+            results = json.loads((root / 'full_output/results.json').read_text())
+            self.assertEqual([r['predicted_id'] for r in results['results']], [13, 5, None, 13])
+            self.assertEqual(results['summary']['accuracy'], .5)
+            self.assertEqual((root / 'output/results.json').read_text(), original)
+            self.assertIn('reused_from', results['results'][0])
+            _, calls = self.call_main(root, full_argv, self.worker(13))
+            self.assertEqual(calls, [])
+
+    def test_reuse_rejects_incomplete_source(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); argv = self.fixture(root)
+            self.call_main(root, argv, self.worker(13))
+            full_argv = argv[:-2]
+            full_argv[full_argv.index('--output') + 1] = str(root / 'full_output')
+            with self.assertRaisesRegex(ValueError, 'still incomplete'):
+                self.call_main(root, full_argv + ['--reuse-from', str(root / 'output')], self.worker(13))
+
+    def test_prepare_only_imports_results_without_inference_and_normal_run_resumes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); argv = self.fixture(root)[:-2]
+            self.call_main(root, argv, self.worker(13))
+            selection = json.loads((root / 'selection.json').read_text())
+            selection['rows'].append(self.row(14))
+            full = root / 'full.json'; full.write_text(json.dumps(selection))
+            full_argv = [*argv]
+            full_argv[full_argv.index('--manifest') + 1] = str(full)
+            full_argv[full_argv.index('--output') + 1] = str(root / 'full_output')
+            full_argv += ['--reuse-from', str(root / 'output')]
+            _, calls = self.call_main(root, full_argv + ['--prepare-only'], self.worker(13))
+            self.assertEqual(calls, [])
+            results = json.loads((root / 'full_output/results.json').read_text())
+            self.assertEqual(len(results['results']), 3)
+            self.assertEqual(results['summary']['selected_total'], 4)
+            audit = json.loads((root / 'full_output/reuse_verification.json').read_text())
+            self.assertEqual(audit['matching_rows'], 3)
+            _, calls = self.call_main(root, full_argv, self.worker(13))
+            self.assertEqual([c[c.index('--csv-row') + 1] for c in calls], ['14'])
+
+    def test_reuse_rejects_model_and_scene_changes(self):
+        from run_size_validation import reuse_results
+        import copy
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); argv = self.fixture(root)[:-2]
+            self.call_main(root, argv, self.worker(13))
+            previous = json.loads((root / 'output/manifest.json').read_text())
+            for field in ('models', 'input_sha256'):
+                changed = copy.deepcopy(previous)
+                if field == 'models':
+                    changed[field]['SEEGROUND_MODEL'] = 'different-model'
+                else:
+                    changed[field]['scene0010_00']['scene.npz'] = 'different-scene'
+                with self.subTest(field=field), self.assertRaisesRegex(ValueError, 'different|mismatch'):
+                    reuse_results(root / 'output', root / 'new', previous['selection']['rows'], changed)
+
+    def test_progress_includes_cached_results_and_null_in_denominator(self):
+        from batch_progress import BatchProgress
+        stdout, stderr = StringIO(), StringIO()
+        progress = BatchProgress(4, stdout=stdout, stderr=stderr,
+            initial_results=[{'correct': True}, {'correct': False, 'predicted_id': None}])
+        progress.update({'predicted_id': 5, 'correct': False})
+        self.assertIn('True 1/3 = 33.33%', stderr.getvalue())
+        progress.update({'predicted_id': 13, 'correct': True})
+        self.assertIn('True 2/4 = 50.00%', stderr.getvalue())
+
+    def test_interrupt_cancels_queued_cases_saves_active_cases_and_can_resume(self):
+        from concurrent.futures import as_completed
+        import time
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); argv = self.fixture(root)[:-2]
+            def slow_worker(command, **kwargs):
+                # Let the coordinator cancel the queue before this active case finishes.
+                self.assertTrue(kwargs['start_new_session'])
+                time.sleep(.05)
+                return self.worker(13)(command, **kwargs)
+            def interrupted(futures):
+                yield next(as_completed(futures))
+                raise KeyboardInterrupt
+            with patch('run_size_validation.as_completed', side_effect=interrupted):
+                _, calls = self.call_main(root, argv, slow_worker)
+            self.assertGreaterEqual(len(calls), 1)
+            self.assertLess(len(calls), 3)
+            result = json.loads((root / 'output/results.json').read_text())
+            self.assertEqual(result['summary']['total'], len(calls))
+            _, resumed = self.call_main(root, argv, self.worker(13))
+            self.assertEqual(len(resumed), 3 - len(calls))
 
 
 if __name__ == '__main__':

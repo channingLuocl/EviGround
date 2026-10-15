@@ -48,7 +48,9 @@ def api_slot_dir() -> Path:
 @contextmanager
 def api_request_slot():
     """Acquire one cross-process slot before sending an outbound API request."""
+    from run_storage import ensure_run_writable
     slot_dir = api_slot_dir()
+    ensure_run_writable(slot_dir)
     slot_dir.mkdir(parents=True, exist_ok=True)
     limit = api_concurrency()
     started = time.perf_counter()
@@ -91,6 +93,8 @@ def request_options(max_tokens: int, temperature: float | None, json_mode: bool,
         if token_parameter not in ('max_completion_tokens', 'max_tokens'):
             raise QwenAPIError('SEEGROUND_OPENAI_TOKEN_PARAMETER must be max_completion_tokens or max_tokens')
         options = {token_parameter: max_tokens}
+        if json_mode:
+            options['enable_thinking'] = False
         configured_temperature = os.getenv('SEEGROUND_OPENAI_TEMPERATURE', '').strip()
         if temperature is None and configured_temperature:
             try:
@@ -289,19 +293,44 @@ def repair_missing_nullable_fields(payload: dict[str, Any], schema: dict[str, An
     return payload, repaired
 
 
+def _schema_messages(messages: list[dict[str, Any]], schema: dict[str, Any],
+                     error: str | None = None) -> list[dict[str, Any]]:
+    """Include the output contract in text for compatible gateways."""
+    instruction = ('Return ONLY one JSON object matching this JSON Schema. '
+        'No markdown fences or prose. Include every required field. '
+        'Use null only where allowed. Do not invent evidence. JSON Schema: '
+        + json.dumps(schema['schema'], ensure_ascii=False, separators=(',', ':')))
+    if error is not None:
+        instruction += '\nThe previous response failed validation: ' + error[:1500]
+        instruction += '\nAnswer the original task again using the schema above.'
+    return [*messages, {'role': 'user', 'content': instruction}]
+
+
 def _chat_schema_retry(messages: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
-    """Bounded retries for strict-schema failures: the compatible gateway
-    sometimes ignores response_format and returns a partial JSON object,
-    which a plain re-request usually fixes."""
-    for attempt in range(3):
+    """Retry an invalid structured answer once, with validation feedback."""
+    schema = kwargs.get('response_schema')
+    request_messages = _schema_messages(messages, schema) if schema is not None else messages
+    attempts = []
+    started = time.perf_counter()
+    for attempt in range(2):
+        attempt_start = time.perf_counter()
         try:
-            data = _chat_once(messages, **kwargs)
-            if attempt:
-                data.setdefault('_baseline', {})['schema_retry'] = attempt
+            data = _chat_once(request_messages, **kwargs)
+            attempts.append({'status': 'success', 'latency_s': round(time.perf_counter() - attempt_start, 4),
+                             'usage': data.get('usage')})
+            data['_baseline'].update(api_attempts=attempts, extra_attempts=len(attempts) - 1,
+                schema_retry=attempt, latency_s=round(time.perf_counter() - started, 4))
             return data
         except QwenAPIError as exc:
-            if exc.diagnostic.get('failure_kind') != 'response_schema' or attempt == 2:
+            diagnostic = exc.diagnostic
+            attempts.append({'status': 'failed', 'latency_s': round(time.perf_counter() - attempt_start, 4),
+                             'diagnostic': dict(diagnostic)})
+            diagnostic.update(api_attempts=attempts, extra_attempts=len(attempts) - 1)
+            if (schema is None or diagnostic.get('failure_kind') != 'response_schema' or attempt == 1
+                    or diagnostic.get('stage') == 'response_schema_complete'):
                 raise
+            request_messages = _schema_messages(messages, schema,
+                str(diagnostic.get('validation_error', 'Expected a JSON object')))
 
 
 def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: float | None = None,
@@ -361,14 +390,19 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
         from jsonschema import Draft202012Validator, ValidationError
         payload = None
         parse_error = None
-        salvage_error = None
+        choice = data['choices'][0]
+        if choice['message'].get('refusal') or choice.get('finish_reason') != 'stop':
+            raise QwenAPIError(f'{label} API 结构化回答被拒绝或未完整结束', diagnostic={
+                'failure_kind': 'response_schema', 'http_status': response.status_code,
+                'response_body': _redact(getattr(response, 'text', '') or content),
+                'request_id': _request_id(response), 'model': model, 'request_summary': summary,
+                'schema_name': response_schema['name'], 'finish_reason': choice.get('finish_reason'),
+                'validation_error': 'Model refused' if choice['message'].get('refusal') else 'Incomplete response',
+                'stage': 'response_schema_complete',
+            })
         try:
-            if data['choices'][0]['message'].get('refusal'):
-                raise ValueError('Model refused the structured response')
-            if data['choices'][0].get('finish_reason') != 'stop':
-                raise ValueError('Structured response did not complete normally')
             payload = json.loads(content)
-        except (ValueError, ValidationError) as exc:
+        except ValueError as exc:
             payload = None
             parse_error = str(exc)
         if payload is None:
@@ -382,24 +416,16 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
                 except ValueError:
                     try:
                         from json_repair import loads as json_repair_loads
-                        payload = json_repair.loads(_match.group(0))
+                        payload = json_repair_loads(_match.group(0))
                         if not isinstance(payload, dict):
                             payload = None
-                    except Exception:
+                    except (ImportError, ValueError, TypeError):
                         payload = None
-            if payload is None and parse_error and ('refused' in parse_error or 'did not complete' in parse_error):
-                raise QwenAPIError(f'{label} API 回答不符合严格 schema', diagnostic={
-                    'failure_kind': 'response_schema', 'http_status': response.status_code,
-                    'response_body': _redact(getattr(response, 'text', '') or content),
-                    'request_id': _request_id(response),
-                    'schema_name': response_schema['name'], 'validation_error': parse_error,
-                    'stage': 'response_schema_parse',
-                })
         if payload is None:
             raise QwenAPIError(f'{label} API 回答不符合严格 schema', diagnostic={
                 'failure_kind': 'response_schema', 'http_status': response.status_code,
                 'response_body': _redact(getattr(response, 'text', '') or content),
-                'request_id': _request_id(response),
+                'request_id': _request_id(response), 'model': model, 'request_summary': summary,
                 'schema_name': response_schema['name'],
                 'validation_error': parse_error or 'content is not a JSON object',
                 'stage': 'response_schema_parse',
@@ -475,8 +501,7 @@ def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: 
         try:
             data = _chat_schema_retry(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, json_mode=json_mode,
                               response_schema=response_schema)
-            attempts.append({'status': 'success', 'latency_s': round(time.perf_counter() - attempt_start, 4),
-                             'usage': data.get('usage')})
+            attempts.extend(data['_baseline']['api_attempts'])
             data['_baseline'].update(api_attempts=attempts, extra_attempts=len(attempts) - 1,
                                       latency_s=round(time.perf_counter() - started, 4))
             if budget.get('api_checkpoint'):
@@ -485,8 +510,7 @@ def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: 
             return data
         except QwenAPIError as exc:
             diagnostic = exc.diagnostic
-            attempts.append({'status': 'failed', 'latency_s': round(time.perf_counter() - attempt_start, 4),
-                             'diagnostic': dict(diagnostic)})
+            attempts.extend(diagnostic.pop('api_attempts'))
             context_error = diagnostic.get('http_status') == 400 and any(marker in
                 str(diagnostic.get('response_body', '')).lower() for marker in
                 ('context window', 'context_length_exceeded', 'maximum context length'))

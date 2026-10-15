@@ -34,13 +34,19 @@ def object_table_path(scene_dir, object_table):
     return scene_dir/OBJECT_TABLES[object_table]
 
 
-def structural_objects(scene_dir, objects):
+def structural_objects(scene_dir, objects, object_table='gt'):
     """Load non-OLT scene instances for structural reference evidence only."""
     path=scene_dir/'scene_instances.json'
     if not path.exists():
         return []
     known={obj['bbox_id'] for obj in objects}
-    return [obj for obj in load_objects(path) if obj['bbox_id'] not in known]
+    structural = [obj for obj in load_objects(path) if obj['bbox_id'] not in known]
+    from v4_policy import v72_enabled
+    if v72_enabled() and object_table == 'pred':
+        # The author's predicted OLT excludes wall/floor/ceiling. Keep their
+        # geometry, but do not inject ScanNet's annotated categories as references.
+        structural = [{**obj, 'target': 'object'} for obj in structural]
+    return structural
 
 
 def select_objects(names, objects):
@@ -279,6 +285,8 @@ def main():
 
 
 def run_query(scene_dir, query, out, query_source='manually authored exploratory query, NOT an Nr3D benchmark annotation', mode='baseline', review_limit=6, object_table='pred'):
+    from run_storage import ensure_run_writable
+    ensure_run_writable(out)
     if mode not in MODES:
         raise ValueError('未知实验模式')
     if review_limit<1:raise ValueError('review-limit must be positive')
@@ -286,7 +294,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
     prior_pipeline_latency = 0
     objects_path=object_table_path(scene_dir,object_table)
     objects=load_objects(objects_path)
-    structural=structural_objects(scene_dir,objects) if mode in ('diagnostic','active_diagnostic') else []
+    structural=structural_objects(scene_dir,objects,object_table) if mode in ('diagnostic','active_diagnostic') else []
     geometry_objects=objects+structural
     out.mkdir(parents=True,exist_ok=True)
     calls=[]
@@ -407,7 +415,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                           query_syntax=parsed.get('query_syntax', {}),
                           prediction_source=prediction['prediction_source'])
             prediction.update(mode=mode,object_table=object_table,objects_file=objects_path.name,
-                              decision_backend=trace['decision_backend'],planner_input='text_only',
+                              decision_backend=trace['decision_backend'],planner_input=trace['planner_input'],
                               visual_backend=api_provider(),
                               gt_categories_supplied_to_model=object_table=='gt',query_target_id_supplied_to_model=False,
                               pipeline_latency_s=round(perf_counter()-started+prior_pipeline_latency,4),api_calls=len(calls),
@@ -418,6 +426,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                 prediction['api_attempts'] = sum(actual_attempts(c) for c in calls)
                 prediction['recovery_attempts'] = sample_recovery.get()['attempts']
                 prediction['recovery_budget_exhausted'] = sample_recovery.get()['used']
+            record['planner_input'] = trace['planner_input']
             (out/'prediction.json').write_text(json.dumps(prediction,ensure_ascii=False,indent=2))
             if v5_enabled() and not prediction.get('review_failed'):
                 (out/'pending_review.json').unlink(missing_ok=True)

@@ -52,13 +52,19 @@ ATTRIBUTES = obj({'Attributes': array(ATTRIBUTE)})
 def planner_schema(known_ids, target_ids):
     focus = {'type': 'array', 'items': {'type': 'integer', 'enum': sorted(set(known_ids))},
              'minItems': 1, 'maxItems': 6}
-    return obj({'action': enum('evidence', 'finish', 'stop'), 'reason': REASON,
+    schema = obj({'action': enum('evidence', 'finish', 'stop'), 'reason': REASON,
         'dimension': nullable(enum('viewpoint', 'position', 'distance', 'appearance', 'size')),
         'predicted_id': {'type': ['integer', 'null'], 'enum': sorted(set(target_ids)) + [None]},
         'inspect': nullable({'type': 'boolean'}), 'focus_ids': nullable(focus),
         'azimuth_deg': nullable({'type': 'number', 'minimum': 0, 'exclusiveMaximum': 360}),
         'elevation_deg': nullable({'type': 'number', 'minimum': 10, 'maximum': 75}),
         'context': nullable(enum('scene', 'isolated'))})
+    from v4_policy import v73_enabled
+    if v73_enabled():
+        schema['properties']['inspect']['description'] = 'Only for size/position/distance evidence. Null for appearance (always renders), viewpoint, finish and stop.'
+        schema['properties']['context']['description'] = 'Only for appearance evidence. Null for other dimensions and finish/stop; geometry inspection uses a fixed comparison panel.'
+        schema['properties']['predicted_id']['description'] = 'Only for finish. Null for evidence and stop.'
+    return schema
 
 
 ATTRIBUTE_CHECK = obj({'attribute': TEXT, 'verdict': VERDICT,

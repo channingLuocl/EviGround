@@ -1,0 +1,46 @@
+{
+  "summary": {
+    "recorded_rejections": 144,
+    "valid_after_fix": 135
+  },
+  "remaining_invalid_actions": [
+    {
+      "case": "q00118",
+      "error": "appearance needs 1-6 distinct known focus_ids including a remaining target"
+    },
+    {
+      "case": "q00118",
+      "error": "appearance needs 1-6 distinct known focus_ids including a remaining target"
+    },
+    {
+      "case": "q00118",
+      "error": "appearance needs 1-6 distinct known focus_ids including a remaining target"
+    },
+    {
+      "case": "q00118",
+      "error": "appearance needs 1-6 distinct known focus_ids including a remaining target"
+    },
+    {
+      "case": "q00118",
+      "error": "appearance needs 1-6 distinct known focus_ids including a remaining target"
+    },
+    {
+      "case": "q00118",
+      "error": "appearance needs 1-6 distinct known focus_ids including a remaining target"
+    },
+    {
+      "case": "q00118",
+      "error": "appearance needs 1-6 distinct known focus_ids including a remaining target"
+    },
+    {
+      "case": "q00118",
+      "error": "appearance needs 1-6 distinct known focus_ids including a remaining target"
+    },
+    {
+      "case": "q00118",
+      "error": "appearance needs 1-6 distinct known focus_ids including a remaining target"
+    }
+  ],
+  "scope": "Validator replay of recorded requests only; no accuracy inference",
+  "implementation_version": "relative-size-v7.3"
+}

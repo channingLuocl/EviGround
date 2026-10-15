@@ -1,0 +1,385 @@
+{
+  "old_new_cases": 33,
+  "old_correct": 3,
+  "old_null": 29,
+  "old_errors": 3,
+  "old_api_failures": [
+    {
+      "csv_row": 21,
+      "failure_kind": "response_schema",
+      "finish_reason": "length",
+      "stage": "active_relations_visual_check",
+      "validation_error": "Incomplete response"
+    },
+    {
+      "csv_row": 63,
+      "failure_kind": "response_schema",
+      "finish_reason": "length",
+      "stage": "active_relations_visual_check",
+      "validation_error": "Incomplete response"
+    },
+    {
+      "csv_row": 214,
+      "failure_kind": "response_schema",
+      "finish_reason": "length",
+      "stage": "active_relations_visual_check",
+      "validation_error": "Incomplete response"
+    }
+  ],
+  "old_missing_counts": {
+    "unsupported relation: to the far left hand side of the taller  desk": 1,
+    "unhandled condition: with the computer monitor on it": 1,
+    "direction condition not represented": 3,
+    "parsed reference has no represented relation/observer role": 15,
+    "appearance attribute has no represented target/reference role": 2,
+    "unhandled condition: grouped together": 1,
+    "observer origin or facing direction is unspecified": 8,
+    "unsupported relation: on the bed": 2,
+    "unhandled condition: of the group of pillows": 1,
+    "category/appearance evidence is uncertain or unreviewed": 12,
+    "observer origin/facing category has no detected instance": 4,
+    "unsupported relation: at the bottom of the stack": 1,
+    "unhandled condition: The middle box of the stack": 1,
+    "unsupported relation: in the corner": 1,
+    "corner/ordinal/support/extreme conditions require additional predicates": 2,
+    "vertical relation geometry is uncertain at an alignment boundary or with unproved box separation": 4,
+    "relation target is not the bound target category": 1,
+    "unsupported relation: second from the back of the row": 1,
+    "unhandled condition: second from the back of the row": 1,
+    "near has no calibrated predicate; distances are evidence only": 4,
+    "unsupported relation: between the two beds": 1,
+    "missing reference category: window": 1,
+    "unhandled condition: The lamp not next to the beds.": 1,
+    "negation/exclusion is unsupported": 2,
+    "proximity condition not represented": 2,
+    "unsupported relation: The lamp on the nightstand.": 1,
+    "unhandled condition: The lamp on the nightstand.": 1,
+    "unhandled condition: It is the only lamp attached to the wall": 1,
+    "unhandled condition: sitting on the loveseat": 1,
+    "observer reference size comparison is not jointly bound to its frame: large": 1,
+    "relation evidence has unresolved binding: reference size is unresolved": 1,
+    "candidate relation exclusion lacks complete fail evidence: 10": 1,
+    "relation evidence has unresolved binding: reference category/appearance is unresolved": 2,
+    "unhandled condition: not next to the pink dollhouse": 1,
+    "reference size conditions lack complete evidence": 1,
+    "missing reference category: step ladder": 1,
+    "object-intrinsic facing orientation is unavailable: Facing foot of bed": 1,
+    "unhandled condition: Facing foot of bed": 1,
+    "facing direction has no supporting quote/category": 1
+  },
+  "regression_selection": "Eight prior null cases selected before new inference; first four correct responses retained after schema refinement; no rerun of correct examples.",
+  "comparisons": [
+    {
+      "csv_row": 12,
+      "query": "The chair to the far left hand side of the taller  desk with the computer monitor on it",
+      "v73": {
+        "predicted_id": null,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 7,
+        "pipeline_latency_s": 48.3241,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_3_nr3d_val_full_gt/q00012/prediction.json"
+      },
+      "v74_initial": {
+        "predicted_id": null,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 15.0041,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00012/prediction.json"
+      },
+      "v74_final_or_cached": {
+        "predicted_id": 0,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 19.2926,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_final_20261014/q00012/prediction.json"
+      }
+    },
+    {
+      "csv_row": 20,
+      "query": "The desk beneath the clock on the right hand side of the two desks grouped together",
+      "v73": {
+        "predicted_id": null,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 8,
+        "pipeline_latency_s": 31.0589,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_3_nr3d_val_full_gt/q00020/prediction.json"
+      },
+      "v74_initial": {
+        "predicted_id": 13,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 15.0179,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00020/prediction.json"
+      },
+      "v74_final_or_cached": {
+        "predicted_id": 13,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 14.6046,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_final_20261014/q00020/prediction.json"
+      }
+    },
+    {
+      "csv_row": 21,
+      "query": "The pillow on the bed that is on the far end of the room and is at the rear and right hand side of the bed",
+      "v73": {
+        "predicted_id": null,
+        "correct": false,
+        "error": "Inference process exit code 1; see /Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_3_nr3d_val_full_gt/q00021/console.log",
+        "correct_cache_imported": null,
+        "api_attempts": 5,
+        "pipeline_latency_s": 114.2256,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_3_nr3d_val_full_gt/q00021/prediction.json"
+      },
+      "v74_initial": {
+        "predicted_id": 46,
+        "correct": true,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 15.854,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00021/prediction.json"
+      },
+      "v74_final_or_cached": {
+        "predicted_id": 46,
+        "correct": true,
+        "error": null,
+        "correct_cache_imported": true,
+        "api_attempts": 2,
+        "pipeline_latency_s": 15.854,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00021/prediction.json"
+      }
+    },
+    {
+      "csv_row": 34,
+      "query": "The box at the bottom of the stack",
+      "v73": {
+        "predicted_id": null,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 8,
+        "pipeline_latency_s": 109.2555,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_3_nr3d_val_full_gt/q00034/prediction.json"
+      },
+      "v74_initial": {
+        "predicted_id": null,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 10.6656,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00034/prediction.json"
+      },
+      "v74_final_or_cached": {
+        "predicted_id": 4,
+        "correct": true,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 10.9682,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_final_20261014/q00034/prediction.json"
+      }
+    },
+    {
+      "csv_row": 147,
+      "query": "'The lamp between the two beds.'",
+      "v73": {
+        "predicted_id": null,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 7,
+        "pipeline_latency_s": 78.9165,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_3_nr3d_val_full_gt/q00147/prediction.json"
+      },
+      "v74_initial": {
+        "predicted_id": 38,
+        "correct": true,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 11.9834,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00147/prediction.json"
+      },
+      "v74_final_or_cached": {
+        "predicted_id": 38,
+        "correct": true,
+        "error": null,
+        "correct_cache_imported": true,
+        "api_attempts": 2,
+        "pipeline_latency_s": 11.9834,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00147/prediction.json"
+      }
+    },
+    {
+      "csv_row": 171,
+      "query": "'The lamp not next to the beds.'",
+      "v73": {
+        "predicted_id": null,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 6,
+        "pipeline_latency_s": 91.021,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_3_nr3d_val_full_gt/q00171/prediction.json"
+      },
+      "v74_initial": {
+        "predicted_id": 12,
+        "correct": true,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 12.4159,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00171/prediction.json"
+      },
+      "v74_final_or_cached": {
+        "predicted_id": 12,
+        "correct": true,
+        "error": null,
+        "correct_cache_imported": true,
+        "api_attempts": 2,
+        "pipeline_latency_s": 12.4159,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00171/prediction.json"
+      }
+    },
+    {
+      "csv_row": 214,
+      "query": "Looking up from the end of the bed, choose the pillow on the very bottom of the left side of the bed.  It is right touching the stool.",
+      "v73": {
+        "predicted_id": null,
+        "correct": false,
+        "error": "Inference process exit code 1; see /Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_3_nr3d_val_full_gt/q00214/console.log",
+        "correct_cache_imported": null,
+        "api_attempts": 5,
+        "pipeline_latency_s": 69.4177,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_3_nr3d_val_full_gt/q00214/prediction.json"
+      },
+      "v74_initial": {
+        "predicted_id": 43,
+        "correct": true,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 14.3039,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00214/prediction.json"
+      },
+      "v74_final_or_cached": {
+        "predicted_id": 43,
+        "correct": true,
+        "error": null,
+        "correct_cache_imported": true,
+        "api_attempts": 2,
+        "pipeline_latency_s": 14.3039,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00214/prediction.json"
+      }
+    },
+    {
+      "csv_row": 219,
+      "query": "shoes are between couch and bed",
+      "v73": {
+        "predicted_id": null,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 43.4915,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_3_nr3d_val_full_gt/q00219/prediction.json"
+      },
+      "v74_initial": {
+        "predicted_id": null,
+        "correct": false,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 12.5942,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_20261014/q00219/prediction.json"
+      },
+      "v74_final_or_cached": {
+        "predicted_id": 23,
+        "correct": true,
+        "error": null,
+        "correct_cache_imported": null,
+        "api_attempts": 2,
+        "pipeline_latency_s": 11.2596,
+        "prediction_path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_null_regression_final_20261014/q00219/prediction.json"
+      }
+    }
+  ],
+  "final_cumulative_regression": {
+    "correct": 6,
+    "wrong_id": 2,
+    "null": 0,
+    "cases": 8
+  },
+  "verification": {
+    "unittest_total": 69,
+    "unittest_pass": 68,
+    "unittest_skip": 1
+  },
+  "limitations": [
+    "Small failure-selected regression, not full-corpus accuracy.",
+    "Final 8-case result reuses four successes from an earlier v7.4 development revision.",
+    "Historical success reuse is cumulative_ever_correct, not a single-version accuracy estimate.",
+    "Unresolved reference/viewpoint inference still causes wrong IDs."
+  ],
+  "code_sha256": {
+    "replay_module_acceptance.py": "8b885ab3427b19efc4b373d0ed76fa035d09bf05be499d2fb7c9f61b0b47eafe",
+    "v7_evidence.py": "23cf57bf9c619a7b4083c0e1fd696c7a9bf7e338bc6dfced5b06935ec29ea3d9",
+    "batch_progress.py": "71f3149cbec799545bd8a66e905432cc8a7ffb4b84da9fc941874a9175d09c86",
+    "validate_v4_offline.py": "286ce5294e12197ebb5c8842224acddf6c1825cf20f32f8e2d8b91f4611a59c6",
+    "qwen_api.py": "283b522799472c57bb404856ebc72639d53ea15ed034b5d983e7ced0a7650ed9",
+    "metrics.py": "0c12f9a00230d51ca5d20a9b08411ab7dfea01eb5aa561da73debb9c0daea687",
+    "visual_review.py": "1b8bf90753a7953c4c979ae445a7d5f5d6633c1cc3e124346000e51a17353f09",
+    "run.py": "1d0a8e05a87bf697daee8b489bd452f7ea15f9913e3c3155b728dd3e5f412262",
+    "inspect_active_trace.py": "b5055aa26f1c1a4b1e66bb96c6441ebe8f8a9515521075abebe693bed09333fe",
+    "prepare_size_validation.py": "00ca331dc2e03fc3f10e9d9e5e95f9187ee83492b96afe0b37be3d1fffded826",
+    "replay_v3_validation.py": "920eb5f996eb5e659ddee7fd7a7270a5f8d7dbbe64a5f1722b8ff52de12a3fd2",
+    "query_graph.py": "16fed13dbaf6a5ba8160c368f54c7e8a5277b90e0563810a59fd3d4953c442d1",
+    "replay_evidence_gate.py": "d9580eecbac6e2d3488b49fa7f73e6fb158b7b7b41f37e45c94319bcff542b4d",
+    "batch_nr3d_upstream_gpu.py": "5edd597a741146dda640a24f4cb7f47b5fad29a839490a9f0247cf059a285fbf",
+    "prepare_scene.py": "7dce75df6d3cb50afffd63235a51b2cb4f5e78de5fde98e3ec58435c36b705a0",
+    "v74_grounding.py": "90975a628164607d526df405c14b60499923d19f88241b979f4ef4cfaafc8d45",
+    "v4_policy.py": "04a7f7a04c737673ca7af4774a3c7c67e744a24140b6f87c14b7ded6e0220f70",
+    "query_syntax.py": "cd6b72d8778a8ba0ba35e8c84dab1b419186dac8b17e357451cb02e90958dcf7",
+    "render_upstream_gpu.py": "d5b97eed156adde9aa1bf9c837960ec276a3d9144a5a8f87ec3a1e4e37544ae6",
+    "wall_geometry.py": "cd5054c728e4eeb0699f55eec2a31de1ac4572a5e5a8c51171a8e311b34a057d",
+    "active_diagnostic.py": "928e6d43f58d42858c7ba1689285803fa2d1b6734dac51271d8787b4a0461a79",
+    "paired_nr3d.py": "de7919e18fc39071d893d953564518d1acd0335f56bc0c60cf087d5b0b03e6f6",
+    "run_module_acceptance.py": "b41a567a309d4c2aa5916bb484abe8db7dba231773bc50a93c4e1bd00f0e434c",
+    "probe_chat_api.py": "5f962916faf93cb61144a6db021f532ed3d10ac825831164e54fd58a93b898fa",
+    "rgb_review.py": "423147691529f1fb3bff700793d863cf1a31a458dfd8ec80d84cf9c0564e5e39",
+    "appearance_evidence.py": "c1097004bae0cda565bc666f0002abed316739e1a8e4b891dfd6f067139e3aeb",
+    "select_full_validation.py": "290fa6952b3d5370f1735e54363fb4feaf74b1ece8d83380e28c3031074be946",
+    "query_rewrite.py": "ce798eb88a59d5cc72ec99903c77cefc8ccb86fb62e89348c5472e444f4af631",
+    "decision_replay.py": "8e777f002fd7eb2a65430d89014fec7c5da64a14d87757386b223d945c440ffe",
+    "react_decision.py": "504faae468d1737f5b8e07c6a22d5e1596c1c3aea387829a715d5a8c0585f7df",
+    "size_semantics.py": "624ce7be831982466a35d640cdf254326180aa6ea74de6c2f125e8b9c94cc91d",
+    "run_size_validation.py": "8e71d22da9f54e907bcba6335a3d55efd0b6c6e262f62c968c2dceacc4d5ed86",
+    "decision_api.py": "f57f7bedb374a22e09be2c2b5c9c5dea610c6231bd3899e49f71c97f582afc98",
+    "diagnostic.py": "e3f233038ebcf0f0a30c7e42ae6ecaf6f776fa72f752a2f603f6c80216948b6e",
+    "object_geometry.py": "26715b4b65512d8007a77db1ce87dbef2594f0aceadda054d574be6dc7c8ea5f",
+    "v5_runtime.py": "a951a839c2b5516f1b22c1590ae5dca210a9b529db2947ee98aa81b6e57bb4d8",
+    "real_scene.py": "1499cb1d48dbf98df209a79a91901f4600ffb1865d1288b8c0798c06ead79950",
+    "category_review.py": "75d8e3754b220c595e46699bae12e9069455327090d4685c647b9d8f7893e1da",
+    "response_schemas.py": "a3c7f063a2da75a342a4ad0a19872c8a5b1fe58f6d02c9a176b73ac04bc4fd5a",
+    "select_size_validation.py": "8ee05bdea32151e38e0d0fa3b556fd89b0f4a253766c2df643fca947c9a3fdb0",
+    "v4_relations.py": "e001ac46457b40985de866f4171eb849ec9d89a6691753f8b940275be16e9385",
+    "ground_upstream_gpu.py": "11173cf68d711b32a2a2157ee2ecaa4b94fb5bc84cccb44e21e56c2580024f46",
+    "evidence.py": "051f7d730fd7bd3394f6347b8598e8ea864e2e9c6587eb63b42d751e43ee59dc",
+    "v4_visual.py": "30c395f3d2461afda9813ecf88a58f78bd356ba103b77f801d7b3b8cecfd16cd",
+    "batch_nr3d.py": "5f168a8c5446112daab62edbace068abda67814d141adba01d3beece8a1843a1"
+  }
+}

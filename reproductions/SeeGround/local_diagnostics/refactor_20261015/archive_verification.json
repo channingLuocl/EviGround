@@ -1,0 +1,37 @@
+{
+  "status": "verified",
+  "file_count": 68683,
+  "uncompressed_bytes": 8260968095,
+  "compressed_bytes": 4721254713,
+  "archive_sha256": "be96c573753b5051ae59ce199907b75cce0821dd070e52e861e5e48453bdc88f",
+  "verification": "Source bytes were hashed while packing; every archived member was read and compared with those hashes in the initial packaging pass. This final inventory was reconstructed from that validated archive.",
+  "source_directories_count": 26,
+  "all_7805_final_evaluations_archived": true,
+  "unarchived_prediction_or_log_references": [
+    {
+      "csv_row": 5147,
+      "key": "prediction_path",
+      "path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_nr3d_val_full_gt/q05147/prediction.json",
+      "exists": false
+    },
+    {
+      "csv_row": 24075,
+      "key": "prediction_path",
+      "path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_nr3d_val_full_gt/q24075/prediction.json",
+      "exists": false
+    },
+    {
+      "csv_row": 24079,
+      "key": "prediction_path",
+      "path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_nr3d_val_full_gt/q24079/prediction.json",
+      "exists": false
+    },
+    {
+      "csv_row": 39880,
+      "key": "prediction_path",
+      "path": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v7_4_nr3d_val_full_gt/q39880/prediction.json",
+      "exists": false
+    }
+  ],
+  "missing_prediction_files_explanation": "The four failed inference rows never produced prediction.json; their evaluations and console logs are archived. No generated prediction/log reference is missing."
+}

@@ -1,11 +1,11 @@
 {
-  "endpoint": "http://106.14.25.135:3000/v1",
-  "model": "gpt-6.1-sol",
+  "endpoint": "https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1",
+  "model": "qwen3.7-plus",
   "requests": [
     {
       "name": "simple_json",
       "request": {
-        "model": "gpt-6.1-sol",
+        "model": "qwen3.7-plus",
         "messages": [
           {
             "role": "user",
@@ -18,26 +18,31 @@
         }
       },
       "http_status": 200,
-      "request_id": "b0e788c5-578e-4319-aaec-eafd9d8721b7",
-      "response_body": "{\"id\":\"resp_0ce92057ec7d48ad016acd93a1f0008199b112a20761eaaeb5\",\"object\":\"chat.completion\",\"created\":1791857572,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true,\\\"kind\\\":\\\"text\\\"}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":4237,\"completion_tokens\":16,\"total_tokens\":4253,\"prompt_tokens_details\":{\"cached_tokens\":4096}},\"service_tier\":\"default\"}",
+      "request_id": "45e24d41-a94d-4337-a642-47ff10f8f8b6",
+      "response_body": "{\"id\":\"chatcmpl-45e24d41-a94d-4337-a642-47ff10f8f8b6\",\"object\":\"chat.completion\",\"created\":1791946492,\"model\":\"qwen3.7-plus\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"reasoning_content\":\"Thinking Process:\\n\\n1.  **Analyze the Request:** The user is asking for a specific JSON object: `{\\\"ok\\\":true,\\\"kind\\\":\\\"text\\\"}`.\\n2.  **Analyze the Constraints:** \\\"Return *only* the JSON object...\\\". This means no conversational filler, no markdown formatting (unless strictly part of the JSON, but usually raw JSON is preferred when \\\"only\\\" is specified, or just the exact string requested).\\n3.  **Formulate the Output:** `{\\\"ok\\\":true,\\\"kind\\\":\\\"text\\\"}`\\n4.  **Verify:** Does the output match the requested JSON exactly? Yes. Are there any extra characters? No.\\n\\nLet's output exactly `{\\\"ok\\\":true,\\\"kind\\\":\\\"text\\\"}`.\\nWait, should I include markdown code blocks? \\\"Return only the JSON object\\\" usually means the raw string. I will provide just the raw string.\\n`{\\\"ok\\\":true,\\\"kind\\\":\\\"text\\\"}`\\nDone.\",\"content\":\"{\\\"ok\\\":true,\\\"kind\\\":\\\"text\\\"}\"},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":27,\"total_tokens\":242,\"completion_tokens\":215,\"prompt_tokens_details\":{\"cached_tokens\":0,\"text_tokens\":27},\"completion_tokens_details\":{\"reasoning_tokens\":203,\"text_tokens\":215}}}",
       "content": "{\"ok\":true,\"kind\":\"text\"}",
       "finish_reason": "stop",
       "usage": {
-        "prompt_tokens": 4237,
-        "completion_tokens": 16,
-        "total_tokens": 4253,
+        "prompt_tokens": 27,
+        "total_tokens": 242,
+        "completion_tokens": 215,
         "prompt_tokens_details": {
-          "cached_tokens": 4096
+          "cached_tokens": 0,
+          "text_tokens": 27
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 203,
+          "text_tokens": 215
         }
       },
       "valid_json_object": true,
       "expected_fields_match": true,
-      "latency_s": 4.532
+      "latency_s": 4.479
     },
     {
       "name": "plain_text_control",
       "request": {
-        "model": "gpt-6.1-sol",
+        "model": "qwen3.7-plus",
         "messages": [
           {
             "role": "user",
@@ -47,22 +52,30 @@
         "max_completion_tokens": 512
       },
       "http_status": 200,
-      "request_id": "4e518561-b5f1-4395-b711-2b1c890222c5",
-      "response_body": "{\"id\":\"resp_0f29f2e51987c7cb016acd93a6458487d19d00434aaa4d0007\",\"object\":\"chat.completion\",\"created\":1791857576,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"PROBE_COMPLETE\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":37,\"completion_tokens\":7,\"total_tokens\":44},\"service_tier\":\"default\"}",
+      "request_id": "b2e44e6f-3ba1-44c5-b869-63e34d34d142",
+      "response_body": "{\"id\":\"chatcmpl-b2e44e6f-3ba1-44c5-b869-63e34d34d142\",\"object\":\"chat.completion\",\"created\":1791946496,\"model\":\"qwen3.7-plus\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"reasoning_content\":\"Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Condition: JSON mode interface test.\\n    *   Constraint 1: Reply with *exactly* the plain text `PROBE_COMPLETE`.\\n    *   Constraint 2: Do *not* use JSON.\\n    *   Constraint 3: Do *not* use quotes.\\n    *   Constraint 4: Do *not* use braces.\\n    *   Constraint 5: Do *not* use code fences.\\n\\n2.  **Determine the Output:**\\n    *   The required output is exactly the string: `PROBE_COMPLETE`\\n    *   No extra whitespace, no punctuation, no formatting.\\n\\n3.  **Verify Constraints:**\\n    *   Is it exactly `PROBE_COMPLETE`? Yes.\\n    *   Is it JSON? No.\\n    *   Are there quotes? No.\\n    *   Are there braces? No.\\n    *   Are there code fences? No.\\n\\n4.  **Final Output Generation:**\\n    *   `PROBE_COMPLETE`\\n    *   (Ensure no trailing newline if possible, or just standard single line output). Just the raw text.\\n\\n5.  **Final sanity check:**\\n    *   Text: PROBE_COMPLETE\\n    *   Length: 13 characters.\\n    *   Matches all negative constraints.\\n    *   Ready.\",\"content\":\"PROBE_COMPLETE\"},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":41,\"total_tokens\":345,\"completion_tokens\":304,\"prompt_tokens_details\":{\"cached_tokens\":0,\"text_tokens\":41},\"completion_tokens_details\":{\"reasoning_tokens\":298,\"text_tokens\":304}}}",
       "content": "PROBE_COMPLETE",
       "finish_reason": "stop",
       "usage": {
-        "prompt_tokens": 37,
-        "completion_tokens": 7,
-        "total_tokens": 44
+        "prompt_tokens": 41,
+        "total_tokens": 345,
+        "completion_tokens": 304,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "text_tokens": 41
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 298,
+          "text_tokens": 304
+        }
       },
       "valid_json_object": false,
-      "latency_s": 3.716
+      "latency_s": 5.716
     },
     {
       "name": "json_mode_enforcement",
       "request": {
-        "model": "gpt-6.1-sol",
+        "model": "qwen3.7-plus",
         "messages": [
           {
             "role": "user",
@@ -75,22 +88,30 @@
         }
       },
       "http_status": 200,
-      "request_id": "3140cd7f-2681-4382-b09a-002cb994a188",
-      "response_body": "{\"id\":\"resp_0742e4cd6242a97d016acd93a9b13887d18cbb7b524297b7dc\",\"object\":\"chat.completion\",\"created\":1791857580,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":\\\"PROBE_COMPLETE\\\"}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":37,\"completion_tokens\":14,\"total_tokens\":51},\"service_tier\":\"default\"}",
-      "content": "{\"response\":\"PROBE_COMPLETE\"}",
+      "request_id": "72d57615-ef03-4bab-a82a-cfeb9168b59d",
+      "response_body": "{\"id\":\"chatcmpl-72d57615-ef03-4bab-a82a-cfeb9168b59d\",\"object\":\"chat.completion\",\"created\":1791946502,\"model\":\"qwen3.7-plus\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"reasoning_content\":\"Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Condition 1: Reply with *exactly* the plain text `PROBE_COMPLETE`.\\n    *   Condition 2: Do *not* use JSON.\\n    *   Condition 3: Do *not* use quotes.\\n    *   Condition 4: Do *not* use braces.\\n    *   Condition 5: Do *not* use code fences.\\n    *   Context: \\\"JSON mode interface test\\\" (This is a distractor/prompt injection test to see if I will follow the negative constraints over the implied JSON mode, or just a standard strict instruction following test).\\n\\n2.  **Determine the Output:**\\n    *   The required output is exactly the string: `PROBE_COMPLETE`\\n    *   Check constraints:\\n        *   Is it plain text? Yes.\\n        *   Is it exactly `PROBE_COMPLETE`? Yes.\\n        *   No JSON? Yes.\\n        *   No quotes? Yes.\\n        *   No braces? Yes.\\n        *   No code fences? Yes.\\n\\n3.  **Final String Generation:**\\n    PROBE_COMPLETE\\n    (No extra whitespace, no newlines if possible, just the exact text).\",\"content\":\"{\\n  \\\"response\\\": \\\"PROBE_COMPLETE\\\"\\n}\"},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":43,\"total_tokens\":330,\"completion_tokens\":287,\"prompt_tokens_details\":{\"cached_tokens\":0,\"text_tokens\":43},\"completion_tokens_details\":{\"reasoning_tokens\":271,\"text_tokens\":287}}}",
+      "content": "{\n  \"response\": \"PROBE_COMPLETE\"\n}",
       "finish_reason": "stop",
       "usage": {
-        "prompt_tokens": 37,
-        "completion_tokens": 14,
-        "total_tokens": 51
+        "prompt_tokens": 43,
+        "total_tokens": 330,
+        "completion_tokens": 287,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "text_tokens": 43
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 271,
+          "text_tokens": 287
+        }
       },
       "valid_json_object": true,
-      "latency_s": 4.066
+      "latency_s": 5.744
     },
     {
       "name": "strict_schema_enforcement",
       "request": {
-        "model": "gpt-6.1-sol",
+        "model": "qwen3.7-plus",
         "messages": [
           {
             "role": "user",
@@ -129,26 +150,31 @@
         }
       },
       "http_status": 200,
-      "request_id": "3b9b329d-d278-44de-8987-fe3efb96077d",
-      "response_body": "{\"id\":\"resp_0ffa091c8b7d2431016acd93ad1a8c87d1a26e1c27c7808cb1\",\"object\":\"chat.completion\",\"created\":1791857583,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"marker\\\":\\\"seeground_json_probe\\\",\\\"ok\\\":true}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":79,\"completion_tokens\":54,\"total_tokens\":133,\"completion_tokens_details\":{\"reasoning_tokens\":31}},\"service_tier\":\"default\"}",
-      "content": "{\"marker\":\"seeground_json_probe\",\"ok\":true}",
+      "request_id": "a6db1a71-f870-49d6-9f17-a51ef94ad6f2",
+      "response_body": "{\"id\":\"chatcmpl-a6db1a71-f870-49d6-9f17-a51ef94ad6f2\",\"object\":\"chat.completion\",\"created\":1791946508,\"model\":\"qwen3.7-plus\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"reasoning_content\":\"Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Condition 1: Reply with *exactly* the plain text \\\"PROBE_COMPLETE\\\".\\n    *   Condition 2: Do not use JSON.\\n    *   Condition 3: Do not use quotes.\\n    *   Condition 4: Do not use braces.\\n    *   Condition 5: Do not use code fences.\\n    *   Context: \\\"JSON mode interface test\\\" (This is a distractor/context, the actual instruction overrides it to output plain text).\\n\\n2.  **Determine the Output:**\\n    *   The required string is `PROBE_COMPLETE`.\\n\\n3.  **Check Constraints:**\\n    *   Is it exactly \\\"PROBE_COMPLETE\\\"? Yes.\\n    *   Is it plain text? Yes.\\n    *   No JSON? Yes.\\n    *   No quotes? Yes.\\n    *   No braces? Yes.\\n    *   No code fences? Yes.\\n\\n4.  **Final Output Generation:**\\n    *   `PROBE_COMPLETE` (without any surrounding characters or formatting).\\n    *   Wait, the prompt says \\\"Reply with exactly the plain text PROBE_COMPLETE.\\\"\\n    *   I will output just: PROBE_COMPLETE\\n    *   No newline if possible, or just standard single line.\\n\\n5.  **Final Verification:**\\n    *   Output: PROBE_COMPLETE\\n    *   Matches all negative constraints.\\n    *   Matches the exact string requested.\\n    *   Ready.\",\"content\":\"{\\n  \\\"ok\\\": true\\n  ,\\n  \\\"marker\\\": \\\"seeground_json_probe\\\"\\n}\"},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":43,\"total_tokens\":401,\"completion_tokens\":358,\"prompt_tokens_details\":{\"cached_tokens\":0,\"text_tokens\":43},\"completion_tokens_details\":{\"reasoning_tokens\":326,\"text_tokens\":358}}}",
+      "content": "{\n  \"ok\": true\n  ,\n  \"marker\": \"seeground_json_probe\"\n}",
       "finish_reason": "stop",
       "usage": {
-        "prompt_tokens": 79,
-        "completion_tokens": 54,
-        "total_tokens": 133,
+        "prompt_tokens": 43,
+        "total_tokens": 401,
+        "completion_tokens": 358,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "text_tokens": 43
+        },
         "completion_tokens_details": {
-          "reasoning_tokens": 31
+          "reasoning_tokens": 326,
+          "text_tokens": 358
         }
       },
       "valid_json_object": true,
       "expected_fields_match": true,
-      "latency_s": 3.493
+      "latency_s": 7.233
     },
     {
       "name": "invalid_format_validation",
       "request": {
-        "model": "gpt-6.1-sol",
+        "model": "qwen3.7-plus",
         "messages": [
           {
             "role": "user",
@@ -161,15 +187,15 @@
         }
       },
       "http_status": 400,
-      "request_id": null,
-      "response_body": "{\"error\":{\"message\":\"The request could not be processed. Please check the request parameters.\",\"type\":\"invalid_request_error\",\"param\":\"\",\"code\":\"invalid_request\"}}",
+      "request_id": "d666899d-1f7a-4d45-9b16-e5e89e4df678",
+      "response_body": "{\"error\":{\"code\":\"invalid_parameter_error\",\"param\":null,\"message\":\"'response_format.type' Invalid value: 'invalid_seeground_probe'. Supported values are: 'json_object' and 'text'.\",\"type\":\"invalid_request_error\"},\"id\":\"chatcmpl-d666899d-1f7a-4d45-9b16-e5e89e4df678\"}",
       "valid_completion_response": false,
-      "latency_s": 1.72
+      "latency_s": 0.175
     },
     {
       "name": "production_parser_The largest picture in the room.",
       "request": {
-        "model": "gpt-6.1-sol",
+        "model": "qwen3.7-plus",
         "messages": [
           {
             "role": "system",
@@ -186,26 +212,31 @@
         }
       },
       "http_status": 200,
-      "request_id": "bd51e768-8e13-460d-90b0-f8339845cd0e",
-      "response_body": "{\"id\":\"resp_0fd668316b28ea93016acd93b3f3c4819ca19f726c9215fd56\",\"object\":\"chat.completion\",\"created\":1791857594,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"Target\\\":[\\\"picture\\\"],\\\"Anchor\\\":[],\\\"Relations\\\":[],\\\"Viewpoint\\\":\\\"\\\",\\\"Observer\\\":{\\\"origin\\\":{\\\"kind\\\":\\\"unspecified\\\",\\\"category\\\":\\\"\\\",\\\"phrase\\\":\\\"\\\"},\\\"facing\\\":{\\\"category\\\":\\\"\\\",\\\"group\\\":false,\\\"phrase\\\":\\\"\\\"}},\\\"Attributes\\\":[{\\\"category\\\":\\\"picture\\\",\\\"role\\\":\\\"target\\\",\\\"phrase\\\":\\\"largest picture in the room\\\"}],\\\"Unhandled\\\":[]}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":6816,\"completion_tokens\":135,\"total_tokens\":6951,\"completion_tokens_details\":{\"reasoning_tokens\":59}},\"service_tier\":\"default\"}",
-      "content": "{\"Target\":[\"picture\"],\"Anchor\":[],\"Relations\":[],\"Viewpoint\":\"\",\"Observer\":{\"origin\":{\"kind\":\"unspecified\",\"category\":\"\",\"phrase\":\"\"},\"facing\":{\"category\":\"\",\"group\":false,\"phrase\":\"\"}},\"Attributes\":[{\"category\":\"picture\",\"role\":\"target\",\"phrase\":\"largest picture in the room\"}],\"Unhandled\":[]}",
+      "request_id": "a957d5ea-3948-47aa-8ca4-55a0c777a73e",
+      "response_body": "{\"id\":\"chatcmpl-a957d5ea-3948-47aa-8ca4-55a0c777a73e\",\"object\":\"chat.completion\",\"created\":1791946516,\"model\":\"qwen3.7-plus\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"reasoning_content\":\"The user wants to parse the object description: \\\"The largest picture in the room.\\\"\\nI need to extract the target, anchor, relations, viewpoint, observer, attributes, and unhandled conditions.\\n\\nTarget: \\\"picture\\\"\\nAnchor: [] (room is the location, not an anchor for a spatial relation, or maybe it's just the scope of the comparison)\\nRelations: []\\nViewpoint: \\\"\\\"\\nObserver: {\\\"origin\\\": {\\\"kind\\\": \\\"unspecified\\\", \\\"category\\\": \\\"\\\", \\\"phrase\\\": \\\"\\\"}, \\\"facing\\\": {\\\"category\\\": \\\"\\\", \\\"group\\\": false, \\\"phrase\\\": \\\"\\\"}}\\nAttributes: [{\\\"category\\\": \\\"picture\\\", \\\"role\\\": \\\"target\\\", \\\"phrase\\\": \\\"The largest picture\\\"}] -> Wait, \\\"largest\\\" is a superlative. The instructions say: \\\"Represent smallest/largest/biggest/tallest/shortest/highest/lowest and the comparatives larger/smaller/bigger/taller/shorter as Attributes of the noun they modify, with target or reference role as quoted; do not force them onto the target.\\\"\\nWait, \\\"in the room\\\" is a modifier. Should it be an attribute or unhandled? \\\"in the room\\\" is a location. There's no \\\"in\\\" relation implemented, so it should probably go to Unhandled, or maybe it's just the scope of the superlative.\\nLet's look at the instructions:\\n\\\"Represent EVERY query condition, including appearance, corner, on-ground and negation.\\\"\\n\\\"Do not silently omit conditions; put unsupported ones in Unhandled.\\\"\\n\\\"in the room\\\" -> unsupported relation (containment/location). Put in Unhandled.\\nWait, \\\"largest\\\" is an attribute.\\nAttribute phrase: \\\"largest\\\" or \\\"The largest picture\\\"? \\\"The largest picture\\\"\\nLet's use \\\"largest\\\" as the attribute phrase, or \\\"The largest picture\\\". The instruction says \\\"phrase\\\": \\\"exact appearance/size quote\\\". So \\\"largest\\\" or \\\"The largest picture\\\". Let's use \\\"largest\\\".\\nWait, the instructions: \\\"Represent smallest/largest... as Attributes of the noun they modify, with target or reference role as quoted\\\".\\nLet's set Attribute: {\\\"category\\\": \\\"picture\\\", \\\"role\\\": \\\"target\\\", \\\"phrase\\\": \\\"largest\\\"}\\nWhat about \\\"in the room\\\"? It's a prepositional phrase indicating location. Since there's no \\\"in\\\" or \\\"inside\\\" relation, it goes to Unhandled.\\nUnhandled: [\\\"in the room\\\"]\\n\\nLet's refine:\\nTarget: [\\\"picture\\\"]\\nAnchor: []\\nRelations: []\\nViewpoint: \\\"\\\"\\nObserver: {\\\"origin\\\": {\\\"kind\\\": \\\"unspecified\\\", \\\"category\\\": \\\"\\\", \\\"phrase\\\": \\\"\\\"}, \\\"facing\\\": {\\\"category\\\": \\\"\\\", \\\"group\\\": false, \\\"phrase\\\": \\\"\\\"}}\\nAttributes: [{\\\"category\\\": \\\"picture\\\", \\\"role\\\": \\\"target\\\", \\\"phrase\\\": \\\"largest\\\"}]\\nUnhandled: [\\\"in the room\\\"]\\n\\nWait, can \\\"room\\\" be an anchor? No, it's not a spatial relation anchor.\\nIs there any other interpretation? \\\"The largest picture in the room.\\\"\\nTarget: [\\\"picture\\\"]\\nAttributes: [{\\\"category\\\": \\\"picture\\\", \\\"role\\\": \\\"target\\\", \\\"phrase\\\": \\\"largest\\\"}]\\nUnhandled: [\\\"in the room\\\"]\\n\\nLet's double check if \\\"room\\\" should be in Anchor. \\\"Anchor\\\" is for spatial relations. Since there are no spatial relations, Anchor is empty.\\nWait, \\\"in the room\\\" could be an attribute of the picture? No, it's a location.\\nLet's put \\\"in the room\\\" in Unhandled.\\n\\n```json\\n{\\n  \\\"Target\\\": [\\\"picture\\\"],\\n  \\\"Anchor\\\": [],\\n  \\\"Relations\\\": [],\\n  \\\"Viewpoint\\\": \\\"\\\",\\n  \\\"Observer\\\": {\\n    \\\"origin\\\": {\\n      \\\"kind\\\": \\\"unspecified\\\",\\n      \\\"category\\\": \\\"\\\",\\n      \\\"phrase\\\": \\\"\\\"\\n    },\\n    \\\"facing\\\": {\\n      \\\"category\\\": \\\"\\\",\\n      \\\"group\\\": false,\\n      \\\"phrase\\\": \\\"\\\"\\n    }\\n  },\\n  \\\"Attributes\\\": [\\n    {\\n      \\\"category\\\": \\\"picture\\\",\\n      \\\"role\\\": \\\"target\\\",\\n      \\\"phrase\\\": \\\"largest\\\"\\n    }\\n  ],\\n  \\\"Unhandled\\\": [\\n    \\\"in the room\\\"\\n  ]\\n}\\n```\\n\\nWait, should \\\"The\\\" be included in the attribute phrase? \\\"The largest picture\\\" -> \\\"largest\\\" is the size quote.\\n\\\"Represent smallest/largest... as Attributes of the noun they modify, with target or reference role as quoted\\\" -> \\\"largest\\\" is the quote.\\n\\nLet's review the syntax hints:\\n\\\"largest\\\" is the modifier.\\n\\\"in the room\\\" is a modifier with attachment \\\"ambiguous\\\".\\nI will put \\\"in the room\\\" in Unhandled.\\n\\nIs there any need to include \\\"room\\\" in Anchor? No, Anchor is for relations.\\nI'll output the JSON.\",\"content\":\"{\\n  \\\"Target\\\": [\\n    \\\"picture\\\"\\n  ],\\n  \\\"Anchor\\\": [],\\n  \\\"Relations\\\": [],\\n  \\\"Viewpoint\\\": \\\"\\\",\\n  \\\"Observer\\\": {\\n    \\\"origin\\\": {\\n      \\\"kind\\\": \\\"unspecified\\\",\\n      \\\"category\\\": \\\"\\\",\\n      \\\"phrase\\\": \\\"\\\"\\n    },\\n    \\\"facing\\\": {\\n      \\\"category\\\": \\\"\\\",\\n      \\\"group\\\": false,\\n      \\\"phrase\\\": \\\"\\\"\\n    }\\n  },\\n  \\\"Attributes\\\": [\\n    {\\n      \\\"category\\\": \\\"picture\\\",\\n      \\\"role\\\": \\\"target\\\",\\n      \\\"phrase\\\": \\\"largest\\\"\\n    }\\n  ],\\n  \\\"Unhandled\\\": [\\n    \\\"in the room\\\"\\n  ]\\n}\"},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":1617,\"total_tokens\":2824,\"completion_tokens\":1207,\"prompt_tokens_details\":{\"cached_tokens\":0,\"text_tokens\":1617},\"completion_tokens_details\":{\"reasoning_tokens\":1044,\"text_tokens\":1207}}}",
+      "content": "{\n  \"Target\": [\n    \"picture\"\n  ],\n  \"Anchor\": [],\n  \"Relations\": [],\n  \"Viewpoint\": \"\",\n  \"Observer\": {\n    \"origin\": {\n      \"kind\": \"unspecified\",\n      \"category\": \"\",\n      \"phrase\": \"\"\n    },\n    \"facing\": {\n      \"category\": \"\",\n      \"group\": false,\n      \"phrase\": \"\"\n    }\n  },\n  \"Attributes\": [\n    {\n      \"category\": \"picture\",\n      \"role\": \"target\",\n      \"phrase\": \"largest\"\n    }\n  ],\n  \"Unhandled\": [\n    \"in the room\"\n  ]\n}",
       "finish_reason": "stop",
       "usage": {
-        "prompt_tokens": 6816,
-        "completion_tokens": 135,
-        "total_tokens": 6951,
+        "prompt_tokens": 1617,
+        "total_tokens": 2824,
+        "completion_tokens": 1207,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "text_tokens": 1617
+        },
         "completion_tokens_details": {
-          "reasoning_tokens": 59
+          "reasoning_tokens": 1044,
+          "text_tokens": 1207
         }
       },
       "valid_json_object": true,
       "expected_fields_match": true,
-      "latency_s": 7.493
+      "latency_s": 21.617
     },
     {
       "name": "production_parser_the smaller chair",
       "request": {
-        "model": "gpt-6.1-sol",
+        "model": "qwen3.7-plus",
         "messages": [
           {
             "role": "system",
@@ -222,26 +253,31 @@
         }
       },
       "http_status": 200,
-      "request_id": "ba7668ee-fdb4-4c6b-9b7b-1a8244b9a3fd",
-      "response_body": "{\"id\":\"resp_06ec85443ca5ea70016acd93bb44e481a1b855691e8b41cf2b\",\"object\":\"chat.completion\",\"created\":1791857599,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"Target\\\":[\\\"chair\\\"],\\\"Anchor\\\":[],\\\"Relations\\\":[],\\\"Viewpoint\\\":\\\"\\\",\\\"Observer\\\":{\\\"origin\\\":{\\\"kind\\\":\\\"unspecified\\\",\\\"category\\\":\\\"\\\",\\\"phrase\\\":\\\"\\\"},\\\"facing\\\":{\\\"category\\\":\\\"\\\",\\\"group\\\":false,\\\"phrase\\\":\\\"\\\"}},\\\"Attributes\\\":[{\\\"category\\\":\\\"chair\\\",\\\"role\\\":\\\"target\\\",\\\"phrase\\\":\\\"the smaller chair\\\"}],\\\"Unhandled\\\":[]}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":6620,\"completion_tokens\":72,\"total_tokens\":6692,\"prompt_tokens_details\":{\"cached_tokens\":5120}},\"service_tier\":\"default\"}",
-      "content": "{\"Target\":[\"chair\"],\"Anchor\":[],\"Relations\":[],\"Viewpoint\":\"\",\"Observer\":{\"origin\":{\"kind\":\"unspecified\",\"category\":\"\",\"phrase\":\"\"},\"facing\":{\"category\":\"\",\"group\":false,\"phrase\":\"\"}},\"Attributes\":[{\"category\":\"chair\",\"role\":\"target\",\"phrase\":\"the smaller chair\"}],\"Unhandled\":[]}",
+      "request_id": "046f7f20-5b97-45b7-b75a-63a7597c7b5b",
+      "response_body": "{\"id\":\"chatcmpl-046f7f20-5b97-45b7-b75a-63a7597c7b5b\",\"object\":\"chat.completion\",\"created\":1791946538,\"model\":\"qwen3.7-plus\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"reasoning_content\":\"思考过程：1.  **分析输入**：\\n    *   用户JSON描述：\\\"the smaller chair\\\"\\n    *   语法提示（spacy）：\\n        *   \\\"smaller\\\" 修饰 \\\"chair\\\"\\n        *   比较级 \\\"smaller\\\"，没有明确的比较对象（reference_category: null）\\n        *   名词短语：\\\"the smaller chair\\\"\\n    *   目标：提取对象描述，返回指定的JSON格式。\\n\\n2.  **提取实体和属性**：\\n    *   Target: [\\\"chair\\\"]\\n    *   Anchor: []\\n    *   Attributes: \\\"smaller\\\" 是修饰 \\\"chair\\\" 的相对大小属性。根据规则：\\\"Represent smallest/largest/biggest/tallest/shortest/highest/lowest and the comparatives larger/smaller/bigger/taller/shorter as Attributes of the noun they modify, with target or reference role as quoted; do not force them onto the target.\\\" 这里 \\\"smaller\\\" 修饰 \\\"chair\\\"，所以 category=\\\"chair\\\", role=\\\"target\\\", phrase=\\\"smaller\\\" (或者 \\\"the smaller chair\\\" 中的 \\\"smaller\\\")。\\n    *   Relations: []\\n    *   Viewpoint: \\\"\\\"\\n    *   Observer: 默认\\n    *   Unhandled: 没有明确比较对象（\\\"smaller\\\" 相对于什么？），是否需要放入 Unhandled？规则说 \\\"Represent smallest/largest... and the comparatives larger/smaller... as Attributes... with target or reference role as quoted\\\"。这里没有 reference，所以只作为 target 的 attribute。不需要放入 Unhandled，除非有无法表示的条件。\\n\\n3.  **构建JSON**：\\n    *   Target: [\\\"chair\\\"]\\n    *   Anchor: []\\n    *   Relations: []\\n    *   Viewpoint: \\\"\\\"\\n    *   Observer: {\\\"origin\\\": {\\\"kind\\\": \\\"unspecified\\\", \\\"category\\\": \\\"\\\", \\\"phrase\\\": \\\"\\\"}, \\\"facing\\\": {\\\"category\\\": \\\"\\\", \\\"group\\\": false, \\\"phrase\\\": \\\"\\\"}}\\n    *   Attributes: [{\\\"category\\\": \\\"chair\\\", \\\"role\\\": \\\"target\\\", \\\"phrase\\\": \\\"smaller\\\"}]  (或者 \\\"the smaller chair\\\" 视具体引用要求，通常引用形容词本身或包含名词，这里用 \\\"smaller\\\")\\n    *   Unhandled: []\\n\\n    检查规则细节：\\n    \\\"Represent smallest/largest/biggest/tallest/shortest/highest/lowest and the comparatives larger/smaller/bigger/taller/shorter as Attributes of the noun they modify, with target or reference role as quoted; do not force them onto the target.\\\"\\n    所以 Attributes: `[{\\\"category\\\": \\\"chair\\\", \\\"role\\\": \\\"target\\\", \\\"phrase\\\": \\\"smaller\\\"}]`\\n\\n    检查是否有其他遗漏：\\n    \\\"the smaller chair\\\" -> 没有其他的条件。\\n\\n    最终JSON结构：\\n    ```json\\n    {\\n      \\\"Target\\\": [\\\"chair\\\"],\\n      \\\"Anchor\\\": [],\\n      \\\"Relations\\\": [],\\n      \\\"Viewpoint\\\": \\\"\\\",\\n      \\\"Observer\\\": {\\n        \\\"origin\\\": {\\n          \\\"kind\\\": \\\"unspecified\\\",\\n          \\\"category\\\": \\\"\\\",\\n          \\\"phrase\\\": \\\"\\\"\\n        },\\n        \\\"facing\\\": {\\n          \\\"category\\\": \\\"\\\",\\n          \\\"group\\\": false,\\n          \\\"phrase\\\": \\\"\\\"\\n        }\\n      },\\n      \\\"Attributes\\\": [\\n        {\\n          \\\"category\\\": \\\"chair\\\",\\n          \\\"role\\\": \\\"target\\\",\\n          \\\"phrase\\\": \\\"smaller\\\"\\n        }\\n      ],\\n      \\\"Unhandled\\\": []\\n    }\\n    ```\\n\\n    确认 \\\"smaller\\\" 的 phrase 是否需要包含 \\\"the\\\" 或 \\\"chair\\\"？规则说 \\\"exact appearance/size quote\\\"，\\\"smaller\\\" 是准确的。\\n    确认 \\\"role\\\" 字段：规则中提到 `\\\"role\\\":\\\"target|reference\\\"`，在 Attributes 中需要包含。\\n    确认 Target 和 Anchor 是数组。\\n    确认 Relations 是数组。\\n    确认没有拼写错误。\\n    完成。\\n    注意：在系统提示中，Attributes 的定义是 `\\\"Attributes\\\":[{\\\"category\\\":\\\"category\\\",\\\"role\\\":\\\"target|reference\\\",\\\"phrase\\\":\\\"exact appearance/size quote\\\"}]`。\\n    所以 `{\\\"category\\\": \\\"chair\\\", \\\"role\\\": \\\"target\\\", \\\"phrase\\\": \\\"smaller\\\"}` 是正确的。\\n    没有其他需要处理的。\\n    输出纯JSON。\",\"content\":\"{\\n  \\\"Target\\\": [\\n    \\\"chair\\\"\\n  ],\\n  \\\"Anchor\\\": [],\\n  \\\"Relations\\\": [],\\n  \\\"Viewpoint\\\": \\\"\\\",\\n  \\\"Observer\\\": {\\n    \\\"origin\\\": {\\n      \\\"kind\\\": \\\"unspecified\\\",\\n      \\\"category\\\": \\\"\\\",\\n      \\\"phrase\\\": \\\"\\\"\\n    },\\n    \\\"facing\\\": {\\n      \\\"category\\\": \\\"\\\",\\n      \\\"group\\\": false,\\n      \\\"phrase\\\": \\\"\\\"\\n    }\\n  },\\n  \\\"Attributes\\\": [\\n    {\\n      \\\"category\\\": \\\"chair\\\",\\n      \\\"role\\\": \\\"target\\\",\\n      \\\"phrase\\\": \\\"smaller\\\"\\n    }\\n  ],\\n  \\\"Unhandled\\\": []\\n}\"},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":1409,\"total_tokens\":2508,\"completion_tokens\":1099,\"prompt_tokens_details\":{\"cached_tokens\":0,\"text_tokens\":1409},\"completion_tokens_details\":{\"reasoning_tokens\":946,\"text_tokens\":1099}}}",
+      "content": "{\n  \"Target\": [\n    \"chair\"\n  ],\n  \"Anchor\": [],\n  \"Relations\": [],\n  \"Viewpoint\": \"\",\n  \"Observer\": {\n    \"origin\": {\n      \"kind\": \"unspecified\",\n      \"category\": \"\",\n      \"phrase\": \"\"\n    },\n    \"facing\": {\n      \"category\": \"\",\n      \"group\": false,\n      \"phrase\": \"\"\n    }\n  },\n  \"Attributes\": [\n    {\n      \"category\": \"chair\",\n      \"role\": \"target\",\n      \"phrase\": \"smaller\"\n    }\n  ],\n  \"Unhandled\": []\n}",
       "finish_reason": "stop",
       "usage": {
-        "prompt_tokens": 6620,
-        "completion_tokens": 72,
-        "total_tokens": 6692,
+        "prompt_tokens": 1409,
+        "total_tokens": 2508,
+        "completion_tokens": 1099,
         "prompt_tokens_details": {
-          "cached_tokens": 5120
+          "cached_tokens": 0,
+          "text_tokens": 1409
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 946,
+          "text_tokens": 1099
         }
       },
       "valid_json_object": true,
       "expected_fields_match": true,
-      "latency_s": 4.896
+      "latency_s": 19.452
     },
     {
       "name": "image_json",
       "request": {
-        "model": "gpt-6.1-sol",
+        "model": "qwen3.7-plus",
         "messages": [
           {
             "role": "user",
@@ -263,21 +299,27 @@
         }
       },
       "http_status": 200,
-      "request_id": "9a1941bd-18b6-4dcb-9494-e8cbf8e68759",
-      "response_body": "{\"id\":\"resp_01455d911c275651016acd93c07fd48190b949a3ad7cc831b9\",\"object\":\"chat.completion\",\"created\":1791857603,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true,\\\"kind\\\":\\\"image\\\",\\\"dominant_color\\\":\\\"red\\\"}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":4256,\"completion_tokens\":22,\"total_tokens\":4278,\"prompt_tokens_details\":{\"cached_tokens\":4096}},\"service_tier\":\"default\"}",
+      "request_id": "cfb7f7b0-9c43-4f97-aa0b-e6b9db14b860",
+      "response_body": "{\"id\":\"chatcmpl-cfb7f7b0-9c43-4f97-aa0b-e6b9db14b860\",\"object\":\"chat.completion\",\"created\":1791946558,\"model\":\"qwen3.7-plus\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"reasoning_content\":\"The user wants me to identify the dominant color of the provided image.\\n1.  **Analyze the image:** The image is a solid block of bright red color. There are no other shapes, patterns, or colors visible.\\n2.  **Determine the color:** The color is clearly red (hex code roughly #FF0000).\\n3.  **Check condition:** The user asks to return a specific JSON object *if* the image is red.\\n4.  **Formulate response:** Since the image is red, I will return the requested JSON.\",\"content\":\"{\\\"ok\\\":true,\\\"kind\\\":\\\"image\\\",\\\"dominant_color\\\":\\\"red\\\"}\"},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":107,\"total_tokens\":246,\"completion_tokens\":139,\"prompt_tokens_details\":{\"cached_tokens\":0,\"image_tokens\":66,\"text_tokens\":41},\"completion_tokens_details\":{\"reasoning_tokens\":120,\"text_tokens\":18}}}",
       "content": "{\"ok\":true,\"kind\":\"image\",\"dominant_color\":\"red\"}",
       "finish_reason": "stop",
       "usage": {
-        "prompt_tokens": 4256,
-        "completion_tokens": 22,
-        "total_tokens": 4278,
+        "prompt_tokens": 107,
+        "total_tokens": 246,
+        "completion_tokens": 139,
         "prompt_tokens_details": {
-          "cached_tokens": 4096
+          "cached_tokens": 0,
+          "image_tokens": 66,
+          "text_tokens": 41
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 120,
+          "text_tokens": 18
         }
       },
       "valid_json_object": true,
       "expected_fields_match": true,
-      "latency_s": 4.084
+      "latency_s": 3.251
     }
   ]
 }

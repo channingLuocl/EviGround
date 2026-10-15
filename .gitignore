@@ -8,6 +8,7 @@ __pycache__/
 .DS_Store
 # Generated outputs and downloaded assets
 local_outputs/
+archives/
 *.pth
 *.pt
 *.pkl
