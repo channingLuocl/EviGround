@@ -105,6 +105,20 @@ PointNeXt/OpenShape 的公开权重是网络参数，不是作者预测标签。
 
 本机为 Apple Silicon，不能运行此 CUDA 推理路径。已核验 PointNeXt 文件 SHA-256，并在 CPU 上检查全部 83 项 state dict 严格匹配、256×512 语义投影完整；结构检查临时屏蔽了 CUDA 扩展导入，没有执行模型前向。GPU 算子编译、真实前向和准确率须由服务器试跑确认。
 
+2026-10-16 服务器验证：RTX 4090 24GB、Python 3.12、PyTorch 2.8.0+cu128、CUDA toolkit 12.8，PointNeXt 算子已编译并成功执行真实单实例前向。`scene0500_00 / 12` 预测 `chair`，GT 为 `chair`，错误数为 0；这只验证链路，不代表子集准确率。服务器无法访问 Hugging Face，使用上述离线公共类别文本特征，文件 SHA-256 为 `688e544d8914c3444648156a48b0260fa730b0ed8bd962195e550f1c0678dac0`。
+
+该服务器已配置的 100 实例命令：
+
+```bash
+cd /root/paper-v8.2/reproductions/SeeGround
+SEEGROUND_V82_PYTHON="$PWD/.venv-v82/bin/python" \
+local/run_v8_2_categories.sh --limit 100 \
+  --text-features weights/v82_clip_text_features.npz \
+  --output local_outputs/v8_2_pointnext_100
+```
+
+已传输固定 100 实例对应的 66 个场景点云和全部 130 个场景的实例 ID/评估表，数据目录为 `/root/autodl-tmp/seeground-v82-scenes`，通过 `local_outputs` 软链接使用。目前扩大子集前仍需补充其余场景的点云文件。
+
 离线测试：
 
 ```bash
