@@ -168,3 +168,7 @@ data/scanrefer/
 
 # Local API exploration
 local_outputs/
+
+# Downloaded v8.2 model assets and its isolated environment.
+weights/*.pth
+.venv-v82/

@@ -1,6 +1,6 @@
 import sys
 import os
-pointnext_dir = './models/pointnext/PointNeXt'
+pointnext_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'PointNeXt')
 
 def add_path_recursive(directory):
     sys.path.append(directory)
@@ -16,7 +16,7 @@ from openpoints.models import build_model_from_cfg
 from openpoints.utils import cal_model_parm_nums
 
 def PointNEXT():
-    cfg_path = './models/pointnext/pointnext-s.yaml'
+    cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pointnext-s.yaml')
 
     cfg = EasyConfig()
     cfg.load(cfg_path, recursive=True)
