@@ -171,4 +171,5 @@ local_outputs/
 
 # Downloaded v8.2 model assets and its isolated environment.
 weights/*.pth
+weights/*text_features.npz
 .venv-v82/

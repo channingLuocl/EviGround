@@ -11,11 +11,23 @@ from unittest.mock import patch
 import numpy as np
 
 from category_common_v82 import category_vocabulary, load_cloud, normalized_category
-from pointcloud_classifier_v82 import prepare_points
+from pointcloud_classifier_v82 import prepare_points, load_text_features, PROMPT, CLIP_REVISION
 from run_categories_v82 import run
 
 
 class V82Tests(unittest.TestCase):
+    def test_offline_text_features_reject_wrong_semantic_space(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td)/'text.npz'
+            metadata = dict(vocabulary=list(category_vocabulary()), prompt=PROMPT,
+                            text_model='openai/clip-vit-base-patch16', text_revision=CLIP_REVISION)
+            np.savez(path, embeddings=np.ones((197, 512), dtype=np.float32), metadata=json.dumps(metadata))
+            self.assertEqual(load_text_features(path)[0].shape, (197, 512))
+            metadata['text_revision'] = 'wrong-model-version'
+            np.savez(path, embeddings=np.ones((197, 512), dtype=np.float32), metadata=json.dumps(metadata))
+            with self.assertRaisesRegex(ValueError, 'text space/vocabulary'):
+                load_text_features(path)
+
     def test_cloud_loader_reads_only_numeric_arrays(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / 'scene.npz'
@@ -57,6 +69,7 @@ class V82Tests(unittest.TestCase):
         return argparse.Namespace(cloud=None, manifest=manifest, scene_root=root,
                                   bbox_id=None, seed=42, limit=0, output=root/'results',
                                   backend='pointnext', checkpoint=root/'weights.pth',
+                                  text_features=None,
                                   retry_errors=False, prepare_only=False)
 
     def test_prediction_evaluation_isolation_and_resume(self):

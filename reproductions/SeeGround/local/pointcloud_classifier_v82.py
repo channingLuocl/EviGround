@@ -1,5 +1,6 @@
 """Frozen pretrained encoders. No GT, author labels, queries, or VLM API inputs."""
 import importlib.metadata
+import json
 import os
 from pathlib import Path
 import sys
@@ -14,6 +15,20 @@ POINTNEXT_URL = 'https://raw.githubusercontent.com/iris0329/SeeGround/master/wei
 CLIP_REVISION = '57c216476eefef5ab752ec549e440a49ae4ae5f3'
 OPENSHAPE_REVISION = 'd771a992218de10b967eea690e8f474aa96dd758'
 PROMPT = 'a {} in a scene'
+
+
+def load_text_features(path):
+    """Public category embeddings prepared with the matching frozen CLIP text tower."""
+    with np.load(path, allow_pickle=False) as data:
+        metadata = json.loads(str(data['metadata']))
+        embeddings = data['embeddings']
+    if (metadata['vocabulary'] != list(category_vocabulary()) or metadata['prompt'] != PROMPT
+            or metadata['text_model'] != 'openai/clip-vit-base-patch16'
+            or metadata['text_revision'] != CLIP_REVISION
+            or embeddings.shape != (len(category_vocabulary()), 512)
+            or not np.isfinite(embeddings).all() or (np.linalg.norm(embeddings, axis=1) <= 0).any()):
+        raise ValueError('Offline text features do not match the PointNeXt text space/vocabulary')
+    return embeddings, metadata
 
 
 def check_inference_platform():
@@ -64,7 +79,7 @@ def load_pointnext(checkpoint):
 
 
 class PointCloudClassifier:
-    def __init__(self, backend, checkpoint):
+    def __init__(self, backend, checkpoint, text_features=None):
         check_inference_platform()
         try:
             import torch
@@ -90,12 +105,19 @@ class PointCloudClassifier:
         with torch.inference_mode():
             if backend == 'pointnext':
                 self.encoder, metadata = load_pointnext(checkpoint)
-                from transformers import AutoTokenizer, CLIPTextModelWithProjection
                 name = 'openai/clip-vit-base-patch16'
-                tokenizer = AutoTokenizer.from_pretrained(name, revision=CLIP_REVISION)
-                text_model = CLIPTextModelWithProjection.from_pretrained(name, revision=CLIP_REVISION)
-                tokens = tokenizer(texts, padding=True, return_tensors='pt')
-                embeddings = text_model.eval()(**tokens).text_embeds
+                if text_features:
+                    values, provenance = load_text_features(text_features)
+                    embeddings = torch.from_numpy(values)
+                    metadata.update(text_features_sha256=file_hash(text_features),
+                                    text_features_provenance=provenance)
+                    text_model = None
+                else:
+                    from transformers import AutoTokenizer, CLIPTextModelWithProjection
+                    tokenizer = AutoTokenizer.from_pretrained(name, revision=CLIP_REVISION)
+                    text_model = CLIPTextModelWithProjection.from_pretrained(name, revision=CLIP_REVISION)
+                    tokens = tokenizer(texts, padding=True, return_tensors='pt')
+                    embeddings = text_model.eval()(**tokens).text_embeds
                 metadata.update(text_model=name, text_revision=CLIP_REVISION,
                                 channels='xyz_height', points=2048)
             else:

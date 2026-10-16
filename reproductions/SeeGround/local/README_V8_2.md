@@ -87,6 +87,16 @@ local/run_v8_2_categories.sh --backend openshape --limit 100 \
 
 OpenShape G/14 输入为 10,000 个 XYZRGB 点，单位球归一化，Z 朝上，RGB 为 0 到 1；PointNeXt 输入为 2,048 个 XYZ+height 点。两条路线使用各自配套的文本空间。
 
+## 服务器无法访问 Hugging Face 时
+
+在能访问 Hugging Face 且安装了 PyTorch/transformers 的机器上，用 CPU 生成固定公共类别的文本特征：
+
+```bash
+python local/prepare_v82_text_features.py --output weights/v82_clip_text_features.npz
+```
+
+将生成的 NPZ 传到服务器同一路径，并为运行命令添加 `--text-features weights/v82_clip_text_features.npz`。此文件只包含 197 个类别的 CLIP 文本向量，不含任何实例或 GT 信息。加载时检查词表、提示模板、模型版本、形状及有限值，运行记录保存文件 SHA-256 和文本模型来源。PointNeXt 仍在服务器上从实例点云独立计算特征；这是同一文本分支的离线缓存，不是另一个分类器。
+
 ## 结果解释
 
 PointNeXt/OpenShape 的公开权重是网络参数，不是作者预测标签。当前结果只能作为同一实例子集上的独立基线；不能把论文的 ModelNet40、ScanObjectNN 或 17 类 ScanNet 结果直接当成我们 197 类数据的预期准确率。OccTIP 是处理残缺扫描的后续改进方向，但本轮没有确认可直接下载的官方预训练权重。

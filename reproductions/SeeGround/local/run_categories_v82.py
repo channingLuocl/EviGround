@@ -111,7 +111,7 @@ def summarize(output, jobs, predictions, labels):
 def code_hashes():
     files = [Path(__file__).parent/name for name in
              ('run_categories_v82.py', 'pointcloud_classifier_v82.py', 'category_common_v82.py',
-              'batch_progress.py', 'run_storage.py')]
+              'batch_progress.py', 'run_storage.py', 'prepare_v82_text_features.py')]
     files += [ROOT/'data/scannet200_constants.py']
     files += sorted(p for p in (ROOT/'models').rglob('*') if p.suffix in ('.py', '.yaml'))
     return {str(p.relative_to(ROOT)): file_hash(p) for p in files}
@@ -142,6 +142,7 @@ def run(args):
                   'vocabulary': category_vocabulary(), 'code_sha256': code_hashes(),
                   'checkpoint': str(args.checkpoint.resolve()) if args.backend == 'pointnext' else None,
                   'checkpoint_sha256': POINTNEXT_SHA256 if args.backend == 'pointnext' else None,
+                  'text_features_sha256': file_hash(args.text_features) if args.text_features else None,
                   'selection_source': str((args.cloud or args.manifest or
                                           ROOT/'local/validation/nr3d_val_full.json').resolve()),
                   'scene_root': str(args.scene_root.resolve()) if not args.cloud else None}
@@ -183,7 +184,7 @@ def run(args):
             print_summary(summary)
             return 1 if summary['errors'] else 0
         # Fail before creating predictions if model/dependencies/weights cannot be loaded.
-        classifier = PointCloudClassifier(args.backend, args.checkpoint)
+        classifier = PointCloudClassifier(args.backend, args.checkpoint, args.text_features)
         runtime_path = output/'runtime.json'
         if runtime_path.exists() and json.loads(runtime_path.read_text()) != classifier.metadata:
             raise ValueError('Runtime or model assets changed; choose a new --output')
@@ -249,6 +250,7 @@ def main():
     parser.add_argument('--bbox-id', type=int, nargs='+', help='Only valid with --cloud')
     parser.add_argument('--backend', choices=('pointnext', 'openshape'), default='pointnext')
     parser.add_argument('--checkpoint', type=Path, default=ROOT/'weights/pnext_cls.pth')
+    parser.add_argument('--text-features', type=Path, help='Offline PointNeXt category text features NPZ')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--limit', type=int, help='Evaluation default 100; cloud default all; 0 means all')
@@ -259,6 +261,8 @@ def main():
         parser.error('--limit must be nonnegative')
     if args.bbox_id is not None and not args.cloud:
         parser.error('--bbox-id requires --cloud')
+    if args.text_features and args.backend != 'pointnext':
+        parser.error('--text-features is only supported by PointNeXt')
     if args.output is None:
         suffix = 'cloud' if args.cloud else 'subset'
         args.output = ROOT/f'local_outputs/v8_2_{args.backend}_{suffix}'
