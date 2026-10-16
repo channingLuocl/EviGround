@@ -16,6 +16,13 @@ OPENSHAPE_REVISION = 'd771a992218de10b967eea690e8f474aa96dd758'
 PROMPT = 'a {} in a scene'
 
 
+def check_inference_platform():
+    if sys.platform == 'darwin':
+        raise ValueError('当前运行在 Mac。v8.2 的点云推理需要 NVIDIA CUDA，'
+                         '请在 NVIDIA GPU 服务器上运行；在 Mac 安装 torch 也不能运行此路径。'
+                         '本机可使用 --prepare-only 检查数据，安装说明见 local/README_V8_2.md。')
+
+
 def prepare_points(xyz, rgb, backend, seed):
     """Preserve aspect ratio and Z-up; match each released encoder's channels."""
     points = np.array(xyz, dtype=np.float64, copy=True)
@@ -58,9 +65,19 @@ def load_pointnext(checkpoint):
 
 class PointCloudClassifier:
     def __init__(self, backend, checkpoint):
-        import torch
+        check_inference_platform()
+        try:
+            import torch
+        except ModuleNotFoundError as exc:
+            if exc.name != 'torch':
+                raise
+            raise ValueError(f'当前 Python 环境未安装 PyTorch：{sys.executable}。'
+                             '请在 NVIDIA GPU 服务器的这个环境内安装 CUDA 版 PyTorch，'
+                             '再按 local/README_V8_2.md 安装依赖和编译算子。') from exc
         if not torch.cuda.is_available():
-            raise ValueError('v8.2 inference needs NVIDIA CUDA. Use --prepare-only on this machine.')
+            raise ValueError(f'当前 Python 无法使用 NVIDIA CUDA：{sys.executable}。'
+                             '请检查服务器 GPU、驱动及 PyTorch CUDA 版本；'
+                             '只检查数据可使用 --prepare-only。')
         self.backend, self.vocabulary = backend, category_vocabulary()
         self.torch = torch
         torch.cuda.set_device(0)  # Select another physical GPU with CUDA_VISIBLE_DEVICES.

@@ -12,7 +12,7 @@ import numpy as np
 from batch_progress import BatchProgress
 from category_common_v82 import (ROOT, VERSION, category_vocabulary, file_hash, instance_seed,
                                  load_cloud, normalized_category, run_lock)
-from pointcloud_classifier_v82 import POINTNEXT_SHA256, PointCloudClassifier
+from pointcloud_classifier_v82 import POINTNEXT_SHA256, PointCloudClassifier, check_inference_platform
 from run_storage import write_json
 
 
@@ -263,6 +263,8 @@ def main():
         suffix = 'cloud' if args.cloud else 'subset'
         args.output = ROOT/f'local_outputs/v8_2_{args.backend}_{suffix}'
     try:
+        if not args.prepare_only:
+            check_inference_platform()
         return run(args)
     except (ValueError, OSError, ImportError, RuntimeError, KeyError) as exc:
         parser.exit(1, f'{type(exc).__name__}: {exc}\nSetup and commands: local/README_V8_2.md\n')

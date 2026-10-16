@@ -6,6 +6,8 @@ v8.2 不调用 VLM API，也不使用作者预测类别。推理只读取 `scene
 
 ## 推荐的服务器安装
 
+下面的推理命令须在登录 NVIDIA GPU 服务器后执行。终端提示符若仍显示 `luocldeMacBook-Air`，说明还在 Mac 本机。Mac 中的 `.venv-v82` 只是准备检查环境，没有安装 PyTorch；即使补装 Mac 版 PyTorch，当前 CUDA 算子也不能在 Apple GPU/MPS 上执行。请在服务器重新创建环境，不要复制 Mac 的虚拟环境目录。
+
 在 NVIDIA GPU Linux 服务器上使用独立环境，建议 Python 3.10 或 3.11。先按服务器 CUDA 版本安装 CUDA 版 PyTorch，再安装 PointNeXt 的推理依赖和算子。编译需要 `nvcc`、C++ 编译器和与 PyTorch 匹配的 CUDA toolkit；只有驱动或 CPU 版 PyTorch 不够。
 
 ```bash
