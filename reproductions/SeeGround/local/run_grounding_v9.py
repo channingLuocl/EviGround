@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 from categories_v9 import VERSION, MIN_SCORE, MAX_GAP, prepare_tables, sha256
 from run import ROOT
@@ -76,8 +77,8 @@ def main():
     parser.add_argument('--min-category-score', type=float, default=MIN_SCORE)
     parser.add_argument('--max-category-gap', type=float, default=MAX_GAP)
     parser.add_argument('--limit', type=int)
-    parser.add_argument('--workers', type=int, default=4)
-    parser.add_argument('--api-concurrency', type=int, default=2)
+    parser.add_argument('--workers', type=int, default=10)
+    parser.add_argument('--api-concurrency', type=int, default=8)
     parser.add_argument('--review-limit', type=int, default=3)
     parser.add_argument('--prepare-only', action='store_true')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
@@ -128,22 +129,35 @@ def main():
         'code_sha256': {p.name: sha256(p) for p in sorted(Path(__file__).parent.glob('*.py'))
                         if not p.name.startswith(('test_', '._'))}}
     save_manifest(output/'manifest.json', settings)
-    print(json.dumps({'selected_queries': len(rows), 'scenes': len(scenes), 'categories': categories}, ensure_ascii=False), flush=True)
-    if args.prepare_only:
-        return
+    from batch_progress import BatchProgress
     from validation_reporting import report
-    results = []
+    results, pending = [], []
+    for row in rows:
+        if (output/f"q{row['csv_row']:05d}"/'evaluation.json').exists():
+            results.append(run_case(row, args.scene_root, output, args.category_top_k, args.review_limit))
+        else:
+            pending.append(row)
+    report(output, results, len(rows))
+    if args.prepare_only:
+        print(f'Prepared {len(rows)} cases: {len(results)} cached, {len(pending)} pending; '
+              'no inference started.', file=sys.stderr, flush=True)
+        return
+    progress = BatchProgress(len(rows), initial_results=results)
+    last_report = time.monotonic()
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        jobs = [pool.submit(run_case, row, args.scene_root, output, args.category_top_k, args.review_limit) for row in rows]
+        jobs = [pool.submit(run_case, row, args.scene_root, output, args.category_top_k, args.review_limit) for row in pending]
         for future in as_completed(jobs):
-            results.append(future.result())
-            summary = report(output, results, len(rows))
-            print(f"{len(results)}/{len(rows)} correct={summary['correct']} errors={summary['errors']}", flush=True)
+            result = future.result()
+            results.append(result)
+            if time.monotonic() - last_report >= 30:
+                report(output, results, len(rows))
+                last_report = time.monotonic()
+            progress.update(result)
+    summary = report(output, results, len(rows))
     summary['evaluation_policy'] = settings['evaluation_policy']
     summary['category_candidate_recall'] = sum(r.get('category_candidate_recall', False) for r in results)/len(rows)
     summary['category_candidate_recall_observed_queries'] = sum('category_candidate_recall' in r for r in results)
     write_json(output/'results.json', {'summary': summary, 'results': sorted(results, key=lambda r: r['csv_row'])})
-    print(json.dumps(summary, ensure_ascii=False))
 
 
 if __name__ == '__main__':

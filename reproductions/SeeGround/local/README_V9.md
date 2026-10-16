@@ -62,7 +62,9 @@ local/run_local_v9.sh --category-top-k 5 --prepare-only \
   --output local_outputs/v9_gated_top5
 ```
 
-去掉 `--prepare-only` 可运行同一目录的全量 7,805 条描述。准备时与运行时的 `--limit`、阈值和其他参数必须一致。可用 `SEEGROUND_WORKERS`、`SEEGROUND_API_CONCURRENCY` 设置并发，默认 4 个本地任务、2 个并发 API 请求。
+去掉 `--prepare-only` 可运行同一目录的全量 7,805 条描述。准备时与运行时的 `--limit`、阈值和其他参数必须一致。可用 `SEEGROUND_WORKERS`、`SEEGROUND_API_CONCURRENCY` 设置并发，默认 10 个本地任务、8 个并发 API 请求。每个本地任务的数值计算线程保持为 1，避免线程数成倍增加。
+
+终端输出复用 v7.4 的 `BatchProgress`：每完成一条输出 `{"predicted_id": ..., "correct": ...}`，进度条显示完成数量、百分比、耗时、ETA 和累计 `True` 准确率。续跑时已缓存结果计入初始进度。完整统计写入 `results.json`。
 
 ## 评估与复现
 
