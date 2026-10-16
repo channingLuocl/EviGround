@@ -68,4 +68,6 @@ SEEGROUND_V83_PYTHON="$PWD/.venv-v82/bin/python" local/run_v8_3_categories.sh --
 PYTHONPATH=local python -m unittest local/test_v83_zero_shot.py local/test_v83_evidence.py local/test_v82_pointcloud.py -v
 ```
 
-上述22项测试已通过。新测试覆盖正支持重排、无支持不产生负证据、重复裁块、候选范围、重采样几何不变，以及默认入口无需head／类别文件的预测与缓存隔离。另已在未安装torch的环境验证默认入口的--help及--prepare-only。CPU测试对冻结CUDA编码器使用测试替身；尚未执行服务器真实点云前向，也没有v8.3准确率结果。
+上述22项测试已通过。新测试覆盖正支持重排、无支持不产生负证据、重复裁块、候选范围、重采样几何不变，以及默认入口无需head／类别文件的预测与缓存隔离。另已在未安装torch的环境验证默认入口的--help及--prepare-only。CPU测试对冻结CUDA编码器使用测试替身。
+
+2026-10-16服务器验证：RTX 4090 D、Python 3.12.3、PyTorch 2.8.0+cu128、CUDA toolkit 12.8；独立venv复用系统PyTorch，依赖及PointNeXt CUDA算子已安装。默认zero-shot路径完成真实点云前向，scene0500_00 / 12预测chair，与评估标签一致，错误数为0。[单实例结果](../local_diagnostics/v8_3_zero_shot_smoke_20261016.json)仅验证运行链路；尚无v8.3规模评估或提分证据。

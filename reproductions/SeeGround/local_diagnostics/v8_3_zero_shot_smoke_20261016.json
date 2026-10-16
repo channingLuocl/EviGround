@@ -1,0 +1,63 @@
+{
+  "summary": {
+    "version": "object-category-v8.3-zero-shot-r1",
+    "method": "zero-shot",
+    "selected": 1,
+    "completed": 1,
+    "errors": 0,
+    "complete": true,
+    "evaluation_scope": "no_task_specific_training",
+    "pretraining_overlap": "not_audited; no strict_zero_shot_claim",
+    "correct": 1,
+    "accuracy": 1.0,
+    "exact_correct": 1,
+    "exact_accuracy": 1.0,
+    "top5_correct": 1,
+    "top5_accuracy": 1.0,
+    "class_mean_accuracy": 1.0,
+    "targets_outside_vocabulary": 0
+  },
+  "results": [
+    {
+      "scene": "scene0500_00",
+      "bbox_id": 12,
+      "target": "chair",
+      "predicted_object": "chair",
+      "status": "completed",
+      "correct": true,
+      "exact_correct": true,
+      "top5_correct": true,
+      "target_in_vocabulary": true,
+      "top5": [
+        {
+          "category": "chair",
+          "score": 0.4032459464157
+        },
+        {
+          "category": "office chair",
+          "score": 0.31581661105155945
+        },
+        {
+          "category": "folded chair",
+          "score": 0.31366783380508423
+        },
+        {
+          "category": "seat",
+          "score": 0.3074927031993866
+        },
+        {
+          "category": "laptop",
+          "score": 0.3013046979904175
+        }
+      ],
+      "error": null
+    }
+  ],
+  "per_class": {
+    "chair": {
+      "count": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    }
+  }
+}
