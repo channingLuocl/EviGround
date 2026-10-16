@@ -3,6 +3,8 @@
 Inputs are the query, scene instances and observed RGB points, never evaluation
 answers. Choices are model hypotheses, not certified symbolic predicates.
 """
+from categories_v9 import category_fields
+from v4_policy import settings as policy_settings
 import json
 from pathlib import Path
 
@@ -114,6 +116,9 @@ Return compact JSON with predicted_id, reason (at most 60 words), evidence (at m
 each with source_quote equal to the COMPLETE description VERBATIM, object_ids and concrete observation
 at most 35 words), and unresolved. Do not put table keys or image names in source_quote.
 No markdown or prose outside JSON. Never output an ID outside allowed_target_ids.'''
+    if any('category_hypotheses' in o for o in objects):
+        from categories_v9 import CATEGORY_INSTRUCTIONS
+        instructions += CATEGORY_INSTRUCTIONS
     def neighbors(origin, pool, count):
         rows = []
         for other in pool:
@@ -124,7 +129,7 @@ No markdown or prose outside JSON. Never output an ID outside allowed_target_ids
                          'xy_box_gap_m': round(metrics['horizontal_gap'], 4)})
         return sorted(rows, key=lambda r: (r['xy_box_gap_m'], r['xy_center_m'], r['id']))[:count]
     payload = {'description': query, 'allowed_target_ids': allowed,
-        'objects': [{'id': o['bbox_id'], 'category': o['target'],
+        'objects': [{'id': o['bbox_id'], 'category': o['target'], **category_fields(o),
             'center_xyz_m': [round(float(v), 4) for v in o['bbox_3d'][:3]],
             'extent_xyz_m': [round(float(v), 4) for v in o['bbox_3d'][3:]]} for o in objects],
         'views': [{k: v for k, v in view.items() if k != 'image'} for view in views],
@@ -163,7 +168,7 @@ No markdown or prose outside JSON. Never output an ID outside allowed_target_ids
     trace['internal_usage']['visual_check'] += 1
     selected = next((o for o in candidates if o['bbox_id'] == oid), None)
     return {'query': query, 'predicted_id': oid, 'bbox_3d': selected['bbox_3d'] if selected else None,
-        'implementation_version': 'relative-size-v7.4',
+        'implementation_version': policy_settings()['version'],
         'prediction_source': 'v74_multimodal_tentative' if oid is not None else 'abstained',
         'diagnosis': diagnosis, 'decision_status': 'tentative' if oid is not None else 'missing',
         'accepted': False, 'images': [v['image'] for v in views],

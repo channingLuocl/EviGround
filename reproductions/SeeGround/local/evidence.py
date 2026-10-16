@@ -1,5 +1,6 @@
 """Query matching and measured geometry; no ground-truth labels are used."""
 import re
+from categories_v9 import category_names
 import numpy as np
 
 ALIASES = {
@@ -147,9 +148,10 @@ def match_categories(names, objects):
     categories = [canonical_category(n).split() for n in names if n.strip()]
     matched = []
     for obj in objects:
-        words = canonical_category(obj['target']).split()
+        labels = [canonical_category(name).split() for name in category_names(obj)]
         if any(category and words and category[-1] == words[-1]
-               and all(w in words for w in category) for category in categories):
+               and all(w in words for w in category)
+               for category in categories for words in labels):
             matched.append(obj)
     return matched
 

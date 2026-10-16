@@ -1,4 +1,5 @@
 """Quoted query obligations and a broad local graph; language never deletes IDs."""
+from categories_v9 import category_fields
 import re
 
 from evidence import match_retrieval_categories, retrieval_category
@@ -158,7 +159,7 @@ def local_graph(parsed, objects, candidates, diagnosis):
               'reference_role': c.get('reference_role'), 'modified_role': c.get('modified_role'),
               'polarity': c['polarity'], 'parse_status': c['parse_status']}
              for c in obligations['conditions']]
-    return {'nodes': [{'bbox_id': o['bbox_id'], 'category': o['target'],
+    return {'nodes': [{'bbox_id': o['bbox_id'], 'category': o['target'], **category_fields(o),
                        'role': 'target' if o['bbox_id'] in targets else 'reference'}
                       for o in objects if o['bbox_id'] in relevant],
             'initial_target_ids': sorted(targets),

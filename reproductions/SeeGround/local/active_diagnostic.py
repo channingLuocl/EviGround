@@ -1,5 +1,6 @@
 """Model-directed, bounded evidence loop for candidate disambiguation."""
 from copy import deepcopy
+from categories_v9 import category_fields, category_names, CATEGORY_INSTRUCTIONS
 import hashlib
 import json
 import re
@@ -175,15 +176,17 @@ def compute_observation(dimension, query, parsed, diagnosis, candidates, geometr
         scope = [obj for obj in candidates if obj['bbox_id'] in scope_ids]
         comparison_pool_ids, comparison_scope_bound, scope_unknown_ids = _target_size_scope(
             parsed, diagnosis, candidates)
-        reference_size_categories = {retrieval_category(obj['target']) for obj in geometry_objects
-                                    if size_conditions(parsed, obj['target'], role='reference')}
+        reference_size_categories = {retrieval_category(name) for obj in geometry_objects
+                                    for name in category_names(obj)
+                                    if size_conditions(parsed, name, role='reference')}
         if v7_enabled() and not comparison_scope_bound:
             comparison_pool_ids = list(diagnosis.get('size_comparison_pool_ids', [o['bbox_id'] for o in candidates]))
         measurement_scope = [obj for obj in geometry_objects
                              if obj['bbox_id'] in set(comparison_pool_ids or [])
-                             or retrieval_category(obj['target']) in reference_size_categories
+                             or any(retrieval_category(name) in reference_size_categories for name in category_names(obj))
                              or (parsed.get('relative_height_binding') and
-                                 retrieval_category(obj['target']) == retrieval_category(parsed['Target'][0]))]
+                                 any(retrieval_category(name) == retrieval_category(parsed['Target'][0])
+                                     for name in category_names(obj)))]
         measurements = point_cloud_measurements(measurement_scope, xyz, ids, scene_objects=geometry_objects)
         if v7_enabled():
             from v7_evidence import box_rows
@@ -966,10 +969,10 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
         v4_settings=v4_settings(), evidence_inventory=inventory, deletion_provenance=deletions,
         backtracks=[], final_reviews=reviews,
     )
-    target_table = [{'bbox_id': obj['bbox_id'], 'category': obj['target']}
+    target_table = [{'bbox_id': obj['bbox_id'], 'category': obj['target'], **category_fields(obj)}
                     for obj in candidates]
     target_ids = set(category_candidates)
-    references = [{'bbox_id': obj['bbox_id'], 'category': obj['target']}
+    references = [{'bbox_id': obj['bbox_id'], 'category': obj['target'], **category_fields(obj)}
                   for obj in geometry_objects if obj['bbox_id'] not in target_ids]
     if v6_enabled():
         from query_graph import local_graph
@@ -1318,6 +1321,8 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
                 'internal_visual_budget': dict(parsed['_v4_budget']),
             }
             instructions = INSTRUCTIONS
+            if any('category_hypotheses' in o for o in candidates):
+                instructions += CATEGORY_INSTRUCTIONS
             if v7_enabled():
                 from v7_evidence import supported_choice
                 state['v7_preview'] = supported_choice(query, parsed, geometry_objects, candidates, diagnosis, checks)

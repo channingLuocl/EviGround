@@ -29,6 +29,11 @@ def _recorded_api_failure(calls):
 
 
 def object_table_path(scene_dir, object_table):
+    if object_table in ('v9_top1', 'v9_top5'):
+        from v4_policy import v9_enabled
+        if not v9_enabled() or not os.getenv('SEEGROUND_V9_CATEGORY_ROOT'):
+            raise ValueError('v9 tables require the v9 launcher and prepared category root')
+        return Path(os.environ['SEEGROUND_V9_CATEGORY_ROOT'])/scene_dir.name/f'objects_top{object_table[-1]}.json'
     if object_table not in OBJECT_TABLES:
         raise ValueError('object-table must be gt or pred')
     return scene_dir/OBJECT_TABLES[object_table]
@@ -42,7 +47,7 @@ def structural_objects(scene_dir, objects, object_table='gt'):
     known={obj['bbox_id'] for obj in objects}
     structural = [obj for obj in load_objects(path) if obj['bbox_id'] not in known]
     from v4_policy import v72_enabled
-    if v72_enabled() and object_table == 'pred':
+    if (v72_enabled() and object_table == 'pred') or object_table.startswith('v9_'):
         # The author's predicted OLT excludes wall/floor/ceiling. Keep their
         # geometry, but do not inject ScanNet's annotated categories as references.
         structural = [{**obj, 'target': 'object'} for obj in structural]
@@ -123,6 +128,11 @@ def parse_query(query, mode='baseline', calls=None, scene_categories=None):
                 'For section/part of a category, Target is the mother category; retain the part quote. '
                 'Map synonyms to available scene categories only when semantically equivalent. '
                 'Do not merge whiteboard and blackboard or invent a nearest relation.')
+        from v4_policy import v9_enabled
+        if v9_enabled():
+            prompt += (' Scene categories are uncertain retrieval hypotheses only. Preserve the category '
+                       'stated in the description even when it is absent from that list; do not replace '
+                       'it with a visually or semantically different available class.')
         messages=[{'role':'system','content':prompt},
                   {'role':'user','content':json.dumps({'description':query,
                       **({'syntax_hints':syntax} if syntax['backend'] == 'spacy' else {}),
@@ -293,7 +303,11 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
     started=perf_counter()
     prior_pipeline_latency = 0
     objects_path=object_table_path(scene_dir,object_table)
-    objects=load_objects(objects_path)
+    from categories_v9 import load_category_objects, category_names
+    is_v9 = object_table.startswith('v9_')
+    if is_v9 and mode != 'active_diagnostic':
+        raise ValueError('v9 supports active_diagnostic mode only')
+    objects=load_category_objects(objects_path) if is_v9 else load_objects(objects_path)
     structural=structural_objects(scene_dir,objects,object_table) if mode in ('diagnostic','active_diagnostic') else []
     geometry_objects=objects+structural
     out.mkdir(parents=True,exist_ok=True)
@@ -335,8 +349,8 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                       'backend': os.getenv('SEEGROUND_REACT_BACKEND'), 'jev_model': os.getenv('SEEGROUND_JEV_MODEL'),
                       'environment': {key: value for key, value in os.environ.items() if key.startswith('SEEGROUND_')
                                       and not any(word in key for word in ('KEY', 'TOKEN', 'SECRET'))},
-                      'scene_sha256': file_identity(scene_dir / name for name in
-                        ('scene.npz', objects_path.name, 'scene_instances.json'))}
+                      'scene_sha256': file_identity((scene_dir/'scene.npz', objects_path,
+                                                       scene_dir/'scene_instances.json'))}
             checkpoint_identity = input_identity(query, geometry_objects, config)
             pending = out / 'pending_review.json'
             if not pending.exists():
@@ -373,7 +387,7 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                         call['resolved_by_resume'] = True
             save_checkpoint(out / 'pending_inference.json', resume or {
                 'stage': 'parse', 'checkpoint_identity': checkpoint_identity, 'calls': calls})
-        parsed=resume['parsed_query'] if resume and resume.get('stage') != 'parse' else parse_query(query,mode,calls, scene_categories=[o['target'] for o in objects])
+        parsed=resume['parsed_query'] if resume and resume.get('stage') != 'parse' else parse_query(query,mode,calls, scene_categories=[name for o in objects for name in category_names(o)])
         stage='retrieve_objects'
         matcher=select_objects if mode=='baseline' else match_categories
         if mode in ('ranked_geometry','category_review','diagnostic','active_diagnostic'):
@@ -383,7 +397,8 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         if mode in ('diagnostic','active_diagnostic'):
             parsed['candidate_generation']={
                 'status':'bound' if matched_targets else 'unknown',
-                'source':'category_retrieval' if matched_targets else 'broad_fallback',
+                'source':('gated_category_hypotheses' if is_v9 else 'category_retrieval') if matched_targets
+                         else ('threshold_abstention' if is_v9 else 'broad_fallback'),
                 'category_pool_ids':[obj['bbox_id'] for obj in matched_targets],
             }
         targets=matched_targets or objects
@@ -391,8 +406,10 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         if mode=='active_diagnostic':
             from active_diagnostic import active_ground
             stage='active_diagnostic'
-            proposed=[] if object_table=='gt' else propose_category_checks(objects,matched_targets,anchors,review_limit)
-            candidates=list({obj['bbox_id']:obj for obj in matched_targets+proposed}.values()) or objects
+            proposed=[] if object_table=='gt' or is_v9 else propose_category_checks(objects,matched_targets,anchors,review_limit)
+            candidates=list({obj['bbox_id']:obj for obj in matched_targets+proposed}.values())
+            if not is_v9:
+                candidates = candidates or objects
             trace={}
             if checkpoint_identity:
                 trace['checkpoint_identity'] = checkpoint_identity
@@ -403,8 +420,32 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                           structural_reference_ids=[obj['bbox_id'] for obj in structural])
             if resume and resume.get('stage') == 'parse':
                 resume = None
-            prediction=active_ground(query,parsed,objects,geometry_objects,candidates,xyz,rgb,ids,
-                                     out,calls,trace,review_limit,object_table=='gt', **({'resume': resume} if v5_enabled() else {}))
+            if is_v9 and not candidates:
+                reason = 'no retained category hypothesis matches the parsed target'
+                trace.update(decision_backend=record['decision_backend'], planner_input='text_only',
+                             steps=[], stop_reason='category_gate_abstention',
+                             final_evidence_state={'status': 'missing', 'missing': [reason]})
+                prediction = {'query': query, 'predicted_id': None, 'bbox_3d': None,
+                    'implementation_version': policy_settings()['version'], 'prediction_source': 'abstained',
+                    'decision_status': 'missing', 'accepted': False,
+                    'diagnosis': {'candidate_ids': [], 'missing': [reason]}, 'active_trace': trace}
+            else:
+                prediction=active_ground(query,parsed,objects,geometry_objects,candidates,xyz,rgb,ids,
+                                         out,calls,trace,review_limit,object_table=='gt', **({'resume': resume} if v5_enabled() else {}))
+            if is_v9:
+                from categories_v9 import sha256
+                table = json.loads(objects_path.read_text())
+                prediction['category_input'] = {key: table[key] for key in
+                    ('version', 'gate', 'source_predictions_sha256', 'cloud_sha256')}
+                prediction['category_input']['table_sha256'] = sha256(objects_path)
+                prediction['category_target_ids'] = [o['bbox_id'] for o in matched_targets]
+                prediction['category_anchor_ids'] = [o['bbox_id'] for o in matched_anchors]
+                prediction['category_bindings'] = {
+                    'targets': [{'bbox_id': o['bbox_id'], 'matched_hypotheses': [h for h in o['category_hypotheses']
+                        if matcher(parsed['Target'], [{**o, 'category_hypotheses': [h]}])]} for o in matched_targets],
+                    'references': [{'bbox_id': o['bbox_id'], 'matched_hypotheses': [h for h in o.get('category_hypotheses', [])
+                        if matcher(parsed['Anchor'], [{**o, 'category_hypotheses': [h]}])]} for o in matched_anchors]}
+
             diagnostic = _recorded_api_failure(calls)
             if diagnostic and not (v5_enabled() and prediction.get('final_review', {}).get('status') == 'review_failed'
                                    and diagnostic.get('failure_stage') == 'final_prediction_review'):

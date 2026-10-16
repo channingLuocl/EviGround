@@ -1,4 +1,5 @@
 """Typed JEV decisions for the text-only outer evidence loop."""
+from categories_v9 import category_fields, CATEGORY_INSTRUCTIONS
 import json
 import os
 from collections import Counter
@@ -342,11 +343,14 @@ def jev_state(state):
                                   if key in prior_observation}
         history.append(row)
     def labels(rows):
-        return [{'bbox_id': row['bbox_id'], 'category': row.get('category', row.get('target', ''))}
+        return [{'bbox_id': row['bbox_id'], 'category': row.get('category', row.get('target', '')),
+                 **category_fields(row)}
                 for row in rows if isinstance(row, dict) and 'bbox_id' in row]
     return {
         'query': state.get('query', ''),
         'parsed_query': parsed,
+        **({'category_policy': CATEGORY_INSTRUCTIONS}
+           if any('category_hypotheses' in r for r in state.get('target_table', [])) else {}),
         'target_candidates': labels(state.get('target_table', [])),
         'reference_candidates': labels(state.get('reference_table', [])),
         'category_candidates': state.get('category_candidates', []),
