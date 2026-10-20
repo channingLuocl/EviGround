@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-10-20T22:14:51.486320+08:00",
+  "evaluation_only_analysis": true,
+  "paired_queries": 3602,
+  "selection": "Completed r3 Top-5 evaluation-selected retry; paired against the same queries in r3 Top-1. Not an independent full Top-5 evaluation.",
+  "top1": {
+    "candidate_count_mean": 2.85341476957246,
+    "candidate_count_median": 3.0,
+    "target_recalled": 2060,
+    "correct": 0
+  },
+  "top5": {
+    "candidate_count_mean": 5.842032204330927,
+    "candidate_count_median": 5.0,
+    "target_recalled": 3135,
+    "correct": 831
+  },
+  "expanded_candidate_pools": 2851,
+  "top5_recalled_but_final_wrong_or_abstained": 2304,
+  "limitations": "Observed paired candidate counts and saved final outcomes. Parsing/revision/rerun variation means this does not isolate a causal Top-K effect; source pair is not held out."
+}

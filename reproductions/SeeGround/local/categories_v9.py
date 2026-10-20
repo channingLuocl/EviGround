@@ -1,4 +1,4 @@
-"""Frozen v8.3 predictions become gated category hypotheses, never annotations."""
+"""Frozen predictions become category hypotheses, never annotations."""
 import hashlib
 import json
 from pathlib import Path
@@ -6,12 +6,19 @@ from pathlib import Path
 import numpy as np
 
 VERSION = 'predicted-category-grounding-v9-r1'
+R8_VERSION = 'predicted-category-grounding-v9-r8-r1'
+LEGACY_SCORE_TYPE = 'cosine_plus_positive_support_not_probability'
+R8_SCORE_TYPE = 'weighted_standardized_3d_rgb_fusion_not_probability'
 MIN_SCORE = .20
 MAX_GAP = .03
 CATEGORY_INSTRUCTIONS = (
     ' Category labels are uncertain, mutually exclusive hypotheses per object ID. '
     'category is the frozen top-1 display label only; use category_hypotheses for eligible bindings. '
-    'Scores are similarities with positive local support, not probabilities. '
+    'Read category_score_type: scores may be cosine plus support or standardized 3D/RGB fusion; '
+    'neither is a probability and their scales are not interchangeable. '
+    'Rank 1 is the classifier primary hypothesis; lower ranks are alternatives, not equally confident labels. '
+    'Use rank and gap_from_top1 as classifier evidence, not proof or a calibrated confidence threshold. '
+    'A lower-ranked category can win when the complete description and visual/spatial evidence support it. '
     'Match target and reference categories to retained hypotheses, then verify with visual/spatial evidence. '
     'Do not assign incompatible categories to the same object in one interpretation. '
     'A retained category is not proof; a rejected category is not proof of physical absence. '
@@ -32,8 +39,19 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def gate_categories(top5, top_k=5, min_score=MIN_SCORE, max_gap=MAX_GAP):
-    if (top_k not in (1, 5) or not -1 <= min_score <= 1 or
+def gate_categories(top5, top_k=5, min_score=None, max_gap=None,
+                    score_type=LEGACY_SCORE_TYPE):
+    if score_type not in (LEGACY_SCORE_TYPE, R8_SCORE_TYPE):
+        raise ValueError('Unknown category score type')
+    if score_type == R8_SCORE_TYPE:
+        if min_score is not None or max_gap is not None:
+            raise ValueError('r8 fusion uses rank-only hypotheses; old cosine thresholds are incompatible')
+    else:
+        min_score = MIN_SCORE if min_score is None else min_score
+        max_gap = MAX_GAP if max_gap is None else max_gap
+    if top_k not in (1, 5):
+        raise ValueError('Expected top_k=1|5')
+    if score_type == LEGACY_SCORE_TYPE and (not -1 <= min_score <= 1 or
             not 0 <= max_gap <= 2 or not np.isfinite([min_score, max_gap]).all()):
         raise ValueError('Expected top_k=1|5, finite similarity threshold and nonnegative score gap')
     if (len(top5) != 5 or len({r['category'] for r in top5}) != 5 or
@@ -42,15 +60,17 @@ def gate_categories(top5, top_k=5, min_score=MIN_SCORE, max_gap=MAX_GAP):
     scores = np.asarray([r['score'] for r in top5], dtype=float)
     if not np.isfinite(scores).all() or np.any(scores[:-1] < scores[1:]):
         raise ValueError('Category scores must be finite and sorted descending')
+    if any('rank' in row and row['rank'] != rank for rank, row in enumerate(top5, 1)):
+        raise ValueError('Category ranks disagree with score order')
     accepted, audit = [], []
     for rank, row in enumerate(top5, 1):
         gap = float(scores[0] - row['score'])
         reasons = []
         if rank > top_k:
             reasons.append('outside_top_k')
-        if row['score'] < min_score:
+        if min_score is not None and row['score'] < min_score:
             reasons.append('below_min_score')
-        if gap > max_gap + 1e-12:
+        if max_gap is not None and gap > max_gap + 1e-12:
             reasons.append('gap_exceeds_max')
         item = {'category': row['category'], 'score': float(row['score']),
                 'rank': rank, 'gap_from_top1': gap}
@@ -66,13 +86,16 @@ def category_fields(obj):
         return {}
     return {'category_hypotheses': obj['category_hypotheses'],
             'category_status': obj['category_status'],
-            'category_score_type': 'cosine_plus_positive_support_not_probability'}
+            'category_score_type': obj.get('category_score_type', LEGACY_SCORE_TYPE)}
 
 
 def load_category_objects(path):
     data = json.loads(Path(path).read_text())
-    if data.get('version') != VERSION:
+    if data.get('version') not in (VERSION, R8_VERSION):
         raise ValueError('Expected a prepared v9 category table')
+    score_type = data['gate'].get('score_type', LEGACY_SCORE_TYPE)
+    if (data['version'] == R8_VERSION) != (score_type == R8_SCORE_TYPE):
+        raise ValueError('Category table version disagrees with score type')
     result = []
     for item in data['objects']:
         box = np.asarray(item['bbox_3d'], dtype=float)
@@ -84,6 +107,7 @@ def load_category_objects(path):
             raise ValueError('Category table disagrees with its recorded gate')
         result.append({key: item[key] for key in
                        ('bbox_id', 'target', 'bbox_3d', 'category_hypotheses', 'category_status')})
+        result[-1]['category_score_type'] = score_type
         expected_status = 'single_hypothesis' if len(retained) == 1 else 'uncertain'
         if item['category_status'] != expected_status:
             raise ValueError('Category status disagrees with retained hypotheses')
@@ -95,9 +119,14 @@ def load_category_objects(path):
 
 
 def prepare_tables(source, scene_root, output, scenes, top_k=5,
-                   min_score=MIN_SCORE, max_gap=MAX_GAP):
+                   min_score=None, max_gap=None):
     """Read predictions and input hashes only; no author/GT category files."""
     source, scene_root, output = map(Path, (source, scene_root, output))
+    if source.suffix.lower() == '.zip' or (source/'EXPORT_VERIFIED.json').is_file():
+        from categories_r8 import prepare_r8_tables
+        return prepare_r8_tables(source, scene_root, output, scenes, top_k, min_score, max_gap)
+    min_score = MIN_SCORE if min_score is None else min_score
+    max_gap = MAX_GAP if max_gap is None else max_gap
     marker = json.loads((source/'FROZEN.json').read_text())
     for name in ('predictions.json', 'config.json'):
         if sha256(source/name) != marker['files'][name]:

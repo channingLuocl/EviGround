@@ -133,8 +133,18 @@ def parse_query(query, mode='baseline', calls=None, scene_categories=None):
             prompt += (' Scene categories are uncertain retrieval hypotheses only. Preserve the category '
                        'stated in the description even when it is absent from that list; do not replace '
                        'it with a visually or semantically different available class.')
+        from v4_policy import r8_refinement_enabled
+        head_hint = None
+        if r8_refinement_enabled():
+            from r8_grounding import target_head_hint
+            head_hint = target_head_hint(query, scene_categories or [])
+            prompt += (' Resolve the requested noun before parsing subordinate objects: in a description '
+                       'of a desk with a box on it, the desk is Target and the box is Anchor. '
+                       'A source_bound_target_head identifies the leading noun phrase, not an instance ID. '
+                       'Preserve attributes and relations of both nouns with their correct roles.')
         messages=[{'role':'system','content':prompt},
                   {'role':'user','content':json.dumps({'description':query,
+                      **({'source_bound_target_head': head_hint} if head_hint else {}),
                       **({'syntax_hints':syntax} if syntax['backend'] == 'spacy' else {}),
                       **({'scene_categories': sorted(set(scene_categories))} if v7_enabled() and scene_categories else {})},ensure_ascii=False)}]
     else:
@@ -393,6 +403,10 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
         if mode in ('ranked_geometry','category_review','diagnostic','active_diagnostic'):
             matcher=match_retrieval_categories
         matched_targets=matcher(parsed['Target'],objects)
+        from r8_grounding import generic_target_pool
+        generic_target = is_v9 and generic_target_pool(parsed['Target'])
+        if generic_target:
+            matched_targets = list(objects)
         matched_anchors=matcher(parsed['Anchor'],geometry_objects)
         if mode in ('diagnostic','active_diagnostic'):
             parsed['candidate_generation']={
@@ -401,6 +415,8 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                          else ('threshold_abstention' if is_v9 else 'broad_fallback'),
                 'category_pool_ids':[obj['bbox_id'] for obj in matched_targets],
             }
+            if generic_target:
+                parsed['candidate_generation']['source'] = 'generic_target_visual_pool'
         targets=matched_targets or objects
         anchors=(matched_anchors or targets) if mode=='baseline' else matched_anchors
         if mode=='active_diagnostic':

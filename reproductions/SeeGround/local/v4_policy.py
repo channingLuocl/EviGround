@@ -26,6 +26,27 @@ def v9_enabled():
     return v74_enabled() and os.getenv('SEEGROUND_V9', '0') == '1'
 
 
+def r8_refinement_enabled():
+    return (v9_enabled() and os.getenv('SEEGROUND_V9_SOURCE') == 'r8'
+            and os.getenv('SEEGROUND_R8_GROUNDING_REVISION', 'r1') in ('r2', 'r3', 'r4', 'r5', 'r10', 'r12'))
+
+
+def r8_challenge_enabled():
+    return r8_refinement_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') in ('r3', 'r4', 'r5', 'r10', 'r12')
+
+
+def r8_numeric_enabled():
+    return r8_challenge_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') in ('r4', 'r5', 'r10', 'r12')
+
+
+def r8_retrieval_enabled():
+    return r8_challenge_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') in ('r10', 'r12')
+
+
+def r8_generic_target_enabled():
+    return r8_challenge_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') == 'r12'
+
+
 def v62_enabled():
     return enabled() and (os.getenv('SEEGROUND_V62', '0') == '1' or v7_enabled())
 
@@ -45,7 +66,9 @@ def enabled(feature=None):
 
 
 def settings():
-    return {'v7': v7_enabled(), 'version': 'predicted-category-grounding-v9-r1' if v9_enabled() else 'relative-size-v7.4' if v74_enabled() else 'relative-size-v7.3' if v73_enabled() else 'relative-size-v7.2' if v72_enabled() else 'relative-size-v7.1' if v71_enabled() else 'relative-size-v7' if v7_enabled() else 'relative-size-v6.2' if v62_enabled() else 'relative-size-v6' if v6_enabled() else 'relative-size-v5' if v5_enabled() else 'relative-size-v4' if enabled() else 'relative-size-v3',
+    revision = os.getenv('SEEGROUND_R8_GROUNDING_REVISION', 'r1') if r8_refinement_enabled() else 'r1'
+    r8_version = 'predicted-category-grounding-v9-r8-' + revision
+    return {'v7': v7_enabled(), 'version': (r8_version if os.getenv('SEEGROUND_V9_SOURCE') == 'r8' else 'predicted-category-grounding-v9-r1') if v9_enabled() else 'relative-size-v7.4' if v74_enabled() else 'relative-size-v7.3' if v73_enabled() else 'relative-size-v7.2' if v72_enabled() else 'relative-size-v7.1' if v71_enabled() else 'relative-size-v7' if v7_enabled() else 'relative-size-v6.2' if v62_enabled() else 'relative-size-v6' if v6_enabled() else 'relative-size-v5' if v5_enabled() else 'relative-size-v4' if enabled() else 'relative-size-v3',
             'v6': v6_enabled(),
             'v5': v5_enabled(),
             'v5_scope': v5_enabled('scope'), 'v5_measurements': v5_enabled('measurements'),

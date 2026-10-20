@@ -127,7 +127,7 @@ def print_summary(summary):
               f'errors {summary["errors"]}.', file=sys.stderr)
 
 
-def run(args):
+def run(args, classifier_factory=None, extra_config=None):
     jobs, clouds, labels = select_jobs(args)
     if not jobs:
         raise ValueError('No instances selected')
@@ -146,6 +146,8 @@ def run(args):
                   'selection_source': str((args.cloud or args.manifest or
                                           ROOT/'local/validation/nr3d_val_full.json').resolve()),
                   'scene_root': str(args.scene_root.resolve()) if not args.cloud else None}
+        if extra_config is not None:
+            config['extension'] = extra_config
         # JSON round-trip converts the vocabulary tuple to its on-disk representation.
         config = json.loads(json.dumps(config))
         config_path = output/'config.json'
@@ -184,7 +186,8 @@ def run(args):
             print_summary(summary)
             return 1 if summary['errors'] else 0
         # Fail before creating predictions if model/dependencies/weights cannot be loaded.
-        classifier = PointCloudClassifier(args.backend, args.checkpoint, args.text_features)
+        classifier = (classifier_factory or PointCloudClassifier)(
+            args.backend, args.checkpoint, args.text_features)
         runtime_path = output/'runtime.json'
         if runtime_path.exists() and json.loads(runtime_path.read_text()) != classifier.metadata:
             raise ValueError('Runtime or model assets changed; choose a new --output')

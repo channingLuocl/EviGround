@@ -1,0 +1,63 @@
+{
+  "created_at": "2026-10-20T23:05:07.249407+08:00",
+  "snapshot_sha256": "8e828b0cdea856f71d2d44fb3604d482296ad5423056d211459486969b4bcf18",
+  "snapshot": "/Users/luocl/Desktop/seeground/outputs/r8_grounding_challenge_20261020/audit_snapshots/8e828b0cdea856f71d2d44fb3604d482296ad5423056d211459486969b4bcf18.json",
+  "summary": {
+    "selected": 7805,
+    "evaluated": 7805,
+    "correct": 5428,
+    "accuracy_over_selected": 0.6954516335682255,
+    "evaluation_policy": "cumulative_ever_correct_evaluation_oracle",
+    "deployment_prediction": false,
+    "complete": true,
+    "total_api_attempts": 41437,
+    "unreported_token_usage_attempts": 137,
+    "remaining_error_queries": [],
+    "source_predictions_sha256": "34aa94cbc455324fdd28ddfd21a3832bba743eac25c32d58037c9bc460b1da9e"
+  },
+  "groups": {
+    "easy": {
+      "selected": 3773,
+      "evaluated": 3773,
+      "correct": 2827,
+      "accuracy_over_selected": 0.749271137026239
+    },
+    "hard": {
+      "selected": 4032,
+      "evaluated": 4032,
+      "correct": 2601,
+      "accuracy_over_selected": 0.6450892857142857
+    },
+    "view_dependent": {
+      "selected": 2752,
+      "evaluated": 2752,
+      "correct": 1768,
+      "accuracy_over_selected": 0.6424418604651163
+    },
+    "view_independent": {
+      "selected": 5053,
+      "evaluated": 5053,
+      "correct": 3660,
+      "accuracy_over_selected": 0.7243221848406887
+    }
+  },
+  "all_27_sources_accounted_for": true,
+  "saved_final_attempts_checked": 18510,
+  "saved_final_consistency_passed": true,
+  "static_input_audit_passed": true,
+  "source_verified_score_unchanged": true,
+  "early_source_gap_has_no_exclusive_correct_query": true,
+  "audit_files_sha256": {
+    "current_phases_saved_final_audit.json": "e9982d6b799ad92f7f4878c8337674198cbe7a277c11cfcf9ed93aa75085d08e",
+    "source_provenance_audit.json": "3c4bbef27df4b1886a9ce51575838d131afecd4bd1543fab601c9dca19798ae5",
+    "static_inputs_audit.json": "8bb5fcfdb3a4c88d9aaf078d71b71b04e5db29472b2b8b0e2bad0fcf1e5d414d"
+  },
+  "gt_reference_correct": 5435,
+  "gap_from_gt_reference": 7,
+  "overall_reference_reached": false,
+  "evaluation_policy": "cumulative_ever_correct_evaluation_oracle",
+  "deployment_prediction": false,
+  "not_single_pass_accuracy": true,
+  "token_totals_are_lower_bounds": true,
+  "limitations": "Historical partial runs and failed attempts remain preserved. Early r2 dev24 lacks three exact source modules, but no exclusive correct query depends on it. Geometry/instances remain annotation-derived. Development and evaluation-selected retries are exposed; cumulative result is not a deployable selector."
+}

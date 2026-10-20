@@ -1,0 +1,336 @@
+{
+  "version": "pointnext-sampling-vote-r8-export-v1",
+  "scene": "scene0081_00",
+  "cloud_sha256": "6359f5c1a576fa147cac2b4867ed98576997824fad2a62784b9c377488e875ba",
+  "score_type": "weighted_standardized_3d_rgb_fusion_not_probability",
+  "objects": [
+    {
+      "bbox_id": 0,
+      "target": "couch",
+      "predicted_object": "couch",
+      "bbox_3d": [
+        0.8561398553814676,
+        1.0658144575233521,
+        0.5703426524996758,
+        0.7035690307767837,
+        3.244350583046227,
+        1.0735312104225159
+      ],
+      "top5": [
+        {
+          "category": "couch",
+          "score": 2.9588190202403886,
+          "rank": 1
+        },
+        {
+          "category": "bench",
+          "score": 1.9541888146680302,
+          "rank": 2
+        },
+        {
+          "category": "table",
+          "score": 1.694491423514989,
+          "rank": 3
+        },
+        {
+          "category": "bed",
+          "score": 1.6077887549383156,
+          "rank": 4
+        },
+        {
+          "category": "piano",
+          "score": 1.5648394006773667,
+          "rank": 5
+        }
+      ],
+      "point_count": 12782
+    },
+    {
+      "bbox_id": 1,
+      "target": "ottoman",
+      "predicted_object": "ottoman",
+      "bbox_3d": [
+        -1.6335668768171687,
+        -0.9131938711219121,
+        0.24871426448225975,
+        0.7032827475513175,
+        0.622504037637313,
+        0.48705726116895676
+      ],
+      "top5": [
+        {
+          "category": "ottoman",
+          "score": 2.917841101861549,
+          "rank": 1
+        },
+        {
+          "category": "armchair",
+          "score": 2.3139688389145636,
+          "rank": 2
+        },
+        {
+          "category": "pillow",
+          "score": 2.241139058413425,
+          "rank": 3
+        },
+        {
+          "category": "sofa chair",
+          "score": 2.15454946287781,
+          "rank": 4
+        },
+        {
+          "category": "chair",
+          "score": 2.006239332370177,
+          "rank": 5
+        }
+      ],
+      "point_count": 1250
+    },
+    {
+      "bbox_id": 2,
+      "target": "ottoman",
+      "predicted_object": "ottoman",
+      "bbox_3d": [
+        0.32272843013668506,
+        -0.02374396024281822,
+        0.1890604179352522,
+        0.544351762699506,
+        0.6136895270877147,
+        0.4980114586651325
+      ],
+      "top5": [
+        {
+          "category": "ottoman",
+          "score": 2.818823062734338,
+          "rank": 1
+        },
+        {
+          "category": "suitcase",
+          "score": 2.009042478247275,
+          "rank": 2
+        },
+        {
+          "category": "chair",
+          "score": 1.960013284843538,
+          "rank": 3
+        },
+        {
+          "category": "seat",
+          "score": 1.9473029179777306,
+          "rank": 4
+        },
+        {
+          "category": "sofa chair",
+          "score": 1.8971516119158731,
+          "rank": 5
+        }
+      ],
+      "point_count": 1482
+    },
+    {
+      "bbox_id": 4,
+      "target": "table",
+      "predicted_object": "table",
+      "bbox_3d": [
+        0.35632761064402985,
+        1.0731949062430601,
+        0.355801897123456,
+        0.6055216529630627,
+        0.6393570505794628,
+        0.7889187447726727
+      ],
+      "top5": [
+        {
+          "category": "table",
+          "score": 3.6966496078097437,
+          "rank": 1
+        },
+        {
+          "category": "coffee table",
+          "score": 3.183528639243077,
+          "rank": 2
+        },
+        {
+          "category": "end table",
+          "score": 2.6224194871788873,
+          "rank": 3
+        },
+        {
+          "category": "dining table",
+          "score": 2.5085526957705397,
+          "rank": 4
+        },
+        {
+          "category": "stool",
+          "score": 2.0182996937502615,
+          "rank": 5
+        }
+      ],
+      "point_count": 1473
+    },
+    {
+      "bbox_id": 5,
+      "target": "table",
+      "predicted_object": "table",
+      "bbox_3d": [
+        -1.0486437298990694,
+        -1.1611859252446948,
+        0.38774119690060616,
+        0.620864293448065,
+        0.6008755744310577,
+        0.761540599167347
+      ],
+      "top5": [
+        {
+          "category": "table",
+          "score": 3.757300759724709,
+          "rank": 1
+        },
+        {
+          "category": "coffee table",
+          "score": 2.9270685926713167,
+          "rank": 2
+        },
+        {
+          "category": "end table",
+          "score": 2.8096427046860986,
+          "rank": 3
+        },
+        {
+          "category": "dining table",
+          "score": 2.725734373797084,
+          "rank": 4
+        },
+        {
+          "category": "desk",
+          "score": 2.2854047532269184,
+          "rank": 5
+        }
+      ],
+      "point_count": 1385
+    },
+    {
+      "bbox_id": 6,
+      "target": "table",
+      "predicted_object": "table",
+      "bbox_3d": [
+        0.15903333828178745,
+        -0.32207175262929866,
+        0.3403649665415287,
+        0.6176912818644098,
+        0.6169428316664209,
+        0.7426510825753212
+      ],
+      "top5": [
+        {
+          "category": "table",
+          "score": 3.669512347217953,
+          "rank": 1
+        },
+        {
+          "category": "coffee table",
+          "score": 2.8088233898371597,
+          "rank": 2
+        },
+        {
+          "category": "end table",
+          "score": 2.6039402472073645,
+          "rank": 3
+        },
+        {
+          "category": "dining table",
+          "score": 2.571857003712025,
+          "rank": 4
+        },
+        {
+          "category": "desk",
+          "score": 2.2653275970572064,
+          "rank": 5
+        }
+      ],
+      "point_count": 1371
+    },
+    {
+      "bbox_id": 7,
+      "target": "couch",
+      "predicted_object": "couch",
+      "bbox_3d": [
+        0.13033786183861196,
+        -1.1356935693699022,
+        0.565812960267067,
+        1.967388765155107,
+        1.6519713821217223,
+        1.0118153244256973
+      ],
+      "top5": [
+        {
+          "category": "couch",
+          "score": 2.6092982327554832,
+          "rank": 1
+        },
+        {
+          "category": "stairs",
+          "score": 1.8086837555929198,
+          "rank": 2
+        },
+        {
+          "category": "cabinet",
+          "score": 1.7949172310484904,
+          "rank": 3
+        },
+        {
+          "category": "bookshelf",
+          "score": 1.7661945326875756,
+          "rank": 4
+        },
+        {
+          "category": "piano",
+          "score": 1.7266223638585632,
+          "rank": 5
+        }
+      ],
+      "point_count": 8786
+    },
+    {
+      "bbox_id": 8,
+      "target": "sofa chair",
+      "predicted_object": "sofa chair",
+      "bbox_3d": [
+        -1.1841637461386334,
+        -1.6685299555666937,
+        0.6193612590432167,
+        0.9568076894171682,
+        0.7160231577943463,
+        0.9999543130397797
+      ],
+      "top5": [
+        {
+          "category": "sofa chair",
+          "score": 2.565234326250539,
+          "rank": 1
+        },
+        {
+          "category": "chair",
+          "score": 2.301164272681071,
+          "rank": 2
+        },
+        {
+          "category": "armchair",
+          "score": 2.2385043908180324,
+          "rank": 3
+        },
+        {
+          "category": "couch",
+          "score": 2.12471478720926,
+          "rank": 4
+        },
+        {
+          "category": "furniture",
+          "score": 2.050936850559121,
+          "rank": 5
+        }
+      ],
+      "point_count": 3752
+    }
+  ]
+}

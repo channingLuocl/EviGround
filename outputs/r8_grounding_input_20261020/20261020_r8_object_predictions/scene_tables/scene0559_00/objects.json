@@ -1,0 +1,377 @@
+{
+  "version": "pointnext-sampling-vote-r8-export-v1",
+  "scene": "scene0559_00",
+  "cloud_sha256": "3a9782970c0886f6ce11e6b121e540e9b9eb9b27391209e2f9e164cf1489b422",
+  "score_type": "weighted_standardized_3d_rgb_fusion_not_probability",
+  "objects": [
+    {
+      "bbox_id": 3,
+      "target": "couch",
+      "predicted_object": "couch",
+      "bbox_3d": [
+        -0.4370711231256763,
+        -2.9315610226401816,
+        0.5388331301510334,
+        1.4376368374282436,
+        0.793308949410914,
+        0.8304993659257889
+      ],
+      "top5": [
+        {
+          "category": "couch",
+          "score": 3.2110477063199037,
+          "rank": 1
+        },
+        {
+          "category": "sofa chair",
+          "score": 2.287127278512477,
+          "rank": 2
+        },
+        {
+          "category": "armchair",
+          "score": 2.109607523882296,
+          "rank": 3
+        },
+        {
+          "category": "tv",
+          "score": 2.029550436217442,
+          "rank": 4
+        },
+        {
+          "category": "piano",
+          "score": 1.8206922385085322,
+          "rank": 5
+        }
+      ],
+      "point_count": 4661
+    },
+    {
+      "bbox_id": 5,
+      "target": "ottoman",
+      "predicted_object": "ottoman",
+      "bbox_3d": [
+        -0.006791334421656359,
+        -2.0210381587755677,
+        0.2850533165037632,
+        0.4595066722154826,
+        0.439447912135023,
+        0.420027419924736
+      ],
+      "top5": [
+        {
+          "category": "ottoman",
+          "score": 2.9755032819382947,
+          "rank": 1
+        },
+        {
+          "category": "stool",
+          "score": 2.0702888418513266,
+          "rank": 2
+        },
+        {
+          "category": "pillow",
+          "score": 1.8731517443031707,
+          "rank": 3
+        },
+        {
+          "category": "cushion",
+          "score": 1.837661793668139,
+          "rank": 4
+        },
+        {
+          "category": "seat",
+          "score": 1.758673301086897,
+          "rank": 5
+        }
+      ],
+      "point_count": 1047
+    },
+    {
+      "bbox_id": 7,
+      "target": "door",
+      "predicted_object": "door",
+      "bbox_3d": [
+        -0.1063244261717049,
+        2.9441373575056815,
+        1.2811736725270748,
+        0.9916298852076473,
+        0.1711593944892087,
+        1.4790749549865723
+      ],
+      "top5": [
+        {
+          "category": "door",
+          "score": 2.7188287395661845,
+          "rank": 1
+        },
+        {
+          "category": "cabinet",
+          "score": 2.185638766980366,
+          "rank": 2
+        },
+        {
+          "category": "picture",
+          "score": 2.142693789999236,
+          "rank": 3
+        },
+        {
+          "category": "closet door",
+          "score": 2.1297377254929994,
+          "rank": 4
+        },
+        {
+          "category": "whiteboard",
+          "score": 2.127898343635078,
+          "rank": 5
+        }
+      ],
+      "point_count": 2701
+    },
+    {
+      "bbox_id": 10,
+      "target": "desk",
+      "predicted_object": "desk",
+      "bbox_3d": [
+        -0.20126463893357993,
+        1.6529156879167672,
+        0.37525851652026176,
+        0.8457939969744785,
+        1.6508020032057544,
+        0.8057966530323029
+      ],
+      "top5": [
+        {
+          "category": "desk",
+          "score": 3.4876706502079036,
+          "rank": 1
+        },
+        {
+          "category": "table",
+          "score": 2.931992246364606,
+          "rank": 2
+        },
+        {
+          "category": "dining table",
+          "score": 2.5129484465860408,
+          "rank": 3
+        },
+        {
+          "category": "coffee table",
+          "score": 2.0238356510457636,
+          "rank": 4
+        },
+        {
+          "category": "bed",
+          "score": 1.8773343915316354,
+          "rank": 5
+        }
+      ],
+      "point_count": 4343
+    },
+    {
+      "bbox_id": 11,
+      "target": "box",
+      "predicted_object": "box",
+      "bbox_3d": [
+        -0.23487695713778578,
+        2.2421448956301404,
+        0.8206458948552608,
+        0.4503671802856388,
+        0.5369222227889736,
+        0.38957858085632324
+      ],
+      "top5": [
+        {
+          "category": "box",
+          "score": 2.3917202735588816,
+          "rank": 1
+        },
+        {
+          "category": "chair",
+          "score": 2.194919997866548,
+          "rank": 2
+        },
+        {
+          "category": "bin",
+          "score": 2.0518741006519683,
+          "rank": 3
+        },
+        {
+          "category": "storage bin",
+          "score": 2.010756673041728,
+          "rank": 4
+        },
+        {
+          "category": "storage container",
+          "score": 1.9284491970989737,
+          "rank": 5
+        }
+      ],
+      "point_count": 2054
+    },
+    {
+      "bbox_id": 12,
+      "target": "ottoman",
+      "predicted_object": "ottoman",
+      "bbox_3d": [
+        -0.3343752277795069,
+        1.645615314771291,
+        0.2157765720039606,
+        0.5007724244672076,
+        1.120304698847903,
+        0.4477209188044071
+      ],
+      "top5": [
+        {
+          "category": "ottoman",
+          "score": 2.8401838238602117,
+          "rank": 1
+        },
+        {
+          "category": "bench",
+          "score": 2.594004487503243,
+          "rank": 2
+        },
+        {
+          "category": "couch",
+          "score": 2.275622897365794,
+          "rank": 3
+        },
+        {
+          "category": "seat",
+          "score": 2.138370026041388,
+          "rank": 4
+        },
+        {
+          "category": "coffee table",
+          "score": 2.0292248716858343,
+          "rank": 5
+        }
+      ],
+      "point_count": 2264
+    },
+    {
+      "bbox_id": 13,
+      "target": "microwave",
+      "predicted_object": "microwave",
+      "bbox_3d": [
+        0.11244761474516451,
+        1.2793697045417254,
+        0.22373266145586967,
+        0.4165006011100303,
+        0.309976746140741,
+        0.4111582338809967
+      ],
+      "top5": [
+        {
+          "category": "microwave",
+          "score": 2.2477652711992873,
+          "rank": 1
+        },
+        {
+          "category": "box",
+          "score": 2.108514242142761,
+          "rank": 2
+        },
+        {
+          "category": "ottoman",
+          "score": 1.9455816819827219,
+          "rank": 3
+        },
+        {
+          "category": "printer",
+          "score": 1.88079189490379,
+          "rank": 4
+        },
+        {
+          "category": "paper towel dispenser",
+          "score": 1.87953977278752,
+          "rank": 5
+        }
+      ],
+      "point_count": 714
+    },
+    {
+      "bbox_id": 14,
+      "target": "couch",
+      "predicted_object": "couch",
+      "bbox_3d": [
+        0.6474384395232349,
+        -1.8038332654825275,
+        0.4718659482896328,
+        0.8862187923469804,
+        1.9695315108475242,
+        0.8797623515129089
+      ],
+      "top5": [
+        {
+          "category": "couch",
+          "score": 3.534055849081179,
+          "rank": 1
+        },
+        {
+          "category": "bench",
+          "score": 2.3935127272606276,
+          "rank": 2
+        },
+        {
+          "category": "sofa chair",
+          "score": 2.00718888935417,
+          "rank": 3
+        },
+        {
+          "category": "piano",
+          "score": 1.997729072733312,
+          "rank": 4
+        },
+        {
+          "category": "bed",
+          "score": 1.9852342457511447,
+          "rank": 5
+        }
+      ],
+      "point_count": 5219
+    },
+    {
+      "bbox_id": 15,
+      "target": "shower floor",
+      "predicted_object": "shower floor",
+      "bbox_3d": [
+        0.5426676254304823,
+        -3.067339304320221,
+        0.5664624534547329,
+        0.6769988560035074,
+        0.6583613048979657,
+        0.08790415525436401
+      ],
+      "top5": [
+        {
+          "category": "shower floor",
+          "score": 3.0654813209251452,
+          "rank": 1
+        },
+        {
+          "category": "mat",
+          "score": 2.3490120682028395,
+          "rank": 2
+        },
+        {
+          "category": "table",
+          "score": 2.2171688324882703,
+          "rank": 3
+        },
+        {
+          "category": "end table",
+          "score": 1.9587064847169133,
+          "rank": 4
+        },
+        {
+          "category": "ceiling light",
+          "score": 1.9433814212948566,
+          "rank": 5
+        }
+      ],
+      "point_count": 897
+    }
+  ]
+}

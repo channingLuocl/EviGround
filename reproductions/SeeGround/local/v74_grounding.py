@@ -4,7 +4,7 @@ Inputs are the query, scene instances and observed RGB points, never evaluation
 answers. Choices are model hypotheses, not certified symbolic predicates.
 """
 from categories_v9 import category_fields
-from v4_policy import settings as policy_settings
+from v4_policy import settings as policy_settings, r8_refinement_enabled, r8_challenge_enabled, r8_numeric_enabled
 import json
 from pathlib import Path
 
@@ -27,15 +27,26 @@ def scene_views(parsed, objects, candidates, xyz, rgb, ids, out):
     # Remove enclosing walls/ceiling from exterior inspection cameras. Keep
     # their boxes in the object table; this is a cutaway, not missing evidence.
     shell_ids = [o['bbox_id'] for o in objects if o['target'].casefold() in ('wall', 'ceiling')]
-    keep = ~np.isin(ids, shell_ids)
+    if r8_refinement_enabled():
+        # GT categories were intentionally scrubbed from supplemental instances.
+        # Show classifier-covered instances, not label-dependent wall cutaways.
+        covered_ids = [o['bbox_id'] for o in objects if 'category_hypotheses' in o]
+        keep = np.isin(ids, covered_ids)
+        shell_ids = []
+    else:
+        keep = ~np.isin(ids, shell_ids)
     points, colors, instance_ids = xyz[keep], rgb[keep], ids[keep]
     references = match_retrieval_categories(parsed.get('Anchor', []), objects)
     focus = list({o['bbox_id']: o for o in candidates + references
-                  if o['target'].casefold() not in ('wall', 'floor', 'ceiling')}.values())
+                  if r8_refinement_enabled() or
+                  o['target'].casefold() not in ('wall', 'floor', 'ceiling')}.values())
     relevant_ids = {o['bbox_id'] for o in candidates + references}
     bounds = np.array([o['bbox_3d'] for o in focus])
     views = []
-    for index, (azimuth, elevation) in enumerate(((90, 65), (270, 30))):
+    angles = ((90, 65), (270, 30), (0, 89)) if r8_refinement_enabled() else ((90, 65), (270, 30))
+    if r8_challenge_enabled():
+        angles = ((45, 50), (225, 40), (0, 89))
+    for index, (azimuth, elevation) in enumerate(angles):
         region = np.ones(len(points), dtype=bool)
         lo, hi = points.min(0), points.max(0)
         # First view retains the room context; second enlarges targets and
@@ -49,6 +60,9 @@ def scene_views(parsed, objects, candidates, xyz, rgb, ids, out):
         span = max(float(np.linalg.norm(hi-lo)), .5)
         a, e = np.deg2rad([azimuth, elevation])
         eye = at + 1.35 * span * np.array([np.cos(a)*np.cos(e), np.sin(a)*np.cos(e), np.sin(e)])
+        if r8_refinement_enabled():
+            from r8_grounding import camera_eye
+            eye, at = camera_eye(lo, hi, eye-at)
         labels = np.where(np.isin(instance_ids[region], list(relevant_ids)), instance_ids[region], -1)
         path = Path(out) / f'v74_scene_{index+1}.png'
         stats = render(points[region], colors[region], path, eye=eye, at=at,
@@ -56,6 +70,11 @@ def scene_views(parsed, objects, candidates, xyz, rgb, ids, out):
         views.append({'image': str(path), **stats,
                       'kind': 'room_cutaway' if index == 0 else 'target_reference_context',
                       'hidden_shell_ids': shell_ids})
+        if r8_refinement_enabled():
+            views[-1].update(kind=('predicted_instance_overview', 'target_reference_context',
+                                   'top_down_geometry_context')[index],
+                hidden_supplemental_instance_ids=[o['bbox_id'] for o in objects
+                                                 if 'category_hypotheses' not in o])
     return views
 
 
@@ -86,6 +105,9 @@ def ground_scene(query, parsed, objects, candidates, xyz, rgb, ids, out, calls,
     if not allowed:
         return None  # Do not revive explicit visual/category contradictions.
     views = scene_views(parsed, objects, candidates, xyz, rgb, ids, out)
+    if r8_refinement_enabled():
+        from r8_grounding import isolated_target_views
+        views.extend(isolated_target_views(candidates, xyz, rgb, ids, out))
     known = {o['bbox_id'] for o in objects}
     schema = obj({'predicted_id': {'type': ['integer', 'null'], 'enum': allowed + [None]},
         'reason': REASON, 'evidence': array(obj({'source_quote': {'type': 'string', 'enum': [query]},
@@ -119,6 +141,17 @@ No markdown or prose outside JSON. Never output an ID outside allowed_target_ids
     if any('category_hypotheses' in o for o in objects):
         from categories_v9 import CATEGORY_INSTRUCTIONS
         instructions += CATEGORY_INSTRUCTIONS
+    if r8_refinement_enabled():
+        from r8_grounding import INSTRUCTIONS
+        instructions = instructions.replace(
+            'Walls/ceiling are hidden for visibility; their boxes remain in the table.',
+            'Unclassified supplemental instances are omitted for visibility; their anonymous geometry remains in the table.')
+        instructions += INSTRUCTIONS
+    if r8_challenge_enabled():
+        from r8_precision import INSTRUCTIONS as PRECISION_INSTRUCTIONS
+        instructions = instructions.replace('instance table (center_xyz_m, extent_xyz_m; Z is up)',
+            'instance table (named center coordinates, height_m and X/Y extents; Z is up)')
+        instructions += PRECISION_INSTRUCTIONS
     def neighbors(origin, pool, count):
         rows = []
         for other in pool:
@@ -138,9 +171,34 @@ No markdown or prose outside JSON. Never output an ID outside allowed_target_ids
         'reference_neighbors': [{'id': o['bbox_id'], 'nearest_targets_xy': neighbors(o, candidates, 3)}
                                 for o in match_retrieval_categories(parsed.get('Anchor', []), objects)],
         'symbolic_coverage_gaps': diagnosis.get('missing', [])}
+    if r8_refinement_enabled():
+        from r8_grounding import query_evidence
+        payload.update(query_evidence(parsed, objects, candidates))
+        payload['views'] = [{k: v for k, v in view.items() if k in
+            ('kind', 'marked_ids', 'unmarked_focus_ids', 'layout', 'hidden_supplemental_instance_ids')}
+            for view in views]
+        if r8_challenge_enabled():
+            from r8_precision import precision_evidence
+            payload.update(precision_evidence(query, parsed, objects, candidates))
+            for key in ('target_neighbors', 'reference_neighbors', 'numeric_reference_distances'):
+                payload.pop(key)
+            payload['target_category_bindings'] = [
+                {**b, 'matched_hypotheses': [{'category': h['category'], 'rank': h['rank']}
+                                            for h in b['matched_hypotheses']]}
+                for b in payload['target_category_bindings']]
+            payload['views'] = [{k: v for k, v in view.items() if k in
+                ('kind', 'marked_ids', 'unmarked_focus_ids', 'layout', 'eye', 'at')}
+                for view in views]
+        trace['r8_scene_input'] = payload
+    if r8_numeric_enabled():
+        from r8_numeric import INSTRUCTIONS as NUMERIC_INSTRUCTIONS, choice_schema
+        schema['properties']['numeric_choice'] = choice_schema(allowed, payload.get('observer_frames', []))
+        schema['required'].append('numeric_choice')
+        instructions += NUMERIC_INSTRUCTIONS
     call = {'stage': 'v74_scene_grounding', 'role': 'multimodal_grounder',
             'allowed_target_ids': allowed, 'images': [v['image'] for v in views]}
     calls.append(call)
+    visual_calls = 1
     try:
         response = chat([{'role': 'system', 'content': instructions}, {'role': 'user', 'content': [
             {'type': 'text', 'text': json.dumps(payload, ensure_ascii=False)},
@@ -150,6 +208,28 @@ No markdown or prose outside JSON. Never output an ID outside allowed_target_ids
         if response.get('_finish_reason') != 'stop':
             raise ValueError('Scene grounding response is incomplete')
         decision = validate_decision(parse_json_object(response['_content']), query, allowed, known)
+        if r8_numeric_enabled():
+            from r8_numeric import execute_choice
+            trace['r4_original_scene_decision'] = decision
+            decision, trace['r4_numeric_execution'] = execute_choice(decision, query, parsed, payload, allowed)
+            decision = validate_decision(decision, query, allowed, known)
+        if r8_refinement_enabled() and not r8_challenge_enabled():
+            from r8_grounding import REVIEW_INSTRUCTIONS
+            trace['r8_initial_scene_decision'] = decision
+            call = {'stage': 'r8_scene_consistency_review', 'role': 'multimodal_verifier',
+                    'allowed_target_ids': allowed, 'images': [v['image'] for v in views]}
+            calls.append(call)
+            visual_calls += 1
+            response = chat([{'role': 'system', 'content': instructions+'\n'+REVIEW_INSTRUCTIONS},
+                {'role': 'user', 'content': [
+                    {'type': 'text', 'text': json.dumps({**payload, 'proposed_decision': decision},
+                                                       ensure_ascii=False)},
+                    *[image_part(view['image']) for view in views]]}],
+                max_tokens=2000, json_mode=True, **schema_kwargs('scene_consistency_review', schema))
+            call.update(response=response['_content'], usage=response.get('usage'), **response.get('_baseline', {}))
+            if response.get('_finish_reason') != 'stop':
+                raise ValueError('Scene consistency review is incomplete')
+            decision = validate_decision(parse_json_object(response['_content']), query, allowed, known)
     except ValueError as exc:
         call['error'] = str(exc)
         # API failures remain failures; invalid local evidence is an abstention.
@@ -165,7 +245,7 @@ No markdown or prose outside JSON. Never output an ID outside allowed_target_ids
                      'symbolic_coverage_gaps': diagnosis.get('missing', [])})
     trace['steps'].append({'action': 'v74_scene_grounding', 'decision': decision})
     trace['internal_usage']['render'] += len(views)
-    trace['internal_usage']['visual_check'] += 1
+    trace['internal_usage']['visual_check'] += visual_calls
     selected = next((o for o in candidates if o['bbox_id'] == oid), None)
     return {'query': query, 'predicted_id': oid, 'bbox_3d': selected['bbox_3d'] if selected else None,
         'implementation_version': policy_settings()['version'],
@@ -174,6 +254,9 @@ No markdown or prose outside JSON. Never output an ID outside allowed_target_ids
         'accepted': False, 'images': [v['image'] for v in views],
         'response': call.get('response', ''), 'decision_reasons': [decision['reason']],
         'scene_evidence': decision, 'active_trace': trace,
-        'final_review': {'status': 'included_in_scene_grounding', 'reason': 'all targets compared in one scene decision'},
+        'final_review': {'status': 'included_in_scene_consistency_review' if r8_refinement_enabled() and not r8_challenge_enabled()
+                        else 'included_in_scene_grounding',
+                        'reason': 'all targets compared with a separate consistency review' if r8_refinement_enabled() and not r8_challenge_enabled()
+                        else 'all targets compared in one scene decision'},
         'backtrack_count': len(trace['backtracks']), 'internal_budget_usage': dict(parsed['_v4_budget']),
         'diagnosis_policy': 'symbolic_evidence_with_multimodal_coverage_recovery'}

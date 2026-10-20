@@ -1,0 +1,42 @@
+{
+  "stage": {
+    "status": "current_phases_completed_and_audited",
+    "audit": "/Users/luocl/Desktop/seeground/outputs/r8_grounding_challenge_20261020/current_phases_completion_audit.json",
+    "overall_reference_reached": false
+  },
+  "snapshot_started_at": "2026-10-20T22:45:09.914696+08:00",
+  "snapshot_finished_at": "2026-10-20T22:48:34.849944+08:00",
+  "primary_completed": 7805,
+  "primary_total": 7805,
+  "primary_correct_so_far": 4170,
+  "primary_accuracy_on_completed_only": 0.5342729019859065,
+  "primary_errors": 1,
+  "primary_full_metrics": {
+    "easy": 0.5793798038695998,
+    "hard": 0.49206349206349204,
+    "view_dependent": 0.4465843023255814,
+    "view_independent": 0.5820304769443895,
+    "overall": 0.5342729019859065
+  },
+  "cumulative_summary": {
+    "selected": 7805,
+    "evaluated": 7805,
+    "correct": 5428,
+    "accuracy_over_selected": 0.6954516335682255,
+    "evaluation_policy": "cumulative_ever_correct_evaluation_oracle",
+    "deployment_prediction": false,
+    "complete": true,
+    "total_api_attempts": 41437,
+    "unreported_token_usage_attempts": 137,
+    "remaining_error_queries": [],
+    "source_predictions_sha256": "34aa94cbc455324fdd28ddfd21a3832bba743eac25c32d58037c9bc460b1da9e"
+  },
+  "current_phases_completion_audit_passed": true,
+  "gt_reference_metrics": {
+    "easy": 0.7717996289424861,
+    "hard": 0.6257440476190477,
+    "view_dependent": 0.5541424418604651,
+    "view_independent": 0.7737977439145063,
+    "overall": 0.6963484945547725
+  }
+}

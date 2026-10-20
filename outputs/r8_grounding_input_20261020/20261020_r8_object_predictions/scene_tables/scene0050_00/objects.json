@@ -1,0 +1,1197 @@
+{
+  "version": "pointnext-sampling-vote-r8-export-v1",
+  "scene": "scene0050_00",
+  "cloud_sha256": "2c823171819843bb288a0310d2f2321d9e85b29ef1f32d5e6e0ff3c6757e17fa",
+  "score_type": "weighted_standardized_3d_rgb_fusion_not_probability",
+  "objects": [
+    {
+      "bbox_id": 0,
+      "target": "box",
+      "predicted_object": "box",
+      "bbox_3d": [
+        -0.2248213929519416,
+        -2.353199068657018,
+        0.4788493439555168,
+        0.3600185603036934,
+        0.2250363990197748,
+        0.14787161350250244
+      ],
+      "top5": [
+        {
+          "category": "box",
+          "score": 2.5276475702487584,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 2.0577790302036103,
+          "rank": 2
+        },
+        {
+          "category": "towel",
+          "score": 1.9687401475184607,
+          "rank": 3
+        },
+        {
+          "category": "tissue box",
+          "score": 1.8518739483194522,
+          "rank": 4
+        },
+        {
+          "category": "suitcase",
+          "score": 1.7210141137211508,
+          "rank": 5
+        }
+      ],
+      "point_count": 333
+    },
+    {
+      "bbox_id": 1,
+      "target": "piano",
+      "predicted_object": "piano",
+      "bbox_3d": [
+        -1.1948949311816266,
+        -2.1442872452436257,
+        0.5045488700270653,
+        1.486070224733874,
+        0.6833545254393005,
+        0.9861962199211121
+      ],
+      "top5": [
+        {
+          "category": "piano",
+          "score": 2.503751671589444,
+          "rank": 1
+        },
+        {
+          "category": "couch",
+          "score": 2.2007531837351255,
+          "rank": 2
+        },
+        {
+          "category": "desk",
+          "score": 2.1874219407649655,
+          "rank": 3
+        },
+        {
+          "category": "table",
+          "score": 1.9849215397396534,
+          "rank": 4
+        },
+        {
+          "category": "coffee table",
+          "score": 1.8775566600348879,
+          "rank": 5
+        }
+      ],
+      "point_count": 7604
+    },
+    {
+      "bbox_id": 3,
+      "target": "armchair",
+      "predicted_object": "armchair",
+      "bbox_3d": [
+        0.8468946153245103,
+        -0.0895069241110793,
+        0.3998422510921955,
+        1.06195523519607,
+        1.3032247649911035,
+        0.8603171184659004
+      ],
+      "top5": [
+        {
+          "category": "armchair",
+          "score": 3.5938005163111404,
+          "rank": 1
+        },
+        {
+          "category": "sofa chair",
+          "score": 3.3254274445621186,
+          "rank": 2
+        },
+        {
+          "category": "chair",
+          "score": 3.1969142585795707,
+          "rank": 3
+        },
+        {
+          "category": "couch",
+          "score": 2.6413243649948734,
+          "rank": 4
+        },
+        {
+          "category": "office chair",
+          "score": 2.030806394849586,
+          "rank": 5
+        }
+      ],
+      "point_count": 8660
+    },
+    {
+      "bbox_id": 4,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        -0.2205750281180343,
+        0.8526019368601983,
+        0.3693782761693001,
+        0.7506777172114099,
+        0.7551571200419396,
+        0.7948741614818573
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 3.813426203644651,
+          "rank": 1
+        },
+        {
+          "category": "armchair",
+          "score": 3.219354454247231,
+          "rank": 2
+        },
+        {
+          "category": "office chair",
+          "score": 2.621652667575069,
+          "rank": 3
+        },
+        {
+          "category": "sofa chair",
+          "score": 2.3692558251494735,
+          "rank": 4
+        },
+        {
+          "category": "folded chair",
+          "score": 2.054198759473138,
+          "rank": 5
+        }
+      ],
+      "point_count": 4824
+    },
+    {
+      "bbox_id": 5,
+      "target": "desk",
+      "predicted_object": "desk",
+      "bbox_3d": [
+        0.9475555618556015,
+        0.8795995491896562,
+        0.429367957636714,
+        1.5528059782277452,
+        0.8806427259944982,
+        0.9144170172512531
+      ],
+      "top5": [
+        {
+          "category": "desk",
+          "score": 3.033036184840352,
+          "rank": 1
+        },
+        {
+          "category": "table",
+          "score": 2.4097172844222516,
+          "rank": 2
+        },
+        {
+          "category": "cabinet",
+          "score": 1.9266985212103942,
+          "rank": 3
+        },
+        {
+          "category": "shelf",
+          "score": 1.7420357843394814,
+          "rank": 4
+        },
+        {
+          "category": "dining table",
+          "score": 1.7112593634935558,
+          "rank": 5
+        }
+      ],
+      "point_count": 4713
+    },
+    {
+      "bbox_id": 6,
+      "target": "tissue box",
+      "predicted_object": "tissue box",
+      "bbox_3d": [
+        -0.6348622252735829,
+        -0.4423516105050558,
+        0.48100804537534714,
+        0.24500032936256133,
+        0.2504772718388839,
+        0.18058979511260986
+      ],
+      "top5": [
+        {
+          "category": "tissue box",
+          "score": 2.6694403952132393,
+          "rank": 1
+        },
+        {
+          "category": "cup",
+          "score": 2.20834272356532,
+          "rank": 2
+        },
+        {
+          "category": "box",
+          "score": 2.1527849115883257,
+          "rank": 3
+        },
+        {
+          "category": "object",
+          "score": 2.111882365464075,
+          "rank": 4
+        },
+        {
+          "category": "shoe",
+          "score": 1.664567307677574,
+          "rank": 5
+        }
+      ],
+      "point_count": 439
+    },
+    {
+      "bbox_id": 7,
+      "target": "lamp",
+      "predicted_object": "lamp",
+      "bbox_3d": [
+        0.32017105997649686,
+        1.1553309676344927,
+        0.9855731353163719,
+        0.3863200850708033,
+        0.16667753182629852,
+        0.25362294912338257
+      ],
+      "top5": [
+        {
+          "category": "lamp",
+          "score": 2.449725796368578,
+          "rank": 1
+        },
+        {
+          "category": "hair dryer",
+          "score": 2.06500029322704,
+          "rank": 2
+        },
+        {
+          "category": "object",
+          "score": 1.9627202649207312,
+          "rank": 3
+        },
+        {
+          "category": "chair",
+          "score": 1.6542738370058154,
+          "rank": 4
+        },
+        {
+          "category": "light",
+          "score": 1.6368038664141227,
+          "rank": 5
+        }
+      ],
+      "point_count": 486
+    },
+    {
+      "bbox_id": 8,
+      "target": "window",
+      "predicted_object": "window",
+      "bbox_3d": [
+        -0.7103418597254478,
+        1.3986049130417353,
+        0.9662927202880383,
+        1.7155338962675124,
+        0.4077108202924613,
+        1.9550081714987755
+      ],
+      "top5": [
+        {
+          "category": "window",
+          "score": 3.084501910888534,
+          "rank": 1
+        },
+        {
+          "category": "bookshelf",
+          "score": 2.3406066291213206,
+          "rank": 2
+        },
+        {
+          "category": "curtain",
+          "score": 2.217306844304705,
+          "rank": 3
+        },
+        {
+          "category": "door",
+          "score": 2.1914641716449514,
+          "rank": 4
+        },
+        {
+          "category": "shelf",
+          "score": 2.0084927700948816,
+          "rank": 5
+        }
+      ],
+      "point_count": 25061
+    },
+    {
+      "bbox_id": 9,
+      "target": "door",
+      "predicted_object": "door",
+      "bbox_3d": [
+        1.7563158070695977,
+        0.01239021938885898,
+        0.9802952408790588,
+        0.1209668811425928,
+        0.7077373791188037,
+        1.9178011268377304
+      ],
+      "top5": [
+        {
+          "category": "door",
+          "score": 3.5422455144169915,
+          "rank": 1
+        },
+        {
+          "category": "closet door",
+          "score": 2.265877984960106,
+          "rank": 2
+        },
+        {
+          "category": "doorframe",
+          "score": 2.067921976306714,
+          "rank": 3
+        },
+        {
+          "category": "window",
+          "score": 2.016474051159974,
+          "rank": 4
+        },
+        {
+          "category": "closet wall",
+          "score": 1.9075471627613965,
+          "rank": 5
+        }
+      ],
+      "point_count": 3681
+    },
+    {
+      "bbox_id": 10,
+      "target": "door",
+      "predicted_object": "door",
+      "bbox_3d": [
+        1.7724588826121845,
+        -1.0369161278201808,
+        0.9709392674267292,
+        0.07958590761576545,
+        0.8303752989606821,
+        1.9614416435360909
+      ],
+      "top5": [
+        {
+          "category": "door",
+          "score": 3.5718400094141014,
+          "rank": 1
+        },
+        {
+          "category": "closet door",
+          "score": 2.2831225249458162,
+          "rank": 2
+        },
+        {
+          "category": "window",
+          "score": 2.212696634679772,
+          "rank": 3
+        },
+        {
+          "category": "cabinet",
+          "score": 2.1570442383643633,
+          "rank": 4
+        },
+        {
+          "category": "doorframe",
+          "score": 2.086883334423367,
+          "rank": 5
+        }
+      ],
+      "point_count": 3257
+    },
+    {
+      "bbox_id": 11,
+      "target": "coffee table",
+      "predicted_object": "coffee table",
+      "bbox_3d": [
+        -0.5629914707177477,
+        -0.46758411374688436,
+        0.23835590295493603,
+        0.7069625794375014,
+        1.1990469991033237,
+        0.5236008651554585
+      ],
+      "top5": [
+        {
+          "category": "coffee table",
+          "score": 2.9479169276937967,
+          "rank": 1
+        },
+        {
+          "category": "ottoman",
+          "score": 2.561026494086126,
+          "rank": 2
+        },
+        {
+          "category": "table",
+          "score": 2.339058645046026,
+          "rank": 3
+        },
+        {
+          "category": "couch",
+          "score": 2.279503799999155,
+          "rank": 4
+        },
+        {
+          "category": "end table",
+          "score": 1.9815995058668952,
+          "rank": 5
+        }
+      ],
+      "point_count": 4574
+    },
+    {
+      "bbox_id": 12,
+      "target": "bench",
+      "predicted_object": "bench",
+      "bbox_3d": [
+        -1.3053828479592973,
+        -1.5077657159354856,
+        0.23216339945793152,
+        0.8216825124545224,
+        0.5662083670827363,
+        0.4345543831586838
+      ],
+      "top5": [
+        {
+          "category": "bench",
+          "score": 2.634227228638068,
+          "rank": 1
+        },
+        {
+          "category": "table",
+          "score": 2.423672683141736,
+          "rank": 2
+        },
+        {
+          "category": "end table",
+          "score": 2.330890853723785,
+          "rank": 3
+        },
+        {
+          "category": "chair",
+          "score": 2.1437579121666537,
+          "rank": 4
+        },
+        {
+          "category": "seat",
+          "score": 1.9648010521369326,
+          "rank": 5
+        }
+      ],
+      "point_count": 1360
+    },
+    {
+      "bbox_id": 13,
+      "target": "couch",
+      "predicted_object": "couch",
+      "bbox_3d": [
+        -1.4737418396887527,
+        0.259711250056875,
+        0.4536583907902241,
+        1.063383111300567,
+        2.0126856998340603,
+        0.90324617177248
+      ],
+      "top5": [
+        {
+          "category": "couch",
+          "score": 3.744440554158192,
+          "rank": 1
+        },
+        {
+          "category": "sofa chair",
+          "score": 2.2619498960072137,
+          "rank": 2
+        },
+        {
+          "category": "armchair",
+          "score": 2.1931561317045394,
+          "rank": 3
+        },
+        {
+          "category": "bed",
+          "score": 2.157591615601363,
+          "rank": 4
+        },
+        {
+          "category": "piano",
+          "score": 1.9053207111220543,
+          "rank": 5
+        }
+      ],
+      "point_count": 10811
+    },
+    {
+      "bbox_id": 14,
+      "target": "backpack",
+      "predicted_object": "backpack",
+      "bbox_3d": [
+        -0.3905016699263495,
+        -0.18668768317141193,
+        0.47503044456243515,
+        0.3782994504744899,
+        0.4891721736497523,
+        0.23611241579055786
+      ],
+      "top5": [
+        {
+          "category": "backpack",
+          "score": 2.489179527905555,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 2.1397454965578,
+          "rank": 2
+        },
+        {
+          "category": "jacket",
+          "score": 2.106843089315077,
+          "rank": 3
+        },
+        {
+          "category": "clothes",
+          "score": 2.0312240881484764,
+          "rank": 4
+        },
+        {
+          "category": "bag",
+          "score": 1.9999759513731243,
+          "rank": 5
+        }
+      ],
+      "point_count": 866
+    },
+    {
+      "bbox_id": 15,
+      "target": "object",
+      "predicted_object": "object",
+      "bbox_3d": [
+        1.4920332850145446,
+        0.788581102396023,
+        0.8969801887869835,
+        0.42546362273550997,
+        0.5436867696089536,
+        0.3296554684638977
+      ],
+      "top5": [
+        {
+          "category": "object",
+          "score": 1.7014625498692997,
+          "rank": 1
+        },
+        {
+          "category": "printer",
+          "score": 1.658612755594321,
+          "rank": 2
+        },
+        {
+          "category": "tissue box",
+          "score": 1.648413440094054,
+          "rank": 3
+        },
+        {
+          "category": "box",
+          "score": 1.6085078603748775,
+          "rank": 4
+        },
+        {
+          "category": "microwave",
+          "score": 1.5126306764928112,
+          "rank": 5
+        }
+      ],
+      "point_count": 1589
+    },
+    {
+      "bbox_id": 16,
+      "target": "shelf",
+      "predicted_object": "shelf",
+      "bbox_3d": [
+        0.7994724556177868,
+        1.2105740492929051,
+        1.2790845856070518,
+        0.6598609584968251,
+        0.2180694566774264,
+        1.080513060092926
+      ],
+      "top5": [
+        {
+          "category": "shelf",
+          "score": 3.3375602687107717,
+          "rank": 1
+        },
+        {
+          "category": "bookshelf",
+          "score": 3.009504235384701,
+          "rank": 2
+        },
+        {
+          "category": "cabinet",
+          "score": 2.190670911150389,
+          "rank": 3
+        },
+        {
+          "category": "rack",
+          "score": 2.114850520428246,
+          "rank": 4
+        },
+        {
+          "category": "window",
+          "score": 2.1057873583627313,
+          "rank": 5
+        }
+      ],
+      "point_count": 4400
+    },
+    {
+      "bbox_id": 17,
+      "target": "book",
+      "predicted_object": "book",
+      "bbox_3d": [
+        1.4688684535439727,
+        -1.5055707974278647,
+        0.0634101890027523,
+        0.39079287147914243,
+        0.33427066883319867,
+        0.16909485310316086
+      ],
+      "top5": [
+        {
+          "category": "book",
+          "score": 2.5810995048565593,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 2.575953272113739,
+          "rank": 2
+        },
+        {
+          "category": "box",
+          "score": 1.997878346197301,
+          "rank": 3
+        },
+        {
+          "category": "scale",
+          "score": 1.88145688120781,
+          "rank": 4
+        },
+        {
+          "category": "cd case",
+          "score": 1.7404161881898472,
+          "rank": 5
+        }
+      ],
+      "point_count": 707
+    },
+    {
+      "bbox_id": 18,
+      "target": "backpack",
+      "predicted_object": "backpack",
+      "bbox_3d": [
+        -0.6315117487681086,
+        -0.7633563729745756,
+        0.4960428699851036,
+        0.443874880722511,
+        0.5834035181575103,
+        0.22015398740768433
+      ],
+      "top5": [
+        {
+          "category": "backpack",
+          "score": 2.9084436591826233,
+          "rank": 1
+        },
+        {
+          "category": "bag",
+          "score": 2.316666558021325,
+          "rank": 2
+        },
+        {
+          "category": "jacket",
+          "score": 2.1842591863099994,
+          "rank": 3
+        },
+        {
+          "category": "object",
+          "score": 2.177217178776852,
+          "rank": 4
+        },
+        {
+          "category": "clothes",
+          "score": 1.9255224442377399,
+          "rank": 5
+        }
+      ],
+      "point_count": 1177
+    },
+    {
+      "bbox_id": 21,
+      "target": "clock",
+      "predicted_object": "clock",
+      "bbox_3d": [
+        -1.8898977649248527,
+        -0.7149943324957944,
+        1.8767754957079887,
+        0.049795240315118505,
+        0.23283466021375787,
+        0.22288262844085693
+      ],
+      "top5": [
+        {
+          "category": "clock",
+          "score": 2.8858509076548247,
+          "rank": 1
+        },
+        {
+          "category": "picture",
+          "score": 2.726574487503153,
+          "rank": 2
+        },
+        {
+          "category": "decoration",
+          "score": 2.3061424554053085,
+          "rank": 3
+        },
+        {
+          "category": "calendar",
+          "score": 1.8795792210124915,
+          "rank": 4
+        },
+        {
+          "category": "object",
+          "score": 1.7927646509519979,
+          "rank": 5
+        }
+      ],
+      "point_count": 177
+    },
+    {
+      "bbox_id": 24,
+      "target": "cup",
+      "predicted_object": "cup",
+      "bbox_3d": [
+        1.3741792279663407,
+        0.6103623456806186,
+        0.7933194562792778,
+        0.20565334764913246,
+        0.19523617949138483,
+        0.11866521835327148
+      ],
+      "top5": [
+        {
+          "category": "cup",
+          "score": 2.998505516178197,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 2.100186322948506,
+          "rank": 2
+        },
+        {
+          "category": "trash can",
+          "score": 1.9718505853748338,
+          "rank": 3
+        },
+        {
+          "category": "bowl",
+          "score": 1.8719509547082704,
+          "rank": 4
+        },
+        {
+          "category": "candle",
+          "score": 1.7305081832857168,
+          "rank": 5
+        }
+      ],
+      "point_count": 209
+    },
+    {
+      "bbox_id": 25,
+      "target": "laptop",
+      "predicted_object": "laptop",
+      "bbox_3d": [
+        0.8763154007426248,
+        0.6280224644386418,
+        0.8309795781970024,
+        0.3371738584043591,
+        0.27045863314409146,
+        0.2235013246536255
+      ],
+      "top5": [
+        {
+          "category": "laptop",
+          "score": 2.8238948381413684,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 1.9177718150845995,
+          "rank": 2
+        },
+        {
+          "category": "monitor",
+          "score": 1.913341342030301,
+          "rank": 3
+        },
+        {
+          "category": "basket",
+          "score": 1.9071003789612813,
+          "rank": 4
+        },
+        {
+          "category": "bag",
+          "score": 1.7350737130651677,
+          "rank": 5
+        }
+      ],
+      "point_count": 557
+    },
+    {
+      "bbox_id": 26,
+      "target": "object",
+      "predicted_object": "object",
+      "bbox_3d": [
+        1.4333949483570354,
+        1.0661288776191071,
+        1.0207143649458885,
+        0.3398190227780482,
+        0.3066456315195154,
+        0.25138944387435913
+      ],
+      "top5": [
+        {
+          "category": "object",
+          "score": 2.62868134000099,
+          "rank": 1
+        },
+        {
+          "category": "box",
+          "score": 2.2925976361417217,
+          "rank": 2
+        },
+        {
+          "category": "bag",
+          "score": 1.9844272219744918,
+          "rank": 3
+        },
+        {
+          "category": "paper bag",
+          "score": 1.8423333619019155,
+          "rank": 4
+        },
+        {
+          "category": "pillow",
+          "score": 1.7928106228588616,
+          "rank": 5
+        }
+      ],
+      "point_count": 516
+    },
+    {
+      "bbox_id": 27,
+      "target": "book",
+      "predicted_object": "book",
+      "bbox_3d": [
+        0.7951064225695195,
+        0.884279500533486,
+        0.7623754665255547,
+        0.35806014713257284,
+        0.29076031231199195,
+        0.09753561019897461
+      ],
+      "top5": [
+        {
+          "category": "book",
+          "score": 2.5166460716253756,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 2.255426657195449,
+          "rank": 2
+        },
+        {
+          "category": "clothes",
+          "score": 2.059332746533586,
+          "rank": 3
+        },
+        {
+          "category": "towel",
+          "score": 1.9857721545724398,
+          "rank": 4
+        },
+        {
+          "category": "keyboard",
+          "score": 1.9697379585455144,
+          "rank": 5
+        }
+      ],
+      "point_count": 282
+    },
+    {
+      "bbox_id": 28,
+      "target": "laptop",
+      "predicted_object": "laptop",
+      "bbox_3d": [
+        0.3642251177981386,
+        0.8796093301562333,
+        0.8166028782725334,
+        0.4025660281285113,
+        0.6912769348147059,
+        0.27908921241760254
+      ],
+      "top5": [
+        {
+          "category": "laptop",
+          "score": 3.0727334024874455,
+          "rank": 1
+        },
+        {
+          "category": "chair",
+          "score": 2.2007278960444308,
+          "rank": 2
+        },
+        {
+          "category": "book",
+          "score": 2.0746707590252806,
+          "rank": 3
+        },
+        {
+          "category": "monitor",
+          "score": 1.9356545754633179,
+          "rank": 4
+        },
+        {
+          "category": "object",
+          "score": 1.7610210207080994,
+          "rank": 5
+        }
+      ],
+      "point_count": 794
+    },
+    {
+      "bbox_id": 29,
+      "target": "box",
+      "predicted_object": "box",
+      "bbox_3d": [
+        -0.25377386733007157,
+        -2.241050295100891,
+        0.20811516791582108,
+        0.4600435991056955,
+        0.4867456862055306,
+        0.4250743091106415
+      ],
+      "top5": [
+        {
+          "category": "box",
+          "score": 2.911577922110774,
+          "rank": 1
+        },
+        {
+          "category": "cabinet",
+          "score": 2.0596116575686323,
+          "rank": 2
+        },
+        {
+          "category": "container",
+          "score": 2.059427290021503,
+          "rank": 3
+        },
+        {
+          "category": "storage bin",
+          "score": 2.0433946308959268,
+          "rank": 4
+        },
+        {
+          "category": "basket",
+          "score": 1.8861336777321838,
+          "rank": 5
+        }
+      ],
+      "point_count": 576
+    },
+    {
+      "bbox_id": 30,
+      "target": "tissue box",
+      "predicted_object": "tissue box",
+      "bbox_3d": [
+        -0.2440288078509063,
+        -2.1375276232365623,
+        0.31503717601299286,
+        0.4768906956009076,
+        0.27145897484532533,
+        0.31537486612796783
+      ],
+      "top5": [
+        {
+          "category": "tissue box",
+          "score": 2.3619071247519723,
+          "rank": 1
+        },
+        {
+          "category": "box",
+          "score": 2.2097473067304843,
+          "rank": 2
+        },
+        {
+          "category": "object",
+          "score": 1.9843405415402295,
+          "rank": 3
+        },
+        {
+          "category": "book",
+          "score": 1.9222244854674626,
+          "rank": 4
+        },
+        {
+          "category": "toaster",
+          "score": 1.717577905071474,
+          "rank": 5
+        }
+      ],
+      "point_count": 504
+    },
+    {
+      "bbox_id": 32,
+      "target": "door",
+      "predicted_object": "door",
+      "bbox_3d": [
+        0.9294404612011995,
+        -2.430517777306788,
+        1.160230416804552,
+        1.6013679630996265,
+        0.11661539540847699,
+        2.2976687625050545
+      ],
+      "top5": [
+        {
+          "category": "door",
+          "score": 3.385684991504146,
+          "rank": 1
+        },
+        {
+          "category": "closet door",
+          "score": 2.579292520676792,
+          "rank": 2
+        },
+        {
+          "category": "window",
+          "score": 2.056041134123829,
+          "rank": 3
+        },
+        {
+          "category": "closet",
+          "score": 1.7150562300399386,
+          "rank": 4
+        },
+        {
+          "category": "cabinet",
+          "score": 1.6972540468121469,
+          "rank": 5
+        }
+      ],
+      "point_count": 6690
+    },
+    {
+      "bbox_id": 34,
+      "target": "doorframe",
+      "predicted_object": "doorframe",
+      "bbox_3d": [
+        1.7151729342596198,
+        -1.0271866366139193,
+        1.0587531216442585,
+        0.16793974349873508,
+        0.8715318211257852,
+        2.1286259964108467
+      ],
+      "top5": [
+        {
+          "category": "doorframe",
+          "score": 3.970206158700522,
+          "rank": 1
+        },
+        {
+          "category": "door",
+          "score": 2.6543359457197826,
+          "rank": 2
+        },
+        {
+          "category": "window",
+          "score": 1.9803160997377187,
+          "rank": 3
+        },
+        {
+          "category": "mirror",
+          "score": 1.9556606112809,
+          "rank": 4
+        },
+        {
+          "category": "structure",
+          "score": 1.8705588303930027,
+          "rank": 5
+        }
+      ],
+      "point_count": 1172
+    },
+    {
+      "bbox_id": 35,
+      "target": "doorframe",
+      "predicted_object": "doorframe",
+      "bbox_3d": [
+        1.74239729084014,
+        0.025269351437327003,
+        1.0086035318672657,
+        0.13995884616435816,
+        0.8980297955376457,
+        1.9921020939946175
+      ],
+      "top5": [
+        {
+          "category": "doorframe",
+          "score": 4.0936962757441595,
+          "rank": 1
+        },
+        {
+          "category": "door",
+          "score": 2.829903508427721,
+          "rank": 2
+        },
+        {
+          "category": "window",
+          "score": 1.9763540521359628,
+          "rank": 3
+        },
+        {
+          "category": "mirror",
+          "score": 1.9649902261644896,
+          "rank": 4
+        },
+        {
+          "category": "structure",
+          "score": 1.9017355697401728,
+          "rank": 5
+        }
+      ],
+      "point_count": 1106
+    }
+  ]
+}

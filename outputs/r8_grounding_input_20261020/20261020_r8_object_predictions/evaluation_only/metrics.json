@@ -1,0 +1,9 @@
+{
+  "count": 3413,
+  "correct": 2411,
+  "accuracy": 0.7064166422502197,
+  "exact_accuracy": 0.6434222092001172,
+  "top5_accuracy": 0.8860240257837679,
+  "class_mean_accuracy": 0.2963662467134562,
+  "errors": 0
+}

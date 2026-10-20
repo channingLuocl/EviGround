@@ -1,0 +1,1033 @@
+{
+  "version": "pointnext-sampling-vote-r8-export-v1",
+  "scene": "scene0100_00",
+  "cloud_sha256": "07ede59bbaa9f8fbdac0d5a4f3c975421f75d858ae8e26768ee07abbf33ebe99",
+  "score_type": "weighted_standardized_3d_rgb_fusion_not_probability",
+  "objects": [
+    {
+      "bbox_id": 1,
+      "target": "shower wall",
+      "predicted_object": "shower wall",
+      "bbox_3d": [
+        -1.124590621101853,
+        -1.2079103674080918,
+        1.0557380616664886,
+        0.4513553801133998,
+        0.7253917077236038,
+        1.4868198037147522
+      ],
+      "top5": [
+        {
+          "category": "shower wall",
+          "score": 2.4471529581778393,
+          "rank": 1
+        },
+        {
+          "category": "shower",
+          "score": 2.29205600902388,
+          "rank": 2
+        },
+        {
+          "category": "bathroom stall door",
+          "score": 2.1650973935557203,
+          "rank": 3
+        },
+        {
+          "category": "bathroom stall",
+          "score": 2.0873790073298952,
+          "rank": 4
+        },
+        {
+          "category": "closet",
+          "score": 2.0348054846752217,
+          "rank": 5
+        }
+      ],
+      "point_count": 3961
+    },
+    {
+      "bbox_id": 2,
+      "target": "sink",
+      "predicted_object": "sink",
+      "bbox_3d": [
+        0.7638169788823781,
+        0.7092459508303897,
+        0.7874116897583008,
+        0.5206216646424409,
+        0.4295918080428649,
+        0.2497798204421997
+      ],
+      "top5": [
+        {
+          "category": "sink",
+          "score": 3.384357822432233,
+          "rank": 1
+        },
+        {
+          "category": "table",
+          "score": 1.771299427709112,
+          "rank": 2
+        },
+        {
+          "category": "light",
+          "score": 1.7663119571279893,
+          "rank": 3
+        },
+        {
+          "category": "chair",
+          "score": 1.6815788766004434,
+          "rank": 4
+        },
+        {
+          "category": "toilet",
+          "score": 1.5382829273948393,
+          "rank": 5
+        }
+      ],
+      "point_count": 781
+    },
+    {
+      "bbox_id": 3,
+      "target": "cup",
+      "predicted_object": "cup",
+      "bbox_3d": [
+        -0.03725401200322942,
+        0.9133355141715391,
+        0.8698153793811798,
+        0.10145850571035098,
+        0.09398831436997312,
+        0.10042744874954224
+      ],
+      "top5": [
+        {
+          "category": "cup",
+          "score": 2.6646896088978274,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 2.5155356335701047,
+          "rank": 2
+        },
+        {
+          "category": "toilet paper",
+          "score": 2.434376267261445,
+          "rank": 3
+        },
+        {
+          "category": "light",
+          "score": 1.84664375322023,
+          "rank": 4
+        },
+        {
+          "category": "trash can",
+          "score": 1.813839494868616,
+          "rank": 5
+        }
+      ],
+      "point_count": 96
+    },
+    {
+      "bbox_id": 4,
+      "target": "cabinet",
+      "predicted_object": "cabinet",
+      "bbox_3d": [
+        -0.10016052676085074,
+        0.6742455487110046,
+        0.5142568498849869,
+        2.5201237247046997,
+        0.5827035376936855,
+        1.0298835933208466
+      ],
+      "top5": [
+        {
+          "category": "cabinet",
+          "score": 2.568503759874883,
+          "rank": 1
+        },
+        {
+          "category": "bathroom cabinet",
+          "score": 2.4079768032233733,
+          "rank": 2
+        },
+        {
+          "category": "bathroom vanity",
+          "score": 2.301375097280881,
+          "rank": 3
+        },
+        {
+          "category": "dresser",
+          "score": 2.175871150095734,
+          "rank": 4
+        },
+        {
+          "category": "kitchen cabinet",
+          "score": 2.135234457305412,
+          "rank": 5
+        }
+      ],
+      "point_count": 7745
+    },
+    {
+      "bbox_id": 5,
+      "target": "book",
+      "predicted_object": "book",
+      "bbox_3d": [
+        -1.2384426948707468,
+        0.8745133760653037,
+        0.8533139824867249,
+        0.20717434781812827,
+        0.18036082568910317,
+        0.05870211124420166
+      ],
+      "top5": [
+        {
+          "category": "book",
+          "score": 3.1142874384599217,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 2.2365804228928328,
+          "rank": 2
+        },
+        {
+          "category": "scale",
+          "score": 2.1394086906434624,
+          "rank": 3
+        },
+        {
+          "category": "towel",
+          "score": 2.1106107614181426,
+          "rank": 4
+        },
+        {
+          "category": "paper",
+          "score": 2.1051708126995345,
+          "rank": 5
+        }
+      ],
+      "point_count": 129
+    },
+    {
+      "bbox_id": 6,
+      "target": "towel",
+      "predicted_object": "towel",
+      "bbox_3d": [
+        0.7390092820028329,
+        -1.0650579195886891,
+        0.9317358732223511,
+        0.6095519047931219,
+        0.2106695871058406,
+        1.414734125137329
+      ],
+      "top5": [
+        {
+          "category": "towel",
+          "score": 3.482243129393364,
+          "rank": 1
+        },
+        {
+          "category": "clothes",
+          "score": 2.868234504592168,
+          "rank": 2
+        },
+        {
+          "category": "shower curtain",
+          "score": 2.3515670286866746,
+          "rank": 3
+        },
+        {
+          "category": "jacket",
+          "score": 2.245157099180782,
+          "rank": 4
+        },
+        {
+          "category": "curtain",
+          "score": 1.9225205764209514,
+          "rank": 5
+        }
+      ],
+      "point_count": 2559
+    },
+    {
+      "bbox_id": 7,
+      "target": "toilet",
+      "predicted_object": "toilet",
+      "bbox_3d": [
+        -1.008348576891315,
+        -0.0004596860936203484,
+        0.31100786849856377,
+        0.715626386003791,
+        0.5161067539245074,
+        0.64966831356287
+      ],
+      "top5": [
+        {
+          "category": "toilet",
+          "score": 3.2823237511389087,
+          "rank": 1
+        },
+        {
+          "category": "chair",
+          "score": 2.077159015614688,
+          "rank": 2
+        },
+        {
+          "category": "bathroom vanity",
+          "score": 1.8899467835879147,
+          "rank": 3
+        },
+        {
+          "category": "armchair",
+          "score": 1.7339614174963716,
+          "rank": 4
+        },
+        {
+          "category": "sink",
+          "score": 1.6896795580502864,
+          "rank": 5
+        }
+      ],
+      "point_count": 1776
+    },
+    {
+      "bbox_id": 8,
+      "target": "ottoman",
+      "predicted_object": "ottoman",
+      "bbox_3d": [
+        -0.151286995581966,
+        -0.7078880480673462,
+        0.07261170912533998,
+        0.47063621215315976,
+        0.29274013335584215,
+        0.2147484328597784
+      ],
+      "top5": [
+        {
+          "category": "ottoman",
+          "score": 2.1765016012479084,
+          "rank": 1
+        },
+        {
+          "category": "suitcase",
+          "score": 2.109796683204502,
+          "rank": 2
+        },
+        {
+          "category": "object",
+          "score": 1.7986599190319625,
+          "rank": 3
+        },
+        {
+          "category": "box",
+          "score": 1.7873683607941644,
+          "rank": 4
+        },
+        {
+          "category": "scale",
+          "score": 1.6900708762170193,
+          "rank": 5
+        }
+      ],
+      "point_count": 729
+    },
+    {
+      "bbox_id": 9,
+      "target": "bathtub",
+      "predicted_object": "bathtub",
+      "bbox_3d": [
+        -0.6497962946754701,
+        -1.1480053065406133,
+        0.2065524598583579,
+        1.399036086113174,
+        0.7520223255498069,
+        0.4641444403678179
+      ],
+      "top5": [
+        {
+          "category": "bathtub",
+          "score": 3.5366530130531,
+          "rank": 1
+        },
+        {
+          "category": "couch",
+          "score": 2.3976348547702573,
+          "rank": 2
+        },
+        {
+          "category": "sink",
+          "score": 2.3403405241992505,
+          "rank": 3
+        },
+        {
+          "category": "bed",
+          "score": 1.8671478036828775,
+          "rank": 4
+        },
+        {
+          "category": "armchair",
+          "score": 1.6366098724455957,
+          "rank": 5
+        }
+      ],
+      "point_count": 2278
+    },
+    {
+      "bbox_id": 10,
+      "target": "towel",
+      "predicted_object": "towel",
+      "bbox_3d": [
+        -0.30874316394720935,
+        -0.8233853331632632,
+        0.5600133612751961,
+        0.7585686762328052,
+        0.15340598913482673,
+        0.8981612771749496
+      ],
+      "top5": [
+        {
+          "category": "towel",
+          "score": 2.9775388890661088,
+          "rank": 1
+        },
+        {
+          "category": "shower curtain",
+          "score": 2.1855327114577516,
+          "rank": 2
+        },
+        {
+          "category": "radiator",
+          "score": 2.074442568687921,
+          "rank": 3
+        },
+        {
+          "category": "curtain",
+          "score": 2.0096315543772816,
+          "rank": 4
+        },
+        {
+          "category": "tube",
+          "score": 1.95027127747267,
+          "rank": 5
+        }
+      ],
+      "point_count": 1783
+    },
+    {
+      "bbox_id": 12,
+      "target": "trash can",
+      "predicted_object": "trash can",
+      "bbox_3d": [
+        -0.999980888822126,
+        0.34114246693598904,
+        0.14945897832512856,
+        0.2114432818233567,
+        0.23375773301580516,
+        0.30990784615278244
+      ],
+      "top5": [
+        {
+          "category": "trash can",
+          "score": 2.964832863551714,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 2.083143838666807,
+          "rank": 2
+        },
+        {
+          "category": "ball",
+          "score": 1.7029038461734656,
+          "rank": 3
+        },
+        {
+          "category": "hat",
+          "score": 1.6941828609596197,
+          "rank": 4
+        },
+        {
+          "category": "backpack",
+          "score": 1.6634474200276972,
+          "rank": 5
+        }
+      ],
+      "point_count": 440
+    },
+    {
+      "bbox_id": 13,
+      "target": "mat",
+      "predicted_object": "mat",
+      "bbox_3d": [
+        0.6990060663547588,
+        0.18506197051342,
+        0.007944988086819649,
+        0.8780655101316981,
+        0.6201969822883129,
+        0.07233638688921928
+      ],
+      "top5": [
+        {
+          "category": "mat",
+          "score": 3.37779165822616,
+          "rank": 1
+        },
+        {
+          "category": "shower floor",
+          "score": 2.597952109661226,
+          "rank": 2
+        },
+        {
+          "category": "table",
+          "score": 2.2632971377924718,
+          "rank": 3
+        },
+        {
+          "category": "coffee table",
+          "score": 1.8609899616814773,
+          "rank": 4
+        },
+        {
+          "category": "seat",
+          "score": 1.8480808237693236,
+          "rank": 5
+        }
+      ],
+      "point_count": 1177
+    },
+    {
+      "bbox_id": 14,
+      "target": "toilet paper",
+      "predicted_object": "toilet paper",
+      "bbox_3d": [
+        -1.299978756009672,
+        -0.48770804417622404,
+        0.48967407643795013,
+        0.11052515070367974,
+        0.16187140194525895,
+        0.3342854082584381
+      ],
+      "top5": [
+        {
+          "category": "toilet paper",
+          "score": 2.9414194169909544,
+          "rank": 1
+        },
+        {
+          "category": "towel",
+          "score": 2.5188091028669475,
+          "rank": 2
+        },
+        {
+          "category": "paper towel roll",
+          "score": 2.130116581895252,
+          "rank": 3
+        },
+        {
+          "category": "soap dispenser",
+          "score": 2.0043755485582833,
+          "rank": 4
+        },
+        {
+          "category": "object",
+          "score": 1.8243303698656028,
+          "rank": 5
+        }
+      ],
+      "point_count": 320
+    },
+    {
+      "bbox_id": 15,
+      "target": "shoe",
+      "predicted_object": "shoe",
+      "bbox_3d": [
+        0.36094465968311695,
+        -0.5645463762531691,
+        -0.002338445745408535,
+        0.320491438137104,
+        0.2995329849665538,
+        0.060707760974764824
+      ],
+      "top5": [
+        {
+          "category": "shoe",
+          "score": 3.0923257440793304,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 2.036131056628937,
+          "rank": 2
+        },
+        {
+          "category": "scale",
+          "score": 1.9551086045977886,
+          "rank": 3
+        },
+        {
+          "category": "clothes",
+          "score": 1.9010050079888172,
+          "rank": 4
+        },
+        {
+          "category": "headphones",
+          "score": 1.8773217295595792,
+          "rank": 5
+        }
+      ],
+      "point_count": 285
+    },
+    {
+      "bbox_id": 16,
+      "target": "door",
+      "predicted_object": "door",
+      "bbox_3d": [
+        0.7863389367143085,
+        -1.1282816019182853,
+        0.8668047394603491,
+        0.7262098324534776,
+        0.10178422499495099,
+        1.728405673056841
+      ],
+      "top5": [
+        {
+          "category": "door",
+          "score": 3.5180909080775944,
+          "rank": 1
+        },
+        {
+          "category": "closet door",
+          "score": 2.3962778804442584,
+          "rank": 2
+        },
+        {
+          "category": "doorframe",
+          "score": 2.2770048290160934,
+          "rank": 3
+        },
+        {
+          "category": "shower door",
+          "score": 1.9152559838606646,
+          "rank": 4
+        },
+        {
+          "category": "closet wall",
+          "score": 1.6991813396364144,
+          "rank": 5
+        }
+      ],
+      "point_count": 1549
+    },
+    {
+      "bbox_id": 17,
+      "target": "bottle",
+      "predicted_object": "bottle",
+      "bbox_3d": [
+        0.06625395051025329,
+        0.916754435365231,
+        0.8998259603977203,
+        0.09127307345249491,
+        0.09356022307989775,
+        0.16287988424301147
+      ],
+      "top5": [
+        {
+          "category": "bottle",
+          "score": 3.237341097184412,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 2.7484391495301277,
+          "rank": 2
+        },
+        {
+          "category": "water bottle",
+          "score": 2.3405346306777095,
+          "rank": 3
+        },
+        {
+          "category": "soap dispenser",
+          "score": 2.2610230733280483,
+          "rank": 4
+        },
+        {
+          "category": "laundry detergent",
+          "score": 1.860010734303224,
+          "rank": 5
+        }
+      ],
+      "point_count": 199
+    },
+    {
+      "bbox_id": 18,
+      "target": "cup",
+      "predicted_object": "cup",
+      "bbox_3d": [
+        0.16818130988949775,
+        0.8781805361350585,
+        0.8731237053871155,
+        0.08425212729565601,
+        0.1222380982104525,
+        0.1056753396987915
+      ],
+      "top5": [
+        {
+          "category": "cup",
+          "score": 2.8843381652730224,
+          "rank": 1
+        },
+        {
+          "category": "toilet paper",
+          "score": 2.8227967022699625,
+          "rank": 2
+        },
+        {
+          "category": "object",
+          "score": 2.550054506085213,
+          "rank": 3
+        },
+        {
+          "category": "trash can",
+          "score": 2.0416301721577534,
+          "rank": 4
+        },
+        {
+          "category": "light",
+          "score": 1.7266973936467753,
+          "rank": 5
+        }
+      ],
+      "point_count": 74
+    },
+    {
+      "bbox_id": 19,
+      "target": "cup",
+      "predicted_object": "cup",
+      "bbox_3d": [
+        0.29154546461343855,
+        0.953606747020018,
+        0.8875040113925934,
+        0.17319261222426974,
+        0.19533772382223447,
+        0.13879770040512085
+      ],
+      "top5": [
+        {
+          "category": "cup",
+          "score": 2.639556089404646,
+          "rank": 1
+        },
+        {
+          "category": "object",
+          "score": 2.3728336352487704,
+          "rank": 2
+        },
+        {
+          "category": "tissue box",
+          "score": 1.880497337763622,
+          "rank": 3
+        },
+        {
+          "category": "toaster",
+          "score": 1.7227577269069752,
+          "rank": 4
+        },
+        {
+          "category": "box",
+          "score": 1.6700911204311537,
+          "rank": 5
+        }
+      ],
+      "point_count": 239
+    },
+    {
+      "bbox_id": 20,
+      "target": "mirror",
+      "predicted_object": "mirror",
+      "bbox_3d": [
+        0.6760303570529107,
+        0.968591509715548,
+        1.0314607918262482,
+        0.9634445563674454,
+        0.09076332677751253,
+        0.22528189420700073
+      ],
+      "top5": [
+        {
+          "category": "mirror",
+          "score": 3.2736355036584097,
+          "rank": 1
+        },
+        {
+          "category": "window",
+          "score": 2.077163015847292,
+          "rank": 2
+        },
+        {
+          "category": "handicap bar",
+          "score": 1.7642787438241605,
+          "rank": 3
+        },
+        {
+          "category": "shower curtain rod",
+          "score": 1.7499049751189952,
+          "rank": 4
+        },
+        {
+          "category": "ledge",
+          "score": 1.7236016001830787,
+          "rank": 5
+        }
+      ],
+      "point_count": 268
+    },
+    {
+      "bbox_id": 21,
+      "target": "object",
+      "predicted_object": "object",
+      "bbox_3d": [
+        1.0791507195146472,
+        0.6234267560318472,
+        0.9453994333744049,
+        0.04650494720183218,
+        0.03255066434863352,
+        0.16969197988510132
+      ],
+      "top5": [
+        {
+          "category": "object",
+          "score": 2.811799721276107,
+          "rank": 1
+        },
+        {
+          "category": "bottle",
+          "score": 2.501483942378135,
+          "rank": 2
+        },
+        {
+          "category": "book",
+          "score": 2.2601896057881783,
+          "rank": 3
+        },
+        {
+          "category": "picture",
+          "score": 2.062102870478254,
+          "rank": 4
+        },
+        {
+          "category": "light switch",
+          "score": 1.998639020571313,
+          "rank": 5
+        }
+      ],
+      "point_count": 50
+    },
+    {
+      "bbox_id": 23,
+      "target": "window",
+      "predicted_object": "window",
+      "bbox_3d": [
+        -0.39366874560439236,
+        1.0035652757269986,
+        1.226487934589386,
+        0.8972243856334252,
+        0.11638257769564575,
+        0.24090540409088135
+      ],
+      "top5": [
+        {
+          "category": "window",
+          "score": 3.1535074779075867,
+          "rank": 1
+        },
+        {
+          "category": "blinds",
+          "score": 1.9059566218787132,
+          "rank": 2
+        },
+        {
+          "category": "mirror",
+          "score": 1.8738861275274143,
+          "rank": 3
+        },
+        {
+          "category": "curtain",
+          "score": 1.8734989230133285,
+          "rank": 4
+        },
+        {
+          "category": "windowsill",
+          "score": 1.7313104780913426,
+          "rank": 5
+        }
+      ],
+      "point_count": 501
+    },
+    {
+      "bbox_id": 25,
+      "target": "light switch",
+      "predicted_object": "light switch",
+      "bbox_3d": [
+        -1.3172483105829516,
+        -1.2224044424767633,
+        0.6129105985164642,
+        0.05478667013722749,
+        0.1277662215967892,
+        0.15630942583084106
+      ],
+      "top5": [
+        {
+          "category": "light switch",
+          "score": 2.650575928350656,
+          "rank": 1
+        },
+        {
+          "category": "power outlet",
+          "score": 2.5038469527813563,
+          "rank": 2
+        },
+        {
+          "category": "object",
+          "score": 2.4687826522100353,
+          "rank": 3
+        },
+        {
+          "category": "toilet paper",
+          "score": 2.2817073411763538,
+          "rank": 4
+        },
+        {
+          "category": "shower head",
+          "score": 2.202339035717507,
+          "rank": 5
+        }
+      ],
+      "point_count": 61
+    },
+    {
+      "bbox_id": 26,
+      "target": "door",
+      "predicted_object": "door",
+      "bbox_3d": [
+        -0.3105613285460578,
+        -0.9097463153052159,
+        0.9737497270107269,
+        0.7971028386826191,
+        0.07431047624480946,
+        1.3150292038917542
+      ],
+      "top5": [
+        {
+          "category": "door",
+          "score": 2.719620946096234,
+          "rank": 1
+        },
+        {
+          "category": "closet door",
+          "score": 2.4838751786656825,
+          "rank": 2
+        },
+        {
+          "category": "closet wall",
+          "score": 2.113561994148889,
+          "rank": 3
+        },
+        {
+          "category": "refrigerator",
+          "score": 2.0428650331899116,
+          "rank": 4
+        },
+        {
+          "category": "shower door",
+          "score": 1.8764950576437323,
+          "rank": 5
+        }
+      ],
+      "point_count": 1613
+    },
+    {
+      "bbox_id": 27,
+      "target": "towel",
+      "predicted_object": "towel",
+      "bbox_3d": [
+        -0.0420267739462723,
+        -0.8257364679155366,
+        0.5948404744267464,
+        0.25083524278054625,
+        0.15323424307688782,
+        0.865362748503685
+      ],
+      "top5": [
+        {
+          "category": "towel",
+          "score": 3.608536276887469,
+          "rank": 1
+        },
+        {
+          "category": "clothes",
+          "score": 2.2705169510921452,
+          "rank": 2
+        },
+        {
+          "category": "shower curtain",
+          "score": 1.9056462166489974,
+          "rank": 3
+        },
+        {
+          "category": "tube",
+          "score": 1.8716079319291286,
+          "rank": 4
+        },
+        {
+          "category": "ironing board",
+          "score": 1.7867520677387325,
+          "rank": 5
+        }
+      ],
+      "point_count": 963
+    },
+    {
+      "bbox_id": 29,
+      "target": "towel",
+      "predicted_object": "towel",
+      "bbox_3d": [
+        -0.181287830526081,
+        -0.8348396229709394,
+        0.8369164764881134,
+        0.3431896848207714,
+        0.1269964946749198,
+        0.3782731890678406
+      ],
+      "top5": [
+        {
+          "category": "towel",
+          "score": 3.5059033441669625,
+          "rank": 1
+        },
+        {
+          "category": "radiator",
+          "score": 1.7967077980853179,
+          "rank": 2
+        },
+        {
+          "category": "object",
+          "score": 1.638627133885932,
+          "rank": 3
+        },
+        {
+          "category": "clothes",
+          "score": 1.6383762199970202,
+          "rank": 4
+        },
+        {
+          "category": "toilet paper",
+          "score": 1.6171967617040914,
+          "rank": 5
+        }
+      ],
+      "point_count": 457
+    }
+  ]
+}

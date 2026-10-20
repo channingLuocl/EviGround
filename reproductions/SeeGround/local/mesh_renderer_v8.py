@@ -7,6 +7,29 @@ from PIL import Image, ImageDraw, ImageFont
 from run import project
 
 
+def highlight_target(output, mask, bbox_id):
+    """Mark only depth-visible target pixels; never draw through occluding objects."""
+    output = Path(output)
+    Image.fromarray(mask.astype(np.uint8)*255).save(output.with_suffix('.mask.png'))
+    if not mask.any():
+        return
+    with Image.open(output) as image:
+        pixels = np.array(image.convert('RGB'))
+    Image.fromarray(pixels).save(output.with_suffix('.unmarked.png'))
+    inside = np.pad(mask, 1)
+    eroded = (inside[1:-1, 1:-1] & inside[:-2, 1:-1] & inside[2:, 1:-1]
+              & inside[1:-1, :-2] & inside[1:-1, 2:])
+    pixels[mask] = (.8*pixels[mask]+.2*np.array([255, 0, 255])).astype(np.uint8)
+    pixels[mask & ~eroded] = [255, 0, 255]
+    image = Image.fromarray(pixels)
+    positions = np.argwhere(mask)
+    y, x = positions[np.argmin(np.sum((positions-positions.mean(0))**2, axis=1))]
+    ImageDraw.Draw(image).text((int(x), int(y)), str(bbox_id), fill='red',
+                              stroke_width=2, stroke_fill='white',
+                              font=ImageFont.load_default(size=23), anchor='mm')
+    image.save(output)
+
+
 def read_scene_faces(scene_root, scene, xyz, rgb):
     """Verify the mesh has the same aligned vertices as the prepared point cloud."""
     from plyfile import PlyData
@@ -30,7 +53,7 @@ def read_scene_faces(scene_root, scene, xyz, rgb):
     return faces
 
 
-def render_mesh(xyz, rgb, faces, output, eye, at, ids=None, size=512):
+def render_mesh(xyz, rgb, faces, output, eye, at, ids=None, size=512, highlight_id=None):
     """Depth-test triangles and interpolate only their measured vertex colours."""
     uv, depth = project(xyz, eye, at, size)
     zbuffer = np.full((size, size), np.inf)
@@ -78,6 +101,8 @@ def render_mesh(xyz, rgb, faces, output, eye, at, ids=None, size=512):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     image.save(output)
+    if highlight_id is not None:
+        highlight_target(output, owners == highlight_id, highlight_id)
     return {'points': len(xyz), 'triangles': len(faces), 'surface_mode': 'measured_mesh',
             'visible_pixels': int(np.isfinite(zbuffer).sum()),
             'marked_ids': [int(oid) for oid in counts], 'visible_instance_pixels': counts,

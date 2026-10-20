@@ -1,0 +1,582 @@
+{
+  "version": "pointnext-sampling-vote-r8-export-v1",
+  "scene": "scene0490_00",
+  "cloud_sha256": "b6d878686fe5f3ba3ccdbe4ddd7e798075e1f0a8372883951e2f8893e45246ea",
+  "score_type": "weighted_standardized_3d_rgb_fusion_not_probability",
+  "objects": [
+    {
+      "bbox_id": 1,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        -0.5090509728765014,
+        1.4179029144152508,
+        0.6138437837362289,
+        0.5984192727586475,
+        0.5499090295004123,
+        0.6116732060909271
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 3.8867262470883857,
+          "rank": 1
+        },
+        {
+          "category": "office chair",
+          "score": 3.6610393389806326,
+          "rank": 2
+        },
+        {
+          "category": "armchair",
+          "score": 2.028091686073229,
+          "rank": 3
+        },
+        {
+          "category": "seat",
+          "score": 2.015968716300985,
+          "rank": 4
+        },
+        {
+          "category": "folded chair",
+          "score": 1.9521121682802898,
+          "rank": 5
+        }
+      ],
+      "point_count": 1707
+    },
+    {
+      "bbox_id": 2,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        0.7357672142018359,
+        1.3539509887052716,
+        0.5998444557189941,
+        0.6307275782846062,
+        0.5864816518795664,
+        0.6362293362617493
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 3.49223350238517,
+          "rank": 1
+        },
+        {
+          "category": "office chair",
+          "score": 3.468099938770604,
+          "rank": 2
+        },
+        {
+          "category": "folded chair",
+          "score": 2.209345748329193,
+          "rank": 3
+        },
+        {
+          "category": "seat",
+          "score": 2.081187620246687,
+          "rank": 4
+        },
+        {
+          "category": "armchair",
+          "score": 2.06941479604936,
+          "rank": 5
+        }
+      ],
+      "point_count": 2138
+    },
+    {
+      "bbox_id": 3,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        -1.0420871224880202,
+        -0.4071186165326566,
+        0.6040536016225815,
+        0.6237172658222789,
+        0.633884612536292,
+        0.620831698179245
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 3.6775873342435155,
+          "rank": 1
+        },
+        {
+          "category": "office chair",
+          "score": 3.6534426953163743,
+          "rank": 2
+        },
+        {
+          "category": "armchair",
+          "score": 2.288405854759511,
+          "rank": 3
+        },
+        {
+          "category": "seat",
+          "score": 1.825165357276084,
+          "rank": 4
+        },
+        {
+          "category": "folded chair",
+          "score": 1.758165801776307,
+          "rank": 5
+        }
+      ],
+      "point_count": 3001
+    },
+    {
+      "bbox_id": 4,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        1.5341101817010312,
+        -0.7175889155902482,
+        0.47312978468835354,
+        0.5792499618999187,
+        0.6078201687511893,
+        0.9396973736584187
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 4.027653458355413,
+          "rank": 1
+        },
+        {
+          "category": "office chair",
+          "score": 3.6967382233873853,
+          "rank": 2
+        },
+        {
+          "category": "armchair",
+          "score": 2.6687030283410706,
+          "rank": 3
+        },
+        {
+          "category": "sofa chair",
+          "score": 2.153472711013339,
+          "rank": 4
+        },
+        {
+          "category": "couch",
+          "score": 2.078833258513052,
+          "rank": 5
+        }
+      ],
+      "point_count": 3065
+    },
+    {
+      "bbox_id": 5,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        -0.9294609642905769,
+        -1.036699350622797,
+        0.46205589920282364,
+        0.7350889150132076,
+        0.5724708624856305,
+        0.9378096908330917
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 3.706203866600984,
+          "rank": 1
+        },
+        {
+          "category": "office chair",
+          "score": 3.542047811801889,
+          "rank": 2
+        },
+        {
+          "category": "armchair",
+          "score": 2.2578216297615867,
+          "rank": 3
+        },
+        {
+          "category": "desk",
+          "score": 1.9895431440374827,
+          "rank": 4
+        },
+        {
+          "category": "seat",
+          "score": 1.959253091423602,
+          "rank": 5
+        }
+      ],
+      "point_count": 2305
+    },
+    {
+      "bbox_id": 6,
+      "target": "office chair",
+      "predicted_object": "office chair",
+      "bbox_3d": [
+        -1.1202075143422263,
+        0.25798841513502424,
+        0.4439608007669449,
+        0.6149357938761,
+        0.6339534253487358,
+        0.9118646681308746
+      ],
+      "top5": [
+        {
+          "category": "office chair",
+          "score": 3.8887390607640966,
+          "rank": 1
+        },
+        {
+          "category": "chair",
+          "score": 3.7517048460624403,
+          "rank": 2
+        },
+        {
+          "category": "armchair",
+          "score": 2.5164854999864463,
+          "rank": 3
+        },
+        {
+          "category": "seat",
+          "score": 1.9604348441918593,
+          "rank": 4
+        },
+        {
+          "category": "desk",
+          "score": 1.8425769632075149,
+          "rank": 5
+        }
+      ],
+      "point_count": 2535
+    },
+    {
+      "bbox_id": 7,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        1.5312662722616324,
+        -1.255191835421229,
+        0.48645051941275597,
+        0.571760348580483,
+        0.7145440545152155,
+        0.9427177980542183
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 3.4708089717210413,
+          "rank": 1
+        },
+        {
+          "category": "office chair",
+          "score": 3.027425165522909,
+          "rank": 2
+        },
+        {
+          "category": "folded chair",
+          "score": 2.133141728437915,
+          "rank": 3
+        },
+        {
+          "category": "armchair",
+          "score": 2.036680723697908,
+          "rank": 4
+        },
+        {
+          "category": "sofa chair",
+          "score": 1.5676724914181346,
+          "rank": 5
+        }
+      ],
+      "point_count": 1982
+    },
+    {
+      "bbox_id": 8,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        -1.5864260370758672,
+        1.1068566264252304,
+        0.5919369608163834,
+        0.6378794469626143,
+        0.644737891313163,
+        0.7183691561222076
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 3.7585104063562875,
+          "rank": 1
+        },
+        {
+          "category": "office chair",
+          "score": 3.7135239865481324,
+          "rank": 2
+        },
+        {
+          "category": "armchair",
+          "score": 2.640373401954592,
+          "rank": 3
+        },
+        {
+          "category": "seat",
+          "score": 2.2150770431684648,
+          "rank": 4
+        },
+        {
+          "category": "folded chair",
+          "score": 2.0412052652071315,
+          "rank": 5
+        }
+      ],
+      "point_count": 2033
+    },
+    {
+      "bbox_id": 12,
+      "target": "table",
+      "predicted_object": "table",
+      "bbox_3d": [
+        0.11294005681670072,
+        -1.4255657895597338,
+        0.43474552780389786,
+        2.364321791011257,
+        4.4243154956761686,
+        0.899456724524498
+      ],
+      "top5": [
+        {
+          "category": "table",
+          "score": 3.7359191993274,
+          "rank": 1
+        },
+        {
+          "category": "dining table",
+          "score": 2.5365892684425777,
+          "rank": 2
+        },
+        {
+          "category": "coffee table",
+          "score": 2.304569136948889,
+          "rank": 3
+        },
+        {
+          "category": "desk",
+          "score": 2.276371327428227,
+          "rank": 4
+        },
+        {
+          "category": "counter",
+          "score": 2.0662589478880675,
+          "rank": 5
+        }
+      ],
+      "point_count": 15533
+    },
+    {
+      "bbox_id": 13,
+      "target": "whiteboard",
+      "predicted_object": "whiteboard",
+      "bbox_3d": [
+        2.3483519534027515,
+        -0.8429292448528756,
+        1.379996806383133,
+        0.2620345060350715,
+        2.4096466598823696,
+        1.0751253366470337
+      ],
+      "top5": [
+        {
+          "category": "whiteboard",
+          "score": 2.882129453962107,
+          "rank": 1
+        },
+        {
+          "category": "window",
+          "score": 2.360817383848904,
+          "rank": 2
+        },
+        {
+          "category": "blackboard",
+          "score": 2.154797441454585,
+          "rank": 3
+        },
+        {
+          "category": "board",
+          "score": 1.8295972508532845,
+          "rank": 4
+        },
+        {
+          "category": "mirror",
+          "score": 1.8143065786789274,
+          "rank": 5
+        }
+      ],
+      "point_count": 6401
+    },
+    {
+      "bbox_id": 14,
+      "target": "whiteboard",
+      "predicted_object": "whiteboard",
+      "bbox_3d": [
+        -2.2136362186521854,
+        -0.7339820398472625,
+        1.4190523624420166,
+        0.3412512647397641,
+        2.4206275198605454,
+        1.152317225933075
+      ],
+      "top5": [
+        {
+          "category": "whiteboard",
+          "score": 3.046230311125613,
+          "rank": 1
+        },
+        {
+          "category": "blackboard",
+          "score": 2.1991776303005146,
+          "rank": 2
+        },
+        {
+          "category": "board",
+          "score": 2.179292136004685,
+          "rank": 3
+        },
+        {
+          "category": "window",
+          "score": 2.076242400445164,
+          "rank": 4
+        },
+        {
+          "category": "blinds",
+          "score": 1.9915276541685434,
+          "rank": 5
+        }
+      ],
+      "point_count": 6685
+    },
+    {
+      "bbox_id": 15,
+      "target": "cabinet",
+      "predicted_object": "cabinet",
+      "bbox_3d": [
+        0.1376550802055121,
+        1.6073195212048148,
+        1.2270203530788422,
+        1.555350874457318,
+        0.1579195238367106,
+        0.4831705093383789
+      ],
+      "top5": [
+        {
+          "category": "cabinet",
+          "score": 2.2799642880971867,
+          "rank": 1
+        },
+        {
+          "category": "kitchen cabinet",
+          "score": 2.2443769055990517,
+          "rank": 2
+        },
+        {
+          "category": "blackboard",
+          "score": 2.0870307970475652,
+          "rank": 3
+        },
+        {
+          "category": "tv",
+          "score": 1.8667301093387527,
+          "rank": 4
+        },
+        {
+          "category": "whiteboard",
+          "score": 1.8104461852875193,
+          "rank": 5
+        }
+      ],
+      "point_count": 2570
+    },
+    {
+      "bbox_id": 16,
+      "target": "office chair",
+      "predicted_object": "office chair",
+      "bbox_3d": [
+        1.329437001924454,
+        -0.057960317854146126,
+        0.6560369431972504,
+        0.28370302683187276,
+        0.5673491571011056,
+        0.5226166248321533
+      ],
+      "top5": [
+        {
+          "category": "office chair",
+          "score": 3.139091164617371,
+          "rank": 1
+        },
+        {
+          "category": "chair",
+          "score": 3.110113377482424,
+          "rank": 2
+        },
+        {
+          "category": "monitor",
+          "score": 2.3565950789978714,
+          "rank": 3
+        },
+        {
+          "category": "armchair",
+          "score": 1.8465673031137293,
+          "rank": 4
+        },
+        {
+          "category": "seat",
+          "score": 1.7762863401902529,
+          "rank": 5
+        }
+      ],
+      "point_count": 2076
+    },
+    {
+      "bbox_id": 17,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        1.2155642743883384,
+        -1.646485280059764,
+        0.668390616774559,
+        0.545938169503863,
+        0.5573294886048927,
+        0.5720586478710175
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 3.4841629373440153,
+          "rank": 1
+        },
+        {
+          "category": "office chair",
+          "score": 3.2217549558781817,
+          "rank": 2
+        },
+        {
+          "category": "armchair",
+          "score": 2.031283481484362,
+          "rank": 3
+        },
+        {
+          "category": "seat",
+          "score": 1.9491266467255284,
+          "rank": 4
+        },
+        {
+          "category": "monitor",
+          "score": 1.763435517018038,
+          "rank": 5
+        }
+      ],
+      "point_count": 2978
+    }
+  ]
+}

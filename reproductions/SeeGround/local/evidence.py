@@ -145,10 +145,21 @@ def canonical_category(name):
 def match_categories(names, objects):
     if isinstance(names, str):
         names = [names]
-    categories = [canonical_category(n).split() for n in names if n.strip()]
+    from v4_policy import r8_retrieval_enabled
+    aliases = ({'sofa': 'couch', 'sofas': 'couch', 'loveseat': 'couch',
+                'bookcase': 'bookshelf', 'bookcases': 'bookshelf',
+                'cupboard': 'cabinet', 'cupboards': 'cabinet',
+                'filing cabinet': 'file cabinet',
+                'painting': 'picture', 'paintings': 'picture', 'artwork': 'picture',
+                'picture frame': 'picture', 'picture frames': 'picture'}
+               if r8_retrieval_enabled() else {})
+    def words(name):
+        text = canonical_category(name)
+        return aliases.get(text, text).split()
+    categories = [words(n) for n in names if n.strip()]
     matched = []
     for obj in objects:
-        labels = [canonical_category(name).split() for name in category_names(obj)]
+        labels = [words(name) for name in category_names(obj)]
         if any(category and words and category[-1] == words[-1]
                and all(w in words for w in category)
                for category in categories for words in labels):

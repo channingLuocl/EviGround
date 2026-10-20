@@ -10,15 +10,16 @@ from PIL import Image, ImageDraw, ImageFont
 from qwen_api import chat, image_part, parse_json_object, api_provider
 from response_schemas import obj, array, enum, nullable, REASON
 from run import project, render
-from mesh_renderer_v8 import render_mesh
+from mesh_renderer_v8 import render_mesh, highlight_target
 from run_storage import ensure_run_writable, write_json
 
 
-VERSION = 'object-category-v8.1'
+VERSION = 'object-category-v8.1-independent-r1'
 VIEW_SIZE = 512
 INSTRUCTIONS = '''Classify ONE numbered indoor object instance from measured RGB point-cloud views.
 The first three images show the same isolated instance from different directions. The fourth
-shows its local context; only the red instance ID marks the object to classify. Other objects
+shows local context when the target is visible; a magenta region and red ID mark only
+the target's depth-visible surface. The tint is an annotation, not the object's colour. Other objects
 are context, never the classification target. Empty pixels and missing surfaces are unobserved,
 not evidence that a part does not exist. Geometry uses metres with Z up; observed extents can
 be incomplete. Inspect shape, visible parts, colour and scale together. Context may support
@@ -118,7 +119,7 @@ def render_instance(xyz, rgb, ids, bbox_id, output, faces=None):
             toward_room = room_center-center[:2]
             angle = float(np.rad2deg(np.arctan2(toward_room[1], toward_room[0])))
             eye = camera_for_instance(view_points, center, angle)
-            title = f'Local context: classify red ID {bbox_id} only'
+            title = f'Context: magenta target {bbox_id} (if visible)'
         path = output / f'view_{index+1}.png'
         local_faces = None
         if faces is not None:
@@ -128,17 +129,31 @@ def render_instance(xyz, rgb, ids, bbox_id, output, faces=None):
             local_faces = mapping[contained]
         if local_faces is not None and len(local_faces):
             stats = render_mesh(view_points, view_colors, local_faces, path, eye=eye,
-                                at=center, ids=labels, size=VIEW_SIZE)
+                                at=center, ids=labels, size=VIEW_SIZE,
+                                highlight_id=bbox_id if index == 3 else None)
         else:
             radius = point_radius(view_points, eye, center)
             stats = render(view_points, view_colors, path, eye=eye,
                            at=center, ids=labels, size=VIEW_SIZE, point_radius=radius)
             stats['surface_mode'] = 'point_splats'
+            if index == 3:
+                # Reuse the same depth test with categorical colours to obtain a
+                # visible-pixel mask without changing the shared v7 renderer.
+                mask_colors = np.zeros_like(view_colors)
+                mask_colors[labels == bbox_id] = [255, 0, 255]
+                mask_path = path.with_suffix('.mask.png')
+                render(view_points, mask_colors, mask_path, eye=eye, at=center,
+                       size=VIEW_SIZE, point_radius=radius)
+                with Image.open(mask_path) as image:
+                    mask = np.all(np.asarray(image) == [255, 0, 255], axis=-1)
+                highlight_target(path, mask, bbox_id)
         left, top = (index % 2)*VIEW_SIZE, (index // 2)*(VIEW_SIZE+32)
         draw.text((left+6, top+6), title, fill='black', font=font)
         with Image.open(path) as image:
             sheet.paste(image, (left, top+32))
-        views.append({'image': str(path), 'kind': 'isolated' if index < 3 else 'context', **stats})
+        views.append({'image': str(path), 'kind': 'isolated' if index < 3 else 'context',
+                      'usable': index < 3 or stats['visible_instance_pixels'].get(str(bbox_id), 0) > 0,
+                      **stats})
     path = output / 'instance_views.png'
     sheet.save(path)
     floor_z = float(np.percentile(xyz[:, 2], 1))
@@ -147,9 +162,9 @@ def render_instance(xyz, rgb, ids, bbox_id, output, faces=None):
                   'observed_bottom_above_floor_m': float(lo[2]-floor_z)}
 
 
-def classify_instance(xyz, rgb, ids, bbox_id, output, vocabulary, faces=None):
+def classify_instance(xyz, rgb, ids, bbox_id, output, vocabulary):
     """No GT label, query, author label or correctness is accepted by this API."""
-    path, geometry = render_instance(xyz, rgb, ids, bbox_id, output, faces=faces)
+    path, geometry = render_instance(xyz, rgb, ids, bbox_id, output)
     schema = obj({'predicted_object': nullable(enum(*vocabulary)),
                   'alternatives': array(enum(*vocabulary)),
                   'visibility': enum('adequate', 'limited', 'insufficient'), 'reason': REASON})
@@ -158,10 +173,12 @@ def classify_instance(xyz, rgb, ids, bbox_id, output, vocabulary, faces=None):
                'observed_bottom_above_floor_m': geometry['observed_bottom_above_floor_m']}
     write_json(output / 'request.json', {'version': VERSION, 'instructions': INSTRUCTIONS,
                                         'payload': payload, 'image': str(path),
-                                        'images': [view['image'] for view in geometry['views']]})
+                                        'images': [view['image'] for view in geometry['views']
+                                                   if view.get('usable', True)]})
     messages = [{'role': 'system', 'content': INSTRUCTIONS},
                 {'role': 'user', 'content': [{'type': 'text', 'text': json.dumps(payload)},
-                    *[image_part(view['image']) for view in geometry['views']]]}]
+                    *[image_part(view['image']) for view in geometry['views']
+                      if view.get('usable', True)]]}]
     # Define the vocabulary once in the schema, keeping gateway retries and
     # local validation consistent without duplicating the long enum per field.
     category_ref = {'$ref': '#/$defs/category'}

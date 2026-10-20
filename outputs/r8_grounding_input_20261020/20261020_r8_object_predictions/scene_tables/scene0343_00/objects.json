@@ -1,0 +1,623 @@
+{
+  "version": "pointnext-sampling-vote-r8-export-v1",
+  "scene": "scene0343_00",
+  "cloud_sha256": "63cccc099acfc62246e8c9624870e491f90b20f73e4b79e57fa54348e22f6a05",
+  "score_type": "weighted_standardized_3d_rgb_fusion_not_probability",
+  "objects": [
+    {
+      "bbox_id": 3,
+      "target": "desk",
+      "predicted_object": "desk",
+      "bbox_3d": [
+        -0.08877085969053411,
+        -1.550464786038443,
+        0.5414701700210571,
+        2.179861449752323,
+        0.9245688329469388,
+        1.0599339604377747
+      ],
+      "top5": [
+        {
+          "category": "desk",
+          "score": 2.8143682079108188,
+          "rank": 1
+        },
+        {
+          "category": "table",
+          "score": 2.61171111479639,
+          "rank": 2
+        },
+        {
+          "category": "shelf",
+          "score": 2.38062579968757,
+          "rank": 3
+        },
+        {
+          "category": "bookshelf",
+          "score": 2.303747052138329,
+          "rank": 4
+        },
+        {
+          "category": "cabinet",
+          "score": 2.109086612675514,
+          "rank": 5
+        }
+      ],
+      "point_count": 13642
+    },
+    {
+      "bbox_id": 4,
+      "target": "cabinet",
+      "predicted_object": "cabinet",
+      "bbox_3d": [
+        -2.3818622756698886,
+        0.1530106515843226,
+        1.9592528641223907,
+        0.30373460981267186,
+        0.3350762814888668,
+        0.5873548984527588
+      ],
+      "top5": [
+        {
+          "category": "cabinet",
+          "score": 2.1646777895657126,
+          "rank": 1
+        },
+        {
+          "category": "file cabinet",
+          "score": 2.0792907000485608,
+          "rank": 2
+        },
+        {
+          "category": "kitchen cabinet",
+          "score": 1.9286491243867463,
+          "rank": 3
+        },
+        {
+          "category": "box",
+          "score": 1.9086851541498215,
+          "rank": 4
+        },
+        {
+          "category": "column",
+          "score": 1.8952785436898916,
+          "rank": 5
+        }
+      ],
+      "point_count": 899
+    },
+    {
+      "bbox_id": 5,
+      "target": "shelf",
+      "predicted_object": "shelf",
+      "bbox_3d": [
+        -2.4485500201355714,
+        -0.39357389434549717,
+        1.603245347738266,
+        0.23934140770503554,
+        0.8313963556773452,
+        0.9356032609939575
+      ],
+      "top5": [
+        {
+          "category": "shelf",
+          "score": 2.932246654660114,
+          "rank": 1
+        },
+        {
+          "category": "bookshelf",
+          "score": 2.51010839755301,
+          "rank": 2
+        },
+        {
+          "category": "rack",
+          "score": 1.9360327079841273,
+          "rank": 3
+        },
+        {
+          "category": "cabinet",
+          "score": 1.9286762637484611,
+          "rank": 4
+        },
+        {
+          "category": "window",
+          "score": 1.8596365736160716,
+          "rank": 5
+        }
+      ],
+      "point_count": 2623
+    },
+    {
+      "bbox_id": 6,
+      "target": "shelf",
+      "predicted_object": "shelf",
+      "bbox_3d": [
+        -2.324319755427539,
+        -0.49986375855326415,
+        0.5505864769220352,
+        0.48812887177032316,
+        0.5795974230247687,
+        0.6597206890583038
+      ],
+      "top5": [
+        {
+          "category": "shelf",
+          "score": 2.5597835876841515,
+          "rank": 1
+        },
+        {
+          "category": "bookshelf",
+          "score": 2.32109147894362,
+          "rank": 2
+        },
+        {
+          "category": "chair",
+          "score": 2.256081553404748,
+          "rank": 3
+        },
+        {
+          "category": "stool",
+          "score": 2.117988833507777,
+          "rank": 4
+        },
+        {
+          "category": "cart",
+          "score": 1.9417865420061955,
+          "rank": 5
+        }
+      ],
+      "point_count": 1924
+    },
+    {
+      "bbox_id": 7,
+      "target": "shelf",
+      "predicted_object": "shelf",
+      "bbox_3d": [
+        -2.3723090874252977,
+        -0.10300096686189741,
+        0.6250447630882263,
+        0.4983645350797179,
+        0.6062595179847543,
+        0.7827872633934021
+      ],
+      "top5": [
+        {
+          "category": "shelf",
+          "score": 2.915572882690542,
+          "rank": 1
+        },
+        {
+          "category": "cart",
+          "score": 2.4150734178715187,
+          "rank": 2
+        },
+        {
+          "category": "bookshelf",
+          "score": 1.9814879337771925,
+          "rank": 3
+        },
+        {
+          "category": "desk",
+          "score": 1.766247929598045,
+          "rank": 4
+        },
+        {
+          "category": "stand",
+          "score": 1.6982303810248465,
+          "rank": 5
+        }
+      ],
+      "point_count": 3215
+    },
+    {
+      "bbox_id": 8,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        -2.350446564602244,
+        0.5780929568296589,
+        0.6236084401607513,
+        0.5736425605247533,
+        0.6081448190930665,
+        0.8474422693252563
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 2.6411458215686068,
+          "rank": 1
+        },
+        {
+          "category": "shelf",
+          "score": 2.1730852761856223,
+          "rank": 2
+        },
+        {
+          "category": "cart",
+          "score": 1.9882209985564,
+          "rank": 3
+        },
+        {
+          "category": "folded chair",
+          "score": 1.8642473732904246,
+          "rank": 4
+        },
+        {
+          "category": "stool",
+          "score": 1.7371588838851846,
+          "rank": 5
+        }
+      ],
+      "point_count": 3285
+    },
+    {
+      "bbox_id": 9,
+      "target": "shelf",
+      "predicted_object": "shelf",
+      "bbox_3d": [
+        -2.3545621833661547,
+        1.1280087761712663,
+        0.6021010726690292,
+        0.5600422802880107,
+        0.5501784167368253,
+        0.8062637746334076
+      ],
+      "top5": [
+        {
+          "category": "shelf",
+          "score": 2.331019036015218,
+          "rank": 1
+        },
+        {
+          "category": "cart",
+          "score": 2.2347942408666013,
+          "rank": 2
+        },
+        {
+          "category": "stove",
+          "score": 1.9014505066712046,
+          "rank": 3
+        },
+        {
+          "category": "chair",
+          "score": 1.533682810219922,
+          "rank": 4
+        },
+        {
+          "category": "bicycle",
+          "score": 1.5144987560522076,
+          "rank": 5
+        }
+      ],
+      "point_count": 3103
+    },
+    {
+      "bbox_id": 11,
+      "target": "table",
+      "predicted_object": "table",
+      "bbox_3d": [
+        -1.5639136858875218,
+        1.5546392976401306,
+        0.5877283066511154,
+        1.07732639109138,
+        0.4681138164870182,
+        0.9024171531200409
+      ],
+      "top5": [
+        {
+          "category": "table",
+          "score": 2.8768828371732265,
+          "rank": 1
+        },
+        {
+          "category": "coffee table",
+          "score": 2.6310249651447934,
+          "rank": 2
+        },
+        {
+          "category": "end table",
+          "score": 2.3488991140213304,
+          "rank": 3
+        },
+        {
+          "category": "desk",
+          "score": 2.2359433056197826,
+          "rank": 4
+        },
+        {
+          "category": "dining table",
+          "score": 1.9970145359765976,
+          "rank": 5
+        }
+      ],
+      "point_count": 3324
+    },
+    {
+      "bbox_id": 12,
+      "target": "shelf",
+      "predicted_object": "shelf",
+      "bbox_3d": [
+        -0.44344759814011536,
+        1.6250451092065186,
+        0.5043351650238037,
+        1.0440549294274857,
+        0.42012296990697884,
+        0.9449043869972229
+      ],
+      "top5": [
+        {
+          "category": "shelf",
+          "score": 2.9207169370211785,
+          "rank": 1
+        },
+        {
+          "category": "bookshelf",
+          "score": 2.8742876045310792,
+          "rank": 2
+        },
+        {
+          "category": "cabinet",
+          "score": 2.240859356385273,
+          "rank": 3
+        },
+        {
+          "category": "cart",
+          "score": 2.1998344222139474,
+          "rank": 4
+        },
+        {
+          "category": "table",
+          "score": 2.1323543218335246,
+          "rank": 5
+        }
+      ],
+      "point_count": 4156
+    },
+    {
+      "bbox_id": 13,
+      "target": "shelf",
+      "predicted_object": "shelf",
+      "bbox_3d": [
+        2.336715669956817,
+        -1.174334853935008,
+        0.8509474545717239,
+        0.452267839330446,
+        0.6995747705727808,
+        1.5598022043704987
+      ],
+      "top5": [
+        {
+          "category": "shelf",
+          "score": 3.1678674053641234,
+          "rank": 1
+        },
+        {
+          "category": "bookshelf",
+          "score": 2.5390279057161855,
+          "rank": 2
+        },
+        {
+          "category": "cart",
+          "score": 2.2364481683504636,
+          "rank": 3
+        },
+        {
+          "category": "rack",
+          "score": 1.7742540074677988,
+          "rank": 4
+        },
+        {
+          "category": "cabinet",
+          "score": 1.7480690538586343,
+          "rank": 5
+        }
+      ],
+      "point_count": 6202
+    },
+    {
+      "bbox_id": 14,
+      "target": "nightstand",
+      "predicted_object": "nightstand",
+      "bbox_3d": [
+        2.157015557318214,
+        -0.2545966297248441,
+        0.25980801694095135,
+        0.5238928402297844,
+        0.6418019095102068,
+        0.8553428985178471
+      ],
+      "top5": [
+        {
+          "category": "nightstand",
+          "score": 2.5523960461989397,
+          "rank": 1
+        },
+        {
+          "category": "table",
+          "score": 2.5065771328218256,
+          "rank": 2
+        },
+        {
+          "category": "end table",
+          "score": 2.4699706660941194,
+          "rank": 3
+        },
+        {
+          "category": "stool",
+          "score": 2.220826642219693,
+          "rank": 4
+        },
+        {
+          "category": "shelf",
+          "score": 2.0723126851458655,
+          "rank": 5
+        }
+      ],
+      "point_count": 4511
+    },
+    {
+      "bbox_id": 15,
+      "target": "table",
+      "predicted_object": "table",
+      "bbox_3d": [
+        -0.5975990776884537,
+        -0.10939149205591292,
+        0.45671461522579193,
+        1.312197200133177,
+        0.559762605113832,
+        0.9730449616909027
+      ],
+      "top5": [
+        {
+          "category": "table",
+          "score": 3.067840148285105,
+          "rank": 1
+        },
+        {
+          "category": "desk",
+          "score": 2.692138765743551,
+          "rank": 2
+        },
+        {
+          "category": "dining table",
+          "score": 2.315466845535524,
+          "rank": 3
+        },
+        {
+          "category": "coffee table",
+          "score": 2.2335311453965376,
+          "rank": 4
+        },
+        {
+          "category": "end table",
+          "score": 2.1057452444581224,
+          "rank": 5
+        }
+      ],
+      "point_count": 6414
+    },
+    {
+      "bbox_id": 16,
+      "target": "table",
+      "predicted_object": "table",
+      "bbox_3d": [
+        0.586162078183186,
+        -0.04441894231294441,
+        0.5106779783964157,
+        1.3021664697409534,
+        0.7263399393423668,
+        0.7697288691997528
+      ],
+      "top5": [
+        {
+          "category": "table",
+          "score": 2.9478635237222943,
+          "rank": 1
+        },
+        {
+          "category": "coffee table",
+          "score": 2.6668346666781595,
+          "rank": 2
+        },
+        {
+          "category": "desk",
+          "score": 2.445967774316712,
+          "rank": 3
+        },
+        {
+          "category": "dining table",
+          "score": 2.351320819736207,
+          "rank": 4
+        },
+        {
+          "category": "end table",
+          "score": 1.86983288175345,
+          "rank": 5
+        }
+      ],
+      "point_count": 6242
+    },
+    {
+      "bbox_id": 17,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        0.1237151210511982,
+        -1.313551643407898,
+        0.4847952648997307,
+        0.5784699256225281,
+        0.5361108849024987,
+        0.920883372426033
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 3.6119207549234393,
+          "rank": 1
+        },
+        {
+          "category": "folded chair",
+          "score": 2.5936583469864716,
+          "rank": 2
+        },
+        {
+          "category": "stool",
+          "score": 2.2884107041630957,
+          "rank": 3
+        },
+        {
+          "category": "office chair",
+          "score": 2.2440707817117245,
+          "rank": 4
+        },
+        {
+          "category": "armchair",
+          "score": 2.2195047988799566,
+          "rank": 5
+        }
+      ],
+      "point_count": 2845
+    },
+    {
+      "bbox_id": 18,
+      "target": "chair",
+      "predicted_object": "chair",
+      "bbox_3d": [
+        -0.45024220298581596,
+        -1.2324271963904643,
+        0.5185492262244225,
+        0.6048051629071054,
+        0.5373810790706628,
+        0.9158151298761368
+      ],
+      "top5": [
+        {
+          "category": "chair",
+          "score": 3.79590834775132,
+          "rank": 1
+        },
+        {
+          "category": "office chair",
+          "score": 2.4217935735762826,
+          "rank": 2
+        },
+        {
+          "category": "folded chair",
+          "score": 2.381706814257291,
+          "rank": 3
+        },
+        {
+          "category": "armchair",
+          "score": 2.316721898947761,
+          "rank": 4
+        },
+        {
+          "category": "stool",
+          "score": 2.155250042361085,
+          "rank": 5
+        }
+      ],
+      "point_count": 3004
+    }
+  ]
+}

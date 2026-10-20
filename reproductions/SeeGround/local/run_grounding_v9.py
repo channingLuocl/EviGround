@@ -8,7 +8,7 @@ import subprocess
 import sys
 import time
 
-from categories_v9 import VERSION, MIN_SCORE, MAX_GAP, prepare_tables, sha256
+from categories_v9 import R8_VERSION, prepare_tables, sha256
 from run import ROOT
 from run_storage import ensure_run_writable, write_json
 
@@ -47,6 +47,10 @@ def run_case(row, scene_root, output, top_k, review_limit):
         data = json.loads(prediction.read_text())
         result['category_candidate_recall'] = row['target_id'] in data['category_target_ids']
         result['category_candidate_count'] = len(data['category_target_ids'])
+        target_binding = next((b for b in data.get('category_bindings', {}).get('targets', [])
+                               if b['bbox_id'] == row['target_id']), {})
+        ranks = [h['rank'] for h in target_binding.get('matched_hypotheses', [])]
+        result['target_category_best_rank'] = min(ranks) if ranks else None
         # Evaluation-only geometry. This path is never supplied to the inference worker.
         boxes = {o['bbox_id']: o['bbox_3d'] for o in
                  json.loads((scene_root/row['scene']/'objects_gt.json').read_text())}
@@ -56,7 +60,8 @@ def run_case(row, scene_root, output, top_k, review_limit):
         run_path = directory/'run.json'
         run = json.loads(run_path.read_text()) if run_path.exists() else {}
         from v5_runtime import actual_attempts
-        result = {**row, 'object_table': table, 'implementation_version': VERSION,
+        from v4_policy import settings as policy_settings
+        result = {**row, 'object_table': table, 'implementation_version': policy_settings()['version'],
                   'api_attempts': sum(actual_attempts(c) for c in run.get('calls', [])),
                   'pipeline_latency_s': run.get('pipeline_latency_s'),
                   'call_usage': [c.get('usage') for c in run.get('calls', [])],
@@ -74,8 +79,10 @@ def main():
     parser.add_argument('--scene-root', type=Path, default=ROOT/'local_outputs')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--category-top-k', type=int, choices=(1, 5), default=5)
-    parser.add_argument('--min-category-score', type=float, default=MIN_SCORE)
-    parser.add_argument('--max-category-gap', type=float, default=MAX_GAP)
+    parser.add_argument('--min-category-score', type=float,
+                        help='Legacy v8.3 only (default 0.20); omit for r8')
+    parser.add_argument('--max-category-gap', type=float,
+                        help='Legacy v8.3 only (default 0.03); omit for r8')
     parser.add_argument('--limit', type=int)
     parser.add_argument('--workers', type=int, default=10)
     parser.add_argument('--api-concurrency', type=int, default=8)
@@ -113,16 +120,18 @@ def main():
                 raise ValueError(f'Missing local input: {scene}/{name}')
     categories = prepare_tables(args.predictions, args.scene_root, output/'category_inputs', scenes,
                                 args.category_top_k, args.min_category_score, args.max_category_gap)
+    os.environ['SEEGROUND_V9_SOURCE'] = 'r8' if categories['version'] == R8_VERSION else 'v8.3'
     from qwen_api import api_config_summary
     from query_syntax import syntax_settings
     from v5_runtime import file_identity
     # Hash structural geometry and evaluation files too; author OLT is never read.
     scene_hashes = {scene: file_identity(args.scene_root/scene/name for name in
                     ('scene.npz', 'scene_instances.json', 'objects_gt.json')) for scene in sorted(scenes)}
-    settings = {'version': VERSION, 'evaluation_policy': 'fixed_predictions_no_historical_correct_reuse',
+    settings = {'version': policy_settings()['version'], 'evaluation_policy': 'fixed_predictions_no_historical_correct_reuse',
         'selection_sha256': sha256(args.manifest), 'rows': rows, 'categories': categories,
         'scene_root': str(args.scene_root.resolve()), 'scene_sha256': scene_hashes,
         'policy': policy_settings(), 'review_limit': args.review_limit, 'workers': args.workers,
+        'r8_grounding_revision': os.getenv('SEEGROUND_R8_GROUNDING_REVISION', 'r1'),
         'query_syntax': syntax_settings(), 'api': api_config_summary(),
         'models': {key: os.getenv(key, '') for key in
                    ('SEEGROUND_REACT_BACKEND', 'SEEGROUND_JEV_MODEL', 'SEEGROUND_MODEL', 'SEEGROUND_BASE_URL')},
@@ -157,6 +166,12 @@ def main():
     summary['evaluation_policy'] = settings['evaluation_policy']
     summary['category_candidate_recall'] = sum(r.get('category_candidate_recall', False) for r in results)/len(rows)
     summary['category_candidate_recall_observed_queries'] = sum('category_candidate_recall' in r for r in results)
+    summary['target_category_rank_groups'] = {
+        name: {'queries': len(group), 'correct': sum(r['correct'] for r in group),
+               'accuracy': sum(r['correct'] for r in group)/len(group) if group else None}
+        for name, group in (
+            ('top1_match', [r for r in results if r.get('target_category_best_rank') == 1]),
+            ('top2_to_5_rescue', [r for r in results if r.get('target_category_best_rank') in (2, 3, 4, 5)]))}
     write_json(output/'results.json', {'summary': summary, 'results': sorted(results, key=lambda r: r['csv_row'])})
 
 

@@ -18,8 +18,7 @@ import numpy as np
 
 from batch_progress import BatchProgress
 from object_classifier_v8 import VERSION, category_vocabulary, classify_instance, normalized_category
-from mesh_renderer_v8 import read_scene_faces
-from qwen_api import api_config_summary, _redact, _settings, QwenAPIError
+from qwen_api import api_config_summary, _redact, _settings
 from run import ROOT
 from run_storage import ensure_run_writable, write_json
 
@@ -64,7 +63,7 @@ def select_instances(scene_root, manifest, limit, seed):
 
 def evaluate_prediction(job, prediction, gt_label, author_label):
     predicted = prediction['predicted_object']
-    return {'scene': job['scene'], 'bbox_id': job['bbox_id'], 'target': gt_label,
+    row = {'scene': job['scene'], 'bbox_id': job['bbox_id'], 'target': gt_label,
             'predicted_object': predicted,
             'correct': predicted is not None and normalized_category(predicted) == normalized_category(gt_label),
             'exact_correct': predicted == gt_label,
@@ -72,13 +71,14 @@ def evaluate_prediction(job, prediction, gt_label, author_label):
             'author_correct': normalized_category(author_label) == normalized_category(gt_label),
             'status': prediction['status'], 'error': prediction.get('error'),
             'alternatives': prediction.get('alternatives', [])}
+    return row
 
 
 def report(output, jobs, evaluations):
     rows = [evaluations[(job['scene'], job['bbox_id'])] for job in jobs
             if (job['scene'], job['bbox_id']) in evaluations]
     n = len(rows)
-    summary = {'version': VERSION, 'unit': 'unique_scene_instance', 'selected': len(jobs), 'completed': n,
+    summary = {'version': VERSION, 'method': 'independent_pointcloud_vlm', 'unit': 'unique_scene_instance', 'selected': len(jobs), 'completed': n,
                'correct': sum(r['correct'] for r in rows),
                'exact_correct': sum(r['exact_correct'] for r in rows),
                'author_correct': sum(r['author_correct'] for r in rows),
@@ -118,7 +118,8 @@ def run(args):
         sources = ['object_classifier_v8.py', 'run_object_classification.py', 'run.py', 'qwen_api.py',
                    'run_storage.py', 'response_schemas.py', 'batch_progress.py', 'v4_policy.py',
                    'mesh_renderer_v8.py']
-        identity = {'version': VERSION, 'model': os.getenv('SEEGROUND_MODEL', ''),
+        identity = {'version': VERSION, 'method': 'independent_pointcloud_vlm',
+                    'input_contract': 'xyz_rgb_instance_ids_only', 'model': os.getenv('SEEGROUND_MODEL', ''),
                     'api_base_url': os.getenv('SEEGROUND_BASE_URL', '').rstrip('/'),
                     'provider': api['provider'],
                     'request_options': {**api['request_options'], 'response_format': {
@@ -142,10 +143,6 @@ def run(args):
             directory = scene_root/scene
             hashes = {name: file_hash(directory/name) for name in
                       ('scene.npz', 'objects.json', 'objects_gt.json')}
-            mesh_path = scene_root/'downloads'/f'{scene}_vh_clean_2.ply'
-            hashes['mesh_sha256'] = file_hash(mesh_path) if mesh_path.exists() else None
-            hashes['alignment_sha256'] = (file_hash(scene_root/'downloads'/f'{scene}.txt')
-                                         if mesh_path.exists() else None)
             if scene in old_inputs and hashes != old_inputs[scene]:
                 raise ValueError(f'Scene inputs changed: {scene}; choose a new --output')
             inputs[scene] = hashes
@@ -169,7 +166,7 @@ def run(args):
                 pending[job['scene']].append(job)
         report(output, jobs, evaluations)
         print(f'v8 categories: {len(jobs)} unique objects; {len(evaluations)} cached; '
-              f'{len(jobs)-len(evaluations)} pending. GT labels are evaluation-only.', file=sys.stderr)
+              f'{len(jobs)-len(evaluations)} pending. Independent point-cloud recognition; GT/author labels are evaluation-only.', file=sys.stderr)
         if args.prepare_only:
             return
         if not identity['model'] or not os.getenv('SEEGROUND_API_KEY'):
@@ -199,8 +196,6 @@ def run(args):
             try:
                 with np.load(scene_root/scene/'scene.npz') as cloud:
                     xyz, rgb, ids = cloud['xyz'], cloud['rgb'], cloud['ids']
-                faces = (read_scene_faces(scene_root, scene, xyz, rgb)
-                         if inputs[scene]['mesh_sha256'] else None)
             except Exception:
                 stop.set()
                 raise
@@ -217,16 +212,16 @@ def run(args):
                         if (directory/name).exists():
                             (directory/name).rename(attempt/name)
                 try:
-                    prediction = classify_instance(xyz, rgb, ids, job['bbox_id'], directory, vocabulary,
-                                                   faces=faces)
+                    prediction = classify_instance(xyz, rgb, ids, job['bbox_id'], directory, vocabulary)
                 except Exception as exc:
                     diagnostic = _redact(getattr(exc, 'diagnostic', {}))
                     prediction = {'bbox_id': job['bbox_id'], 'predicted_object': None, 'status': 'error',
                                   'version': VERSION, 'error': _redact(str(exc)), 'diagnostic': diagnostic}
-                    if isinstance(exc, QwenAPIError) and (
-                            diagnostic.get('http_status') not in (None, 200)
-                            or diagnostic.get('failure_kind') in ('timeout', 'network')):
-                        stop.set()
+                diagnostic = prediction.get('diagnostic', {})
+                if prediction['status'] == 'error' and (
+                        diagnostic.get('http_status') not in (None, 200)
+                        or diagnostic.get('failure_kind') in ('timeout', 'network')):
+                    stop.set()
                 write_json(directory/'prediction.json', prediction)
                 finish(job, prediction, directory)
 
@@ -238,14 +233,16 @@ def run(args):
         finally:
             signal.signal(signal.SIGINT, previous_handler)
             report(output, jobs, evaluations)
-        # Partial selections remain explicitly partial; never mix author and v8 labels.
+        # Partial selections remain explicitly partial; record the prediction method.
         for scene, scene_jobs in grouped.items():
             table = [{'bbox_id': job['bbox_id'], 'target': evaluations[(scene, job['bbox_id'])]['predicted_object'],
                       'bbox_3d': job['bbox_3d']} for job in scene_jobs
                      if (scene, job['bbox_id']) in evaluations]
-            complete = len(table) == scene_counts[scene] and all(o['target'] is not None for o in table)
+            complete = (len(table) == scene_counts[scene] and all(o['target'] is not None for o in table)
+                        and all(evaluations[(scene, job['bbox_id'])]['status'] == 'completed'
+                                for job in scene_jobs if (scene, job['bbox_id']) in evaluations))
             (output/scene).mkdir(parents=True, exist_ok=True)
-            write_json(output/scene/'predicted_objects.json', {'complete': complete, 'objects': table})
+            write_json(output/scene/'predicted_objects.json', {'method': 'independent_pointcloud_vlm', 'complete': complete, 'objects': table})
         if stop.is_set():
             print('Run stopped; completed predictions are saved. Use --retry-errors to retry API errors.', file=sys.stderr)
         return 1 if stop.is_set() else 0
@@ -255,7 +252,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--manifest', type=Path, default=ROOT/'local/validation/nr3d_val_full.json')
     parser.add_argument('--scene-root', type=Path, default=ROOT/'local_outputs')
-    parser.add_argument('--output', type=Path, default=ROOT/'local_outputs/v8_1_category_subset')
+    parser.add_argument('--output', type=Path, default=ROOT/'local_outputs/v8_1_independent_subset')
     parser.add_argument('--limit', type=int, default=100, help='Unique objects; 0 selects all instances')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--workers', type=int, default=10)

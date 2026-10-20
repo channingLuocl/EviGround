@@ -1,127 +1,93 @@
-# v8：物体类型预测子集
+# v8.1：独立物体类别预测
 
-v7.4 代码已保存在 Git 主分支 `master`，提交 `9bce565`，并已推送至 `origin/master`。
-v7.4 的冻结全量运行结果与归档保留原位置。v8 开发分支为 `codex/seeground-v8`。
+修订标识 `object-category-v8.1-independent-r1`，分支 `codex/seeground-v8`。
 
-## v8.1：修复稀疏成像
+## 输入与输出
 
-新增独立实例类别预测，不改变已有定位器。输入是彩色场景点云与已有实例划分，
-每个实例渲染三个独立视角、一个局部上下文视角，作为四张独立图片交给 `.env` 中配置的
-视觉模型识别，同时保存拼图供人工查看。视角按投影覆盖选择并自动取景；上下文相机朝向
-房间内部，提供实测尺寸与估计离地高度。上下文图只标记待识别实例；
-GT 类别、作者预测类别和 Nr3D 查询均不进入模型输入。
+正式推理接口只接受彩色点云坐标、RGB、实例 ID 和公共类别词表：
 
-有原始 ScanNet `downloads/<scene>_vh_clean_2.ply` 时，额外读取其三角面连接，
-通过深度测试与顶点颜色插值显示实测表面。读取前逐点核对顶点顺序、轴对齐坐标、RGB，
-并保存网格及轴对齐文件哈希。这一模式的输入是 RGB 点云、实例划分和原始网格连接，
-不能描述成严格的“仅点坐标”输入；未使用外部重建或生成纹理。无原始网格时明确记录
-`surface_mode=point_splats`，用有界点圆盘显示，不混淆两种成像方式。
-使用作者相同的 ScanNet200 公共类别词表，排除 wall/floor/ceiling，共 197 类。
+彩色点云＋实例划分 → 多视角点云渲染 → VLM 独立识别 → 物体类型。
 
-模型输出最有依据的类别、其他可能类别、可见性与视觉理由。无法识别时允许 null，
-不通过 GT 答案替换预测。结构化接口通过共享 schema 定义词表，保留网关重试及本地校验，
-减少重复枚举。模型识别质量仍需实验验证，尚未证明优于作者预测方式。
+不读取作者现成类别来作候选、复核、覆盖或回退；GT 与查询也不进入推理。
+渲染只用点云，不自动读取外部网格。实例划分已经提供，不包含场景实例分割。
+公共类别词表为 ScanNet200 排除 wall/floor/ceiling 的 197 类，它不是实例答案。
 
-v8.0 原始 100 个物体为 20/100，作者同子集为 72/100，0 个 API 错误、19 个无法识别。
-该目录 `v8_category_subset` 已添加冻结标记并复制到本地
-`/Users/luocl/Desktop/seeground/archives/v8.0_categories_100_20261016`。
-旧结果不导入 v8.1；新版沿用相同抽样种子、物体顺序与评分规则，独立保存预测。
+当前识别器仍是 VLM，不是 PointNeXt；没有加载或训练 PointNeXt 权重。
+这次修订纠正输入依赖，尚未证明独立分类准确率提高。此前融合运行的 61% 使用了作者标签，
+不能作为独立分类成绩；其同轮独立 VLM 为 40%，且该实验使用实测网格，不能直接当作当前
+点云模式的实测成绩。若下一步采用直接编码三维点云的网络，需要匹配的预训练权重与文本
+对齐组件，不能用现成答案代替网络推理。
 
-v8.1 已实测相同 100 个物体：45/100（严格字符串 44/100），无法识别 2 个，最终错误记录 0；
-作者仍为 72/100。该子集参与开发调试，不是独立测试集证据。完整说明见
-`local_diagnostics/v8_1_categories_20261016.md`。
-当前默认目录已保存这 100 条，重复以下命令会直接复用；扩大到 300 时只新增 200 个预测。
+## 仅提供点云的推理入口
 
-## 运行 100 个物体
+NPZ 文件需有三个数组：xyz 为 N×3、Z 向上、单位米；rgb 为 N×3、范围 0..255；
+ids 为 N 个整数实例 ID，负值视为不分类的背景。无需 objects.json、GT、manifest 或网格。
+
+下面以现有 scene0131_00 点云中 ID 30 的实例为例：
 
 ```bash
 cd /Users/luocl/Desktop/seeground/reproductions/SeeGround
+SEEGROUND_WORKERS=10 SEEGROUND_API_CONCURRENCY=8 \
+local/run_local_v8_categories.sh \
+  --cloud local_outputs/scene0131_00/scene.npz --bbox-id 30 \
+  --output local_outputs/v8_1_independent_scene0131
+```
+
+省略 --bbox-id 则处理输入点云中的所有非负实例 ID；可用 --bbox-id 30 33 指定多个实例。
+此入口代码为 local/predict_pointcloud_v8.py，不会加载任何类别答案表。
+默认本地 10 并发、API 8 并发，读取现有 .env 模型配置。
+
+输出示例仅说明格式，不代表真实模型结果：
+
+```json
+{"bbox_id": 30, "predicted_object": "computer tower", "status": "completed"}
+```
+
+没有 GT，因此该入口不计算正确率。结果保存在 predictions.json 及每个实例的 prediction.json；
+同时保留视图、请求与响应。输入／代码／模型变化时拒绝复用旧目录。
+重复同一命令复用完成结果，--retry-errors 仅重试接口／程序错误，旧尝试归档到 attempts/。
+按一次 Ctrl+C 停止新实例并保存正在执行的实例。错误输出 null，不用作者标签填补。
+
+## 固定子集评测入口
+
+```bash
+cd /Users/luocl/Desktop/seeground/reproductions/SeeGround
+SEEGROUND_WORKERS=10 SEEGROUND_API_CONCURRENCY=8 \
 local/run_local_v8_categories.sh --limit 100
 ```
 
-默认本地 10 并发、API 8 并发，复用现有 `.env` 模型配置。每个实例的首次识别发出一次
-逻辑请求，严格输出接口可能触发客户端自身的格式重试。无需重新安装模型或下载权重。
+默认新目录 local_outputs/v8_1_independent_subset。
+该入口为了与历史结果保持相同的样本，仅读取 objects.json 的实例 ID／包围框建立清单；
+它的 target 字段与 objects_gt.json 的 GT 类别只在评分端使用，均不传给分类器。
+源码中已移除作者标签融合、双类别复核与标签回退路径，不能用 --method fusion 开启。
 
-抽样单位是唯一的 `(scene, bbox_id)`，固定种子 42，不重复预测多条描述中的同一物体。
-全量 130 个场景共 3,413 个 OLT 实例，因此子集结束显示 `100/100`；
-`7805/7805` 是定位描述数，与类别预测的物体数不同。类别子集均匀抽取物体，不代表查询频次加权准确率。
+逐实例输出仍为 bbox_id、target、predicted_object、correct，进度条显示累计准确率。
+results.json 保存独立分类 accuracy 和仅供比较的 author_accuracy。
+评分维持原有词汇归一，不合并 chair/office chair、table/desk 等上下位类别。
+接口错误／无法识别都留在分母内，不按答案正误重跑或选择历史成功答案。
 
-逐条标准输出为以下四个字段。这里是**格式示例，不是真实推理结果**：
+扩大子集用 --limit 300，前缀抽样 seed=42 保持一致；--limit 0 是全量实例类别预测，
+不是 7,805 条描述定位。这些已查看过错例的实例用于开发，不能宣称独立测试。
+本次没有自动启动分类 API 请求；不建议仅为了新版本名重复大量调用，需先明确识别方法改进。
 
-```text
-{"bbox_id": 12, "target": "chair", "predicted_object": "chair", "correct": true}
-```
+两个入口均支持 --prepare-only，仅检查输入、保存配置，不调用模型。
+注意使用不同输出目录区分单场景推理与固定子集评测。
 
-`target` 是评分端读取的 GT 类型；`predicted_object` 是模型类型。进度条在 stderr 中显示
-已完成数、耗时、ETA 和累计 `True 正确数/已完成数 = 准确率`，与现有批处理风格一致。
-不同场景中的实例 ID 可能重复，完整场景 ID 记录在文件和汇总中。
+## 历史保留与测试
 
-默认输出：`local_outputs/v8_1_category_subset`。`local_outputs` 当前指向 KESU，
-实际路径为 `/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v8_1_category_subset`。
-
-## 续跑与扩大子集
-
-重复相同命令直接续跑：已完成预测无论答对答错都复用，不按答案挑选历史结果。
-按一次 Ctrl+C 停止安排新物体，正在请求的实例会保存后退出。
-
-把子集扩大到 300 个，前 100 个的预测会继续复用：
-
-```bash
-local/run_local_v8_categories.sh --limit 300
-```
-
-固定种子抽样是可扩展的前缀，因此不是重新抽取一批 300 个物体。
-之后需要分类全量实例时可用 `--limit 0`；这是类别预测全量，不会自动运行 7,805 条定位。
-
-只对接口／程序错误重试，保留原错误记录与原始响应：
-
-```bash
-local/run_local_v8_categories.sh --limit 100 --retry-errors
-```
-
-识别错误和无法识别的已完成答案不会被此参数重跑。遇到非成功 HTTP 状态、网络错误或超时，
-停止安排新的实例，保存正在进行的结果，避免接口异常时刷出大量 null。
-错误具体原因写到 stderr 与每条 `prediction.json`。
-
-更换模型、代码、输入、随机种子时需指定新目录，避免混合实验：
-
-```bash
-local/run_local_v8_categories.sh --limit 100 --output local_outputs/v8_1_category_subset_experiment2
-```
-
-只生成抽样与运行配置，不调用模型：
-
-```bash
-local/run_local_v8_categories.sh --limit 100 --prepare-only
-```
-
-## 结果与评分
-
-- `config.json`、`inputs.json`、`selection.json`：模型／代码／输入哈希和固定抽样。
-- `results.json`：全部已完成实例及汇总；包含 v8 与作者预测在**相同已完成物体**上的准确率。
-- `<scene>/object_<ID>/request.json`：实际文本指令、公共词表、几何输入与图片路径。
-- 同目录下的四张原视图、`instance_views.png`、`response.json`、`prediction.json`、`evaluation.json`。
-- 错误重试的旧结果放在实例目录下 `attempts/`。
-- `<scene>/predicted_objects.json`：仅包含新预测类别的物体表；`complete` 标明是否覆盖整场景，
-  不把未识别／未运行实例偷偷替换为 GT 或作者预测。此表尚未自动接入定位器。
-
-控制台 `correct` 和汇总 `accuracy` 采用固定词汇归一：大小写、空格／连字符、公共词表规则生成的
-复数及 sofa/couch、television/tv、trashcan/trash can。`office chair/chair`、`table/desk`、
-`shelf/bookshelf` 保持不同。另存 `exact_correct`、`exact_accuracy` 供严格字符串比较。
-API 错误与无法识别均计入当前总数，不从分母中删去；汇总分别记录 `errors` 和 `unrecognised`。
-
-这次分类验证适合检查视觉识别质量。后续需要固定分类结果，接入同一定位器，
-分别运行作者预测类别、新预测类别、GT 类别对照，测量最终定位效果。
-
-## 离线测试
+61% 融合实验的全部 3,029 个源文件已复制并逐文件核验 SHA256，连同融合实现保存至：
+/Volumes/KESU/论文/paper/reproductions/SeeGround/archives/v8.1_fusion_100_61_20261016。
+原目录 local_outputs/v8_1_fusion_subset 不修改；本机核心 JSON 备份为
+/Users/luocl/Desktop/seeground/archives/v8.1_fusion_100_61_20261016_critical。
+此前 42.33% 的 300 实例纯视觉实验及冻结 v7.4 记录也保留原位置。
 
 ```bash
 PYTHON_DOTENV_DISABLED=1 SEEGROUND_API_PROVIDER=openai SEEGROUND_V4=0 \
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=local OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
 .venv/bin/python -m unittest \
-  test_object_classification_v8 test_category_review test_frozen_run test_v7_4
+  test_pointcloud_input_v8 test_object_classification_v8 \
+  test_category_review test_frozen_run test_v7_4
 ```
 
-测试使用合成点云／三角面和模拟接口，不产生模型费用；涵盖真实渲染、深度遮挡、网格顶点
-对应、自动取景、四图请求隔离、输出格式、
-错误恢复、子集扩展、模型／输入变化拒绝复用，以及冻结目录保护。
+测试涵盖没有任何标签表时的真实点云渲染与模拟分类、改变 GT／作者标签后预测不变、
+接口失败无标签回退、缓存／重试／模型变化保护和已有冻结保护。
