@@ -58,5 +58,43 @@
       "scalar/plain Target/Answer/ID text; evidence remains required by local validation"
     ]
   },
-  "secrets": "API credentials remain in the local relay env file and are excluded from Git."
+  "secrets": "API credentials remain in the local relay env file and are excluded from Git.",
+  "gpt61_gate": {
+    "model": "gpt-6.1-sol",
+    "pipeline_version": "predicted-category-grounding-v9-r8-r18",
+    "selection_manifest": "outputs/r18_gpt61_formatfix_freeze_20261022/dev96_manifest.json",
+    "selection_sha256": "60b5f5be7e6fe8ecfb40ab59da4c3c4ce3da84b1f3bb895a242782b95551113a",
+    "evaluation_policy": "fixed_predictions_no_historical_correct_reuse",
+    "category_top_k": 5,
+    "ground_truth_categories_supplied": false,
+    "cumulative": false,
+    "summary": {
+      "total": 96,
+      "completed": 92,
+      "correct": 68,
+      "accuracy": 0.7083333333333334,
+      "acc25": 0.71875,
+      "acc50": 0.7083333333333334,
+      "errors": 2,
+      "inference_errors": 2,
+      "actual_api_attempts": 464,
+      "category_candidate_recall": 0.9375,
+      "target_category_rank_groups": {
+        "top1_match": {
+          "queries": 72,
+          "correct": 56,
+          "accuracy": 0.7777777777777778
+        },
+        "top2_to_5_rescue": {
+          "queries": 18,
+          "correct": 12,
+          "accuracy": 0.6666666666666666
+        }
+      }
+    },
+    "external_output": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r18_gpt61_correct_dev96_20261022",
+    "output_manifest_sha256": "0c72745f5b3732a2e7c3a3b6521332db3f6c40bfd0b38ed51488cc761181c94b",
+    "output_results_sha256": "ec31b001ab7ee07f9600b41448161d89e4e49435c3d3440ad4069283115c9c6b",
+    "tests": "35 passed: local.test_r18_react local.test_gpt61_action_format"
+  }
 }
