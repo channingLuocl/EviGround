@@ -33,9 +33,10 @@ class ReactTests(unittest.TestCase):
                                   'observation': 'Visible chair beside the described desk'}]
         return {'_content': json.dumps(value), '_finish_reason': 'stop', '_baseline': {}, 'usage': {}}
 
-    def run_actions(self, replies, limit=2, render_side_effect=None):
+    def run_actions(self, replies, limit=2, render_side_effect=None, candidate_objects=None):
         trace = {'steps': [], 'internal_usage': {'compute': 0, 'render': 0, 'visual_check': 0}}
         calls = []
+        candidate_objects = self.objects[:1] if candidate_objects is None else candidate_objects
         with tempfile.TemporaryDirectory() as directory, \
                 patch('v74_grounding.scene_views', return_value=[{'image': 'overview.png'}, {'image': 'top.png'}]), \
                 patch('r18_react.image_part', return_value={}), \
@@ -43,7 +44,7 @@ class ReactTests(unittest.TestCase):
                     'tool': 'render', 'focus_ids': [2], 'marked_ids': [1, 2], 'context': 'isolated'},
                     side_effect=render_side_effect) as renderer, \
                 patch('r18_react.chat', side_effect=replies) as model:
-            result = ground(self.query, self.parsed, self.objects, self.objects[:1],
+            result = ground(self.query, self.parsed, self.objects, candidate_objects,
                 np.zeros((2, 3)), np.zeros((2, 3)), np.array([1, 2]), Path(directory),
                 calls, {}, trace, limit)
         return result, trace, model, renderer
@@ -112,6 +113,37 @@ class ReactTests(unittest.TestCase):
         self.assertFalse(trace['r18_observations'][0]['accepted'])
         self.assertEqual(result['predicted_id'], 1)
         self.assertEqual(trace['r18_final_decision']['unresolved'], [])
+
+    def test_spatial_finish_forces_complete_measurement_pool(self):
+        self.objects = [prediction(1, ['chair'], (0, 0, 1)),
+                        prediction(2, ['desk'], (2, 0, .5)),
+                        prediction(3, ['chair'], (4, 0, 1))]
+        self.parsed = {'Target': ['chair'], 'Anchor': ['desk'],
+                       'Relations': [{'relation': 'nearest'}], '_v4_budget': {}}
+        self.query = 'the chair next to the desk'
+        result, trace, model, renderer = self.run_actions([
+            self.action('finish', oid=1), self.action('finish', oid=1),
+            self.action('finish', oid=1), self.action('finish', oid=1)],
+            candidate_objects=[self.objects[0], self.objects[2]])
+        self.assertEqual(result['predicted_id'], 1)
+        self.assertEqual(model.call_count, 4)
+        forced = trace['r18_observations'][0]
+        self.assertTrue(forced['controller_forced'])
+        self.assertEqual(forced['tool'], 'measure')
+        self.assertEqual({row['id'] for row in forced['objects']}, {1, 2, 3})
+
+    def test_alternative_finish_requires_primary_rival_view(self):
+        self.objects = [prediction(1, ['stool', 'chair'], (0, 0, 1)),
+                        prediction(2, ['chair', 'stool'], (2, 0, 1))]
+        self.parsed = {'Target': ['chair'], 'Anchor': [], '_v4_budget': {}}
+        self.query = 'the chair'
+        result, trace, model, renderer = self.run_actions([
+            self.action('finish', oid=1), self.action('inspect', [1, 2]),
+            self.action('finish', oid=1), self.action('finish', oid=1)], limit=2,
+            candidate_objects=self.objects)
+        self.assertEqual(result['predicted_id'], 1)
+        self.assertEqual(trace['r18_observations'][0]['tool'], 'finish_check')
+        self.assertEqual(renderer.call_count, 1)
 
     def test_initial_state_preserves_geometry_and_relative_classifier_scores(self):
         result, trace, model, renderer = self.run_actions([self.action('finish', oid=1)])

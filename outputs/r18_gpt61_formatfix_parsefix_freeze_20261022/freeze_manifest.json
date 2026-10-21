@@ -13,11 +13,15 @@
     "root": "reproductions/SeeGround/local",
     "files": [
       "qwen_api.py",
-      "test_gpt61_action_format.py"
+      "r18_react.py",
+      "test_gpt61_action_format.py",
+      "test_r18_react.py"
     ],
     "sha256": {
       "reproductions/SeeGround/local/qwen_api.py": "904c14b2c1839007e4338815f6aecddbdc8d8682a4406d4c4fe658dfd2e49b3d",
-      "reproductions/SeeGround/local/test_gpt61_action_format.py": "7f862c28ddd2892ac0cb74041aac5d821ff76fda749900e2950471a9ea00ad99"
+      "reproductions/SeeGround/local/r18_react.py": "266633f47892169988de9879bd62b7db480406f715fcf64921ab7d5ec389e171",
+      "reproductions/SeeGround/local/test_gpt61_action_format.py": "7f862c28ddd2892ac0cb74041aac5d821ff76fda749900e2950471a9ea00ad99",
+      "reproductions/SeeGround/local/test_r18_react.py": "32447a6c3850f9a97ff7161b168e38d15c23dc1bc5d0299fd7872529a4acc2ad"
     }
   },
   "input": {
@@ -41,7 +45,7 @@
   },
   "tests": {
     "command": "PYTHONPATH=local .venv/bin/python -m unittest local.test_r18_react local.test_gpt61_action_format",
-    "result": "35 passed"
+    "result": "37 passed"
   },
   "format_recovery": {
     "r18": [
@@ -95,6 +99,20 @@
     "external_output": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r18_gpt61_correct_dev96_20261022",
     "output_manifest_sha256": "0c72745f5b3732a2e7c3a3b6521332db3f6c40bfd0b38ed51488cc761181c94b",
     "output_results_sha256": "ec31b001ab7ee07f9600b41448161d89e4e49435c3d3440ad4069283115c9c6b",
-    "tests": "35 passed: local.test_r18_react local.test_gpt61_action_format"
+    "tests": "35 passed: local.test_r18_react local.test_gpt61_action_format (pre-guard-patch dev96 gate)"
+  },
+  "post_gate_guard_patch": {
+    "files": [
+      "reproductions/SeeGround/local/r18_react.py",
+      "reproductions/SeeGround/local/test_r18_react.py"
+    ],
+    "unit_tests": "37 passed",
+    "validation_status": "The recorded dev96 metrics predate this guard patch; no new 96-row API rerun is claimed.",
+    "scope": [
+      "force complete geometry comparison before accepting a multi-candidate finish",
+      "review classifier-covered reference candidates for spatial qualifiers",
+      "require visual inspection for rank-2-to-5 target hypotheses against rank-1 rivals",
+      "reserve one bounded evidence call after adversarial finish review"
+    ]
   }
 }

@@ -1,6 +1,7 @@
 """A bounded visual ReAct trajectory, using predicted categories and measured geometry."""
 import json
 from pathlib import Path
+import re
 
 import numpy as np
 
@@ -32,6 +33,7 @@ Actions:
   at both targets', use the visually bound target group as facing_ids. Never use identical origin
   and facing groups. Without a directional clause use frame=null; distances need no observer frame.
   Both groups must follow the description and visible layout. Use frame=null for other measurements.
+  Always include a nonempty focus_ids list in a measure action, even when a frame is supplied.
   The returned selected_observer_frame is conditional on YOUR chosen groups. Bind the described
   references and comparison group first. Include all plausible comparison members, not just a guess.
   Measurements are observations, not proof that a reference/category interpretation is correct.
@@ -49,8 +51,10 @@ preference only if the remaining evidence is comparable. Never use image left as
 gap_from_top1 is the difference between uncalibrated classifier scores, NOT a probability. Within
 one instance, a small gap denotes a closer classifier alternative than a large gap. It does not
 establish the category, and should not be compared using a probability cutoff.
-Top-5 recall expands the pool; it does not make all five names true. Before choosing an alternative-only
-target category, inspect that instance and plausible primary-category rivals. Geometry alone cannot
+Top-5 recall expands the pool; it does not make all five names true. A rank-1 label is still only a
+prior: do not discard a rank-2--5 candidate merely because its point-cloud appearance is small,
+folded, occluded or visually uncertain. Before choosing an alternative-only target category, inspect
+that instance and plausible primary-category rivals. Geometry alone cannot
 turn a monitor stand into a monitor, or a toilet into a stool. A finish without that inspection is
 deferred while a tool call remains. Check reference categories and their qualifiers independently;
 do not select whichever door, desk or shelf happens to make a convenient distance minimum.
@@ -64,12 +68,90 @@ support a preferred ID. AABB dimensions alone do not identify the head or foot o
 An unobserved attribute stays unknown. Return the best supported target despite minor uncertainty,
 but do not invent appearance, references or evidence. Unknown does not eliminate an alternative.
 
+Before finish, perform a complete comparison for every spatial, distance, order, support or size
+clause: use measure with all allowed target candidates and the bound reference instances. A scene
+view or an object table is not a substitute for that comparison. If the chosen target is a rank-2+
+category hypothesis, inspect it together with every rank-1 target-category rival before deciding.
+Never finish immediately from the initial overview when more than one target candidate remains.
+In the final evidence, cite the measured/observed IDs that distinguish the selected target from its
+strongest rival; do not turn an assumption into a fact merely to satisfy the schema.
+
 Keep reason within 60 words, evidence within 4 entries, and each observation within 35 words.
 Every evidence source_quote must be the COMPLETE original description verbatim. For inspect or
 measure, use predicted_id=null and evidence=[]. For inspect and finish use frame=null. For finish use
 focus_ids=[], context=null, azimuth_deg=null and elevation_deg=null. Return a single top-level JSON
 OBJECT with the schema keys, never an array containing an object.
 '''
+
+
+_MEASURE_RELATIONS = {
+    'nearest', 'farthest', 'near', 'left', 'right', 'front', 'back', 'above',
+    'below', 'underneath', 'between', 'overlap', 'over', 'support', 'inside',
+}
+_MEASURE_WORDS = re.compile(
+    r'\b(?:closest|nearest|farthest|farther|left|right|front|behind|back|above|below|'
+    r'under|underneath|over|between|next\s+to|near|beside|alongside|away\s+from|'
+    r'larger|smaller|taller|shorter|lowest|highest|middle|first|second|third|end|corner)\b',
+    re.IGNORECASE)
+
+
+def requires_measure(query, parsed):
+    """Return whether the description contains a clause whose comparison needs geometry."""
+    relations = {str(item.get('relation', '')).casefold()
+                 for item in parsed.get('Relations', []) if isinstance(item, dict)}
+    return bool(relations & _MEASURE_RELATIONS) or bool(_MEASURE_WORDS.search(query))
+
+
+def required_measure_ids(parsed, allowed, objects):
+    """Bind all target candidates and the visible instances matching parsed anchors."""
+    ids = set(allowed)
+    for name in parsed.get('Anchor', []):
+        ids.update(item['bbox_id'] for item in objects if matching_hypotheses([name], item))
+    return sorted(ids)
+
+
+def reference_review_ids(parsed, objects):
+    """Return classifier-covered reference instances that can change a relation binding."""
+    names = list(parsed.get('Anchor', []))
+    for relation in parsed.get('Relations', []):
+        if not isinstance(relation, dict):
+            continue
+        names.extend(relation.get('anchor_categories', []) or [])
+        if relation.get('anchor_category'):
+            names.append(relation['anchor_category'])
+    names = list(dict.fromkeys(name for name in names if name))
+    ids = []
+    for name in names:
+        matched = [item for item in objects if matching_hypotheses([name], item)]
+        matched.sort(key=lambda item: (min((h['rank'] for h in matching_hypotheses([name], item)),
+                                           default=99), item['bbox_id']))
+        ids.extend(item['bbox_id'] for item in matched)
+    return list(dict.fromkeys(ids))[:12]
+
+
+def measured_ids(observations):
+    ids = set()
+    for item in observations:
+        if item.get('tool') != 'measure':
+            continue
+        ids.update(row.get('id') for row in item.get('objects', []) if type(row.get('id')) is int)
+    return ids
+
+
+def latest_frame_hint(actions):
+    """Reuse a model-selected observer frame when a later guard completes its measurement."""
+    for action in reversed(actions):
+        frame = action.get('frame') if isinstance(action, dict) else None
+        if isinstance(frame, dict):
+            return frame
+    return None
+
+
+def category_review_ids(oid, best_ranks):
+    """Return the selected alternative and all primary-category target rivals."""
+    if best_ranks.get(oid) not in (2, 3, 4, 5):
+        return []
+    return sorted([oid] + [item for item, rank in best_ranks.items() if rank == 1])
 
 
 def observer_frame(frame, objects, selected):
@@ -179,14 +261,17 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
                  r18_initial_input=payload, r18_actions=actions, r18_observations=observations,
                  r18_tool_budget=limit)
     decision = None
-    for step in range(limit+2):
+    guard_attempts = 0
+    final_review_done = False
+    reserved_evidence = False
+    for step in range(limit+5):
         state = {**payload, 'observations': observations, 'previous_actions': actions,
                  'remaining_tool_calls': max(0, limit-step),
                  'views': [{k: v for k, v in view.items() if k in
                             ('kind', 'marked_ids', 'focus_ids', 'context', 'azimuth_deg', 'elevation_deg', 'layout')}
                            for view in views]}
         action_schema = json.loads(json.dumps(schema))
-        if step > limit:
+        if step > limit and not reserved_evidence:
             action_schema['properties']['action'] = enum('finish')
         call = {'stage': 'r18_react_decision', 'role': 'multimodal_evidence_planner',
                 'step': step, 'images': [v['image'] for v in views]}
@@ -203,16 +288,128 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
         if action.get('action') == 'finish':
             decision = validate_decision(action, query, allowed, known)
             oid = decision['predicted_id']
-            if best_ranks.get(oid) in (2, 3, 4, 5) and oid not in inspected:
-                gap = 'The selected target is an alternative-only category match and has not been visibly inspected. Inspect it with plausible primary matches; distance alone is not category evidence.'
-                if step < limit:
-                    observation = {'tool': 'finish_check', 'accepted': False, 'missing': gap}
+            missing = []
+            required_ids = required_measure_ids(parsed, allowed, objects)
+            reference_ids = reference_review_ids(parsed, objects)
+            if len(allowed) > 1 and not observations:
+                missing.append('compare the multiple target candidates with one evidence observation before finishing')
+            if (len(allowed) > 1 and requires_measure(query, parsed)
+                    and not set(required_ids).issubset(measured_ids(observations))):
+                missing.append('measure all target candidates and bound references for the spatial/size clause')
+            unseen_references = set(reference_ids) - inspected
+            if (len(allowed) > 1 and requires_measure(query, parsed) and unseen_references):
+                missing.append('inspect all classifier-covered reference candidates before binding a relation or qualifier')
+            category_ids = category_review_ids(oid, best_ranks)
+            if category_ids and not set(category_ids).issubset(inspected):
+                missing.append('inspect the selected alternative category together with every rank-1 target-category rival')
+            if missing and guard_attempts < 3:
+                # A controller-enforced observation only fills a missing evidence obligation; the
+                # model still receives it and must make the final decision on the next turn.
+                if (len(allowed) > 1 and requires_measure(query, parsed)
+                        and not set(required_ids).issubset(measured_ids(observations))):
+                    observation = measure(required_ids, objects, parsed, candidates, query,
+                                          latest_frame_hint(actions))
+                    observation.update(controller_forced=True,
+                                      reason='complete the comparison pool before accepting finish')
                     observations.append(observation)
                     trace['steps'].append({'action': action, 'observation': observation})
+                    trace['internal_usage']['compute'] += 1
+                    guard_attempts += 1
                     continue
-                decision.setdefault('unresolved', []).append(gap)
+                if unseen_references:
+                    gap = ('Reference candidates remain uninspected. Inspect every reference ID that could satisfy '
+                           'the described noun or qualifier before finishing.')
+                    if step < limit and not any(item.get('tool') == 'finish_check' for item in observations):
+                        observation = {'tool': 'finish_check', 'accepted': False, 'missing': gap}
+                        observations.append(observation)
+                        trace['steps'].append({'action': action, 'observation': observation})
+                        guard_attempts += 1
+                        continue
+                    focus = sorted(unseen_references)
+                    camera = {'azimuth_deg': 315, 'elevation_deg': 30, 'context': 'isolated'}
+                    rendered = []
+                    try:
+                        rendered = [render_action({**camera, 'focus_ids': focus[offset:offset+6]},
+                            objects, xyz, rgb, ids, Path(out), 3200+2*step+offset//6)
+                            for offset in range(0, len(focus), 6)]
+                        views.extend(rendered)
+                        inspected.update(i for view in rendered for i in view.get('marked_ids', []))
+                        observation = {'tool': 'render', 'focus_ids': focus,
+                            'controller_forced': True,
+                            'views': [{k: v for k, v in view.items() if k not in ('image', 'panels')}
+                                      for view in rendered]}
+                        trace['internal_usage']['render'] += sum(v.get('views_rendered', 1) for v in rendered)
+                    except ValueError as exc:
+                        observation = {'tool': 'render', 'focus_ids': focus,
+                            'controller_forced': True, 'error': str(exc), 'no_evidence_acquired': True}
+                    observations.append(observation)
+                    trace['steps'].append({'action': action, 'observation': observation})
+                    guard_attempts += 1
+                    continue
+                if category_ids and not set(category_ids).issubset(inspected):
+                    gap = ('The selected target is an alternative-only category match and has not been visibly '
+                           'inspected with its rank-1 rivals. Inspect those IDs before finishing.')
+                    if step < limit and not any(item.get('tool') == 'finish_check' for item in observations):
+                        observation = {'tool': 'finish_check', 'accepted': False, 'missing': gap}
+                        observations.append(observation)
+                        trace['steps'].append({'action': action, 'observation': observation})
+                        guard_attempts += 1
+                        continue
+                    focus = category_ids
+                    camera = {'azimuth_deg': 315, 'elevation_deg': 30, 'context': 'isolated'}
+                    rendered = []
+                    try:
+                        rendered = [render_action({**camera, 'focus_ids': focus[offset:offset+6]},
+                            objects, xyz, rgb, ids, Path(out), 3000+2*step+offset//6)
+                            for offset in range(0, len(focus), 6)]
+                        views.extend(rendered)
+                        inspected.update(i for view in rendered for i in view.get('marked_ids', []))
+                        observation = {'tool': 'render', 'focus_ids': focus,
+                            'controller_forced': True,
+                            'views': [{k: v for k, v in view.items() if k not in ('image', 'panels')}
+                                      for view in rendered]}
+                        trace['internal_usage']['render'] += sum(v.get('views_rendered', 1) for v in rendered)
+                    except ValueError as exc:
+                        observation = {'tool': 'render', 'focus_ids': focus,
+                            'controller_forced': True, 'error': str(exc), 'no_evidence_acquired': True}
+                    observations.append(observation)
+                    trace['steps'].append({'action': action, 'observation': observation})
+                    guard_attempts += 1
+                    continue
+                if not observations:
+                    focus = allowed[:12]
+                    camera = {'azimuth_deg': 315, 'elevation_deg': 30, 'context': 'isolated'}
+                    rendered = [render_action({**camera, 'focus_ids': focus[offset:offset+6]},
+                        objects, xyz, rgb, ids, Path(out), 3000+2*step+offset//6)
+                        for offset in range(0, len(focus), 6)]
+                    views.extend(rendered)
+                    inspected.update(i for view in rendered for i in view.get('marked_ids', []))
+                    observation = {'tool': 'render', 'focus_ids': focus,
+                        'controller_forced': True,
+                        'views': [{k: v for k, v in view.items() if k not in ('image', 'panels')}
+                                  for view in rendered]}
+                    trace['internal_usage']['render'] += sum(v.get('views_rendered', 1) for v in rendered)
+                    observations.append(observation)
+                    trace['steps'].append({'action': action, 'observation': observation})
+                    guard_attempts += 1
+                    continue
+            if missing:
+                decision.setdefault('unresolved', []).extend(missing)
+            elif len(allowed) > 1 and not final_review_done and guard_attempts < 3:
+                review = {
+                    'tool': 'finish_check', 'accepted': False,
+                    'proposed_id': oid,
+                    'missing': ('Adversarially re-check the proposed target against its strongest rival. '
+                                'Re-read every clause, category rank, measured relation and observer frame; '
+                                'then finish again or acquire one discriminating observation.')}
+                observations.append(review)
+                trace['steps'].append({'action': action, 'observation': review})
+                final_review_done = True
+                reserved_evidence = True
+                guard_attempts += 1
+                continue
             break
-        if step >= limit:
+        if step >= limit and not reserved_evidence:
             if step > limit:
                 raise ValueError('ReAct must finish after the budget-exhausted reminder')
             observation = {'tool': 'budget_exhausted', 'requested_tool': action['action'],
@@ -221,6 +418,10 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
             observations.append(observation)
             trace['steps'].append({'action': action, 'observation': observation})
             continue
+        if reserved_evidence:
+            # One extra model-selected observation is reserved after the adversarial
+            # finish check; this is still bounded and is the only budget extension.
+            reserved_evidence = False
         focus = action.get('focus_ids')
         try:
             if (not isinstance(focus, list) or not focus or len(set(focus)) != len(focus)
