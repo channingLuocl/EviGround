@@ -21,8 +21,17 @@
     }
   },
   "input": {
-    "path": "/Users/luocl/Desktop/seeground/outputs/r8_grounding_input_20261020/20261020_r8_object_predictions",
-    "sha256": "0b8584448988d124ec64b076ad239f09b1a83d6976883237037d6e5f265fa6c9",
+    "archive": {
+      "path": "outputs/r8_best_object_predictions_20261020.zip",
+      "bytes": 7450618,
+      "sha256": "14d11c2a3dcabd25674db536f236f3157a1190d7ef79eacd0e1c9e3b884ee98d"
+    },
+    "directory": {
+      "path": "outputs/r8_grounding_input_20261020/20261020_r8_object_predictions",
+      "file_count": 140,
+      "bytes": 14224166,
+      "tree_sha256": "1ab6d8fbe84d76534c5baa6fd469be05dff19a1cc4ddf9d452a744336b12da4a"
+    },
     "prediction_manifest": "outputs/r13_single_pass_20261020/validation192_manifest.json"
   },
   "validation": {
