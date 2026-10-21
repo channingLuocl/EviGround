@@ -79,30 +79,41 @@ def api_provider() -> str:
     return provider
 
 
+def thinking_enabled() -> bool:
+    raw = os.getenv('SEEGROUND_ENABLE_THINKING', '0').strip()
+    if raw not in ('0', '1'):
+        raise QwenAPIError('SEEGROUND_ENABLE_THINKING must be 0 or 1')
+    return raw == '1'
+
+
+def thinking_token_floor() -> int:
+    raw = os.getenv('SEEGROUND_THINKING_TOKEN_FLOOR', '8192').strip()
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise QwenAPIError('SEEGROUND_THINKING_TOKEN_FLOOR must be a positive integer') from exc
+    if value < 1:
+        raise QwenAPIError('SEEGROUND_THINKING_TOKEN_FLOOR must be a positive integer')
+    return value
+
+
 def request_options(max_tokens: int, temperature: float | None, json_mode: bool,
                     response_schema: dict[str, Any] | None = None) -> dict[str, Any]:
     provider = api_provider()
     if type(max_tokens) is not int or max_tokens < 1:
         raise QwenAPIError('max_tokens must be a positive integer')
+    thinking = json_mode and thinking_enabled()
+    if thinking:
+        max_tokens = max(max_tokens, thinking_token_floor())
     if provider == 'qwen':
         options = {'max_tokens': max_tokens, 'temperature': 0.0 if temperature is None else temperature}
         if json_mode:
-            options['enable_thinking'] = False
+            options['enable_thinking'] = thinking
     else:
         token_parameter = os.getenv('SEEGROUND_OPENAI_TOKEN_PARAMETER', 'max_completion_tokens').strip()
         if token_parameter not in ('max_completion_tokens', 'max_tokens'):
             raise QwenAPIError('SEEGROUND_OPENAI_TOKEN_PARAMETER must be max_completion_tokens or max_tokens')
-        options = {token_parameter: max_tokens}
-        if json_mode:
-            options['enable_thinking'] = False
-        configured_temperature = os.getenv('SEEGROUND_OPENAI_TEMPERATURE', '').strip()
-        if temperature is None and configured_temperature:
-            try:
-                temperature = float(configured_temperature)
-            except ValueError as exc:
-                raise QwenAPIError('SEEGROUND_OPENAI_TEMPERATURE must be a number') from exc
-        if temperature is not None:
-            options['temperature'] = temperature
+        options = {token_parameter: max_tokens, 'reasoning_effort': 'medium'}
     if 'temperature' in options and not 0 <= options['temperature'] <= 2:
         raise QwenAPIError('temperature must be finite and between 0 and 2')
     if response_schema is not None:
@@ -110,10 +121,24 @@ def request_options(max_tokens: int, temperature: float | None, json_mode: bool,
             raise QwenAPIError('Strict response_schema requires OpenAI provider and json_mode=True')
         from jsonschema import Draft202012Validator
         Draft202012Validator.check_schema(response_schema['schema'])
-        options['response_format'] = {'type': 'json_schema', 'json_schema': response_schema}
+        # This relay accepts JSON mode; the full schema is enforced locally.
+        options['response_format'] = {'type': 'json_object'}
     elif json_mode:
         options['response_format'] = {'type': 'json_object'}
     return options
+
+
+def effective_timeout(timeout: tuple[int, int]) -> tuple[int, int]:
+    if api_provider() != 'openai':
+        return timeout
+    raw = os.getenv('SEEGROUND_OPENAI_READ_TIMEOUT_SECONDS', '240').strip()
+    try:
+        read_timeout = int(raw)
+    except ValueError as exc:
+        raise QwenAPIError('SEEGROUND_OPENAI_READ_TIMEOUT_SECONDS must be a positive integer') from exc
+    if read_timeout < 1:
+        raise QwenAPIError('SEEGROUND_OPENAI_READ_TIMEOUT_SECONDS must be a positive integer')
+    return timeout[0], max(timeout[1], read_timeout)
 
 
 def api_config_summary() -> dict[str, Any]:
@@ -122,12 +147,12 @@ def api_config_summary() -> dict[str, Any]:
     options.pop('max_tokens', None)
     options.pop('max_completion_tokens', None)
     from v4_policy import v62_enabled
-    structured_outputs = v62_enabled() and api_provider() == 'openai'
-    if structured_outputs:
-        # The complete schema is stage-specific and recorded with each call.
-        options['response_format'] = {'type': 'json_schema'}
+    structured_outputs = False
     return {'provider': api_provider(), 'request_options': options,
+            **({'thinking_token_floor': thinking_token_floor()} if thinking_enabled() else {}),
             'structured_outputs': structured_outputs,
+            'local_schema_validation': v62_enabled() and api_provider() == 'openai',
+            'format_attempt_limit': 4,
             'token_parameter': ('max_tokens' if api_provider() == 'qwen' else
                 os.getenv('SEEGROUND_OPENAI_TOKEN_PARAMETER', 'max_completion_tokens').strip()),
             'allow_http': os.getenv('SEEGROUND_ALLOW_HTTP', '') == '1',
@@ -293,6 +318,68 @@ def repair_missing_nullable_fields(payload: dict[str, Any], schema: dict[str, An
     return payload, repaired
 
 
+def normalize_schema_payload(name: str, payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Map equivalent provider action fields into the local ReAct contract."""
+    if name != 'r18_react_action' or not isinstance(payload, dict):
+        return payload, []
+
+    value = dict(payload)
+    repaired = []
+    parameters = value.get('parameters')
+    if isinstance(parameters, dict):
+        for field in ('reason', 'focus_ids', 'context', 'azimuth_deg', 'elevation_deg',
+                      'frame', 'predicted_id', 'evidence', 'unresolved'):
+            if field not in value and field in parameters:
+                value[field] = parameters[field]
+                repaired.append(f'parameters.{field}->{field}')
+        if 'context' not in value and isinstance(parameters.get('isolated'), bool):
+            value['context'] = 'isolated' if parameters['isolated'] else 'scene'
+            repaired.append('parameters.isolated->context')
+
+    isolated = value.get('isolated')
+    if isinstance(isolated, bool):
+        context = 'isolated' if isolated else 'scene'
+        if value.get('context') is None:
+            value['context'] = context
+            repaired.append('isolated->context')
+        elif value.get('context') == context:
+            repaired.append('duplicate isolated context removed')
+
+    context_aliases_to_remove = []
+    for alias in ('view', 'mode'):
+        context = value.get(alias)
+        if context not in ('scene', 'isolated'):
+            continue
+        if value.get('context') is None:
+            value['context'] = context
+            repaired.append(f'{alias}->context')
+            context_aliases_to_remove.append(alias)
+        elif value.get('context') == context:
+            repaired.append(f'duplicate {alias} context removed')
+            context_aliases_to_remove.append(alias)
+
+    if 'action' not in value:
+        for alias in ('action_type', 'tool'):
+            if isinstance(value.get(alias), str):
+                value['action'] = value[alias]
+                repaired.append(f'{alias}->action')
+                break
+
+    reason = value.get('reason')
+    if value.get('action') in ('inspect', 'measure', 'finish') and (
+            not isinstance(reason, str) or not reason.strip()):
+        value['reason'] = 'Required reason omitted; the model-selected action and parameters were retained.'
+        repaired.append('missing reason filled with format-repair note')
+
+    for alias in context_aliases_to_remove:
+        value.pop(alias, None)
+
+    if repaired:
+        for alias in ('action_type', 'tool', 'parameters', 'isolated'):
+            value.pop(alias, None)
+    return value, repaired
+
+
 def _schema_messages(messages: list[dict[str, Any]], schema: dict[str, Any],
                      error: str | None = None) -> list[dict[str, Any]]:
     """Include the output contract in text for compatible gateways."""
@@ -307,28 +394,38 @@ def _schema_messages(messages: list[dict[str, Any]], schema: dict[str, Any],
 
 
 def _chat_schema_retry(messages: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
-    """Retry an invalid structured answer once, with validation feedback."""
+    """Allow four format attempts and one relay transport retry."""
     schema = kwargs.get('response_schema')
     request_messages = _schema_messages(messages, schema) if schema is not None else messages
     attempts = []
     started = time.perf_counter()
-    for attempt in range(2):
+    schema_attempt = 0
+    transport_retries = 0
+    while True:
         attempt_start = time.perf_counter()
         try:
             data = _chat_once(request_messages, **kwargs)
             attempts.append({'status': 'success', 'latency_s': round(time.perf_counter() - attempt_start, 4),
                              'usage': data.get('usage')})
             data['_baseline'].update(api_attempts=attempts, extra_attempts=len(attempts) - 1,
-                schema_retry=attempt, latency_s=round(time.perf_counter() - started, 4))
+                schema_retry=schema_attempt, transport_retries=transport_retries,
+                latency_s=round(time.perf_counter() - started, 4))
             return data
         except QwenAPIError as exc:
             diagnostic = exc.diagnostic
             attempts.append({'status': 'failed', 'latency_s': round(time.perf_counter() - attempt_start, 4),
                              'diagnostic': dict(diagnostic)})
-            diagnostic.update(api_attempts=attempts, extra_attempts=len(attempts) - 1)
-            if (schema is None or diagnostic.get('failure_kind') != 'response_schema' or attempt == 1
-                    or diagnostic.get('stage') == 'response_schema_complete'):
+            diagnostic.update(api_attempts=attempts, extra_attempts=len(attempts) - 1,
+                              transport_retries=transport_retries)
+            failure_kind = diagnostic.get('failure_kind')
+            if (api_provider() == 'openai' and transport_retries < 1
+                    and failure_kind in {'timeout', 'network', 'http_5xx'}):
+                transport_retries += 1
+                continue
+            if (schema is None or failure_kind != 'response_schema' or schema_attempt >= 3
+                    or diagnostic.get('validation_error') == 'Model refused'):
                 raise
+            schema_attempt += 1
             request_messages = _schema_messages(messages, schema,
                 str(diagnostic.get('validation_error', 'Expected a JSON object')))
 
@@ -337,9 +434,11 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
          timeout: tuple[int, int] = (15, 120), json_mode: bool = False,
          response_schema: dict[str, Any] | None = None) -> dict[str, Any]:
     base, model, key = _settings()
+    timeout = effective_timeout(timeout)
     options = request_options(max_tokens, temperature, json_mode, response_schema)
     payload = {"model": model, "messages": messages, **options}
     summary = _request_summary(base, model, messages, options)
+    summary['timeout_seconds'] = {'connect': timeout[0], 'read': timeout[1]}
     label = 'Qwen' if api_provider() == 'qwen' else 'OpenAI-compatible'
     started = time.perf_counter()
     try:
@@ -389,6 +488,7 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
     if response_schema is not None:
         from jsonschema import Draft202012Validator, ValidationError
         payload = None
+        response_normalization = []
         parse_error = None
         choice = data['choices'][0]
         if choice['message'].get('refusal') or choice.get('finish_reason') != 'stop':
@@ -432,9 +532,16 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
             })
         try:
             if isinstance(payload, dict):
+                payload, response_normalization = normalize_schema_payload(
+                    response_schema['name'], payload)
                 payload, _repaired = repair_missing_nullable_fields(payload, response_schema['schema'])
                 content = json.dumps(payload, ensure_ascii=False)
             Draft202012Validator(response_schema['schema']).validate(payload)
+            if (response_schema['name'] == 'r18_react_action'
+                    and payload.get('action') == 'finish' and payload.get('predicted_id') is not None
+                    and not any(payload['predicted_id'] in row.get('object_ids', [])
+                                for row in payload.get('evidence', []))):
+                raise ValidationError('Final choice requires recorded evidence about the selected object')
         except (ValueError, ValidationError) as exc:
             raise QwenAPIError(f'{label} API 回答不符合严格 schema', diagnostic={
                 'failure_kind': 'response_schema', 'http_status': response.status_code,
@@ -458,6 +565,8 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
     data["_baseline"] = {"latency_s": round(time.perf_counter() - started, 4), "api_slot_wait_s": slot_wait_s,
                          "api_concurrency": api_concurrency(), "model": model,
                          'provider': api_provider(), 'request_summary': summary,
+                         **({'response_normalization': response_normalization}
+                            if response_schema is not None else {}),
                          **({'response_format': options['response_format']} if 'response_format' in options else {}),
                          'http_status': getattr(response, 'status_code', 200),
                          'request_id': _request_id(response)}
@@ -480,6 +589,8 @@ def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: 
     import hashlib
     request_hash = hashlib.sha256(json.dumps({'messages': messages, 'max_tokens': max_tokens,
         'temperature': temperature, 'json_mode': json_mode,
+        'model': _settings()[1],
+        'request_options': request_options(max_tokens, temperature, json_mode, response_schema),
         **({'response_schema': response_schema} if response_schema is not None else {})}, sort_keys=True).encode()).hexdigest()
     if budget.get('resuming') and request_hash in budget.get('completed_requests', {}):
         from copy import deepcopy

@@ -77,6 +77,14 @@ def render_action(action, objects, xyz, rgb, ids, out, index):
     ceiling_ids = [oid for oid, obj in known.items()
                    if obj['target'].casefold() == 'ceiling']
     keep = np.isin(ids, focus) if context == 'isolated' else ~np.isin(ids, ceiling_ids)
+    cutaway = context == 'scene' and v4_settings()['version'].endswith(('-r14', '-r15', '-r18'))
+    if cutaway:
+        # Supplemental labels were scrubbed: never identify walls using GT names.
+        # Keep classifier-covered context and every explicitly requested instance.
+        covered = {oid for oid, obj in known.items() if 'category_hypotheses' in obj}
+        keep = np.isin(ids, list(covered | set(focus)))
+        from r8_grounding import camera_eye
+        eye, at = camera_eye(lower, upper, direction)
     if not keep.any():
         raise ValueError('selected focus has no instance points')
     path = out / f'active_view_{index:02d}.png'
@@ -124,6 +132,9 @@ def render_action(action, objects, xyz, rgb, ids, out, index):
         'elevation_deg': action['elevation_deg'],
         'unmarked_focus_ids': [oid for oid in focus if oid not in visible],
         'ceiling_ids_hidden': ceiling_ids if context == 'scene' else [],
+        **({'hidden_supplemental_instance_ids': sorted(set(known)-covered-set(focus)),
+            'context_policy': 'classifier-covered cutaway plus requested instances; no GT shell labels'}
+           if cutaway else {}),
         'provenance': 'CPU colored point-cloud inspection with depth-tested 4px point disks; not a real RGB crop',
         **meta,
     }
@@ -1281,6 +1292,18 @@ def active_ground(query, parsed, objects, geometry_objects, candidates, xyz, rgb
             'decision_reasons': [action['reason']],
             'diagnosis_policy': 'active_model_selected_evidence', 'active_trace': trace,
         }
+
+    from v4_policy import r8_react_enabled
+    if r8_react_enabled():
+        if trusted_categories:
+            raise ValueError('r13 requires predicted categories, never GT category inputs')
+        if v4_settings()['version'].endswith('-r18'):
+            from r18_react import ground
+        else:
+            from r15_react import ground
+        checkpoint('scene_grounding', {'excluded_ids': []})
+        return ground(query, parsed, geometry_objects, candidates, xyz, rgb, ids,
+                      out, calls, diagnosis, trace, limit)
 
     if v74_enabled() and (resume is None or resume.get('stage') == 'scene_grounding'):
         from v74_grounding import ground_scene, needs_scene_reasoning

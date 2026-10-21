@@ -139,7 +139,7 @@ class OpenAIAPITests(unittest.TestCase):
                 self.assertEqual(diagnostic['http_status'], 200)
                 self.assertFalse((out / 'prediction.json').exists())
 
-    def test_gpt_errors_are_diagnostic_single_attempt_without_prediction(self):
+    def test_gpt_errors_retry_only_transient_failures_without_prediction(self):
         cases = [(400, 'http_4xx'), (404, 'http_4xx'), (503, 'http_5xx'),
                  ('timeout', 'timeout'), ('parse', 'response_parse')]
         for code, kind in cases:
@@ -154,7 +154,8 @@ class OpenAIAPITests(unittest.TestCase):
                            side_effect=requests.Timeout() if code == 'timeout' else None) as post:
                     with self.assertRaises(QwenAPIError):
                         run_query(root, 'water cooler', out, mode='active_diagnostic')
-                self.assertEqual(post.call_count, 1)
+                expected_attempts = 2 if kind in ('http_5xx', 'timeout') else 1
+                self.assertEqual(post.call_count, expected_attempts)
                 record = json.loads((out / 'run.json').read_text())
                 diagnostic = record['error_diagnostic']
                 self.assertEqual(diagnostic['failure_kind'], kind)

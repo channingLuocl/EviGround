@@ -28,23 +28,27 @@ def v9_enabled():
 
 def r8_refinement_enabled():
     return (v9_enabled() and os.getenv('SEEGROUND_V9_SOURCE') == 'r8'
-            and os.getenv('SEEGROUND_R8_GROUNDING_REVISION', 'r1') in ('r2', 'r3', 'r4', 'r5', 'r10', 'r12'))
+            and os.getenv('SEEGROUND_R8_GROUNDING_REVISION', 'r1') in ('r2', 'r3', 'r4', 'r5', 'r10', 'r12', 'r13', 'r14', 'r15', 'r18'))
 
 
 def r8_challenge_enabled():
-    return r8_refinement_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') in ('r3', 'r4', 'r5', 'r10', 'r12')
+    return r8_refinement_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') in ('r3', 'r4', 'r5', 'r10', 'r12', 'r13', 'r14', 'r15', 'r18')
 
 
 def r8_numeric_enabled():
-    return r8_challenge_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') in ('r4', 'r5', 'r10', 'r12')
+    return r8_challenge_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') in ('r4', 'r5', 'r10', 'r12', 'r13', 'r14', 'r15', 'r18')
 
 
 def r8_retrieval_enabled():
-    return r8_challenge_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') in ('r10', 'r12')
+    return r8_challenge_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') in ('r10', 'r12', 'r13', 'r14', 'r15', 'r18')
 
 
 def r8_generic_target_enabled():
-    return r8_challenge_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') == 'r12'
+    return r8_challenge_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') in ('r12', 'r13', 'r14', 'r15', 'r18')
+
+
+def r8_react_enabled():
+    return r8_challenge_enabled() and os.getenv('SEEGROUND_R8_GROUNDING_REVISION') in ('r13', 'r14', 'r15', 'r18')
 
 
 def v62_enabled():
