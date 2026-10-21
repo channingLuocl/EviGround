@@ -1,0 +1,123 @@
+{
+  "rows": [
+    {
+      "csv_row": 34687,
+      "scene": "scene0050_00",
+      "query": "it is the door closest to the set of French doors, and the piano",
+      "target_id": 10,
+      "instance_type": "door",
+      "stimulus_id": "scene0050_00-door-2-10-9",
+      "stimulus_candidate_ids": [
+        10,
+        9
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 7664,
+      "scene": "scene0690_00",
+      "query": "If your sitting on the couch its the armchair farthest away on the left",
+      "target_id": 16,
+      "instance_type": "armchair",
+      "stimulus_id": "scene0690_00-armchair-4-16-15-17-18",
+      "stimulus_candidate_ids": [
+        16,
+        15,
+        17,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 30873,
+      "scene": "scene0645_00",
+      "query": "the mirror in the bathroom",
+      "target_id": 72,
+      "instance_type": "mirror",
+      "stimulus_id": "scene0645_00-mirror-2-72-11",
+      "stimulus_candidate_ids": [
+        72,
+        11
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 4644,
+      "scene": "scene0169_00",
+      "query": "The window with a trashcan right in front of it",
+      "target_id": 14,
+      "instance_type": "window",
+      "stimulus_id": "scene0169_00-window-2-14-28",
+      "stimulus_candidate_ids": [
+        14,
+        28
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 7438,
+      "scene": "scene0663_00",
+      "query": "The telephone on the black cabinet.",
+      "target_id": 14,
+      "instance_type": "telephone",
+      "stimulus_id": "scene0663_00-telephone-2-14-34",
+      "stimulus_candidate_ids": [
+        14,
+        34
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 19241,
+      "scene": "scene0221_00",
+      "query": "The chair furthest from the door.",
+      "target_id": 3,
+      "instance_type": "chair",
+      "stimulus_id": "scene0221_00-chair-2-3-29",
+      "stimulus_candidate_ids": [
+        3,
+        29
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 37559,
+      "scene": "scene0064_00",
+      "query": "The shorter bookshelf.",
+      "target_id": 0,
+      "instance_type": "bookshelf",
+      "stimulus_id": "scene0064_00-bookshelf-2-0-10",
+      "stimulus_candidate_ids": [
+        0,
+        10
+      ],
+      "stage": "simple_relative",
+      "size_form": "comparative",
+      "size_words": [
+        "shorter"
+      ],
+      "size_scope": "target_likely",
+      "easy": true,
+      "view_dep": false
+    }
+  ],
+  "selection": "failed worker rows from validation192 after pre-parsefix run"
+}

@@ -320,21 +320,54 @@ def repair_missing_nullable_fields(payload: dict[str, Any], schema: dict[str, An
 
 def normalize_schema_payload(name: str, payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     """Map equivalent provider action fields into the local ReAct contract."""
-    if name != 'r18_react_action' or not isinstance(payload, dict):
+    if not isinstance(payload, dict):
         return payload, []
 
     value = dict(payload)
     repaired = []
+    if name in ('scene_grounding', 'scene_consistency_review'):
+        if 'predicted_id' not in value and 'target_id' in value:
+            value['predicted_id'] = value['target_id']
+            repaired.append('target_id->predicted_id')
+        if 'reason' not in value and isinstance(value.get('reasoning'), str):
+            value['reason'] = value['reasoning']
+            repaired.append('reasoning->reason')
+        if repaired:
+            value.pop('target_id', None)
+            value.pop('reasoning', None)
+        return value, repaired
+    if name != 'r18_react_action':
+        return payload, []
     parameters = value.get('parameters')
+    if not isinstance(parameters, dict) and isinstance(value.get('params'), dict):
+        parameters = value['params']
+        repaired.append('params->parameters')
     if isinstance(parameters, dict):
         for field in ('reason', 'focus_ids', 'context', 'azimuth_deg', 'elevation_deg',
                       'frame', 'predicted_id', 'evidence', 'unresolved'):
             if field not in value and field in parameters:
                 value[field] = parameters[field]
                 repaired.append(f'parameters.{field}->{field}')
+        for alias in ('ids', 'object_ids'):
+            if 'focus_ids' not in value and alias in parameters:
+                value['focus_ids'] = parameters[alias]
+                repaired.append(f'parameters.{alias}->focus_ids')
+                break
+        for alias in ('render_mode', 'view', 'mode'):
+            if 'context' not in value and alias in parameters:
+                value[alias] = parameters[alias]
+                repaired.append(f'parameters.{alias}->context')
+                break
         if 'context' not in value and isinstance(parameters.get('isolated'), bool):
             value['context'] = 'isolated' if parameters['isolated'] else 'scene'
             repaired.append('parameters.isolated->context')
+
+    if 'focus_ids' not in value:
+        for alias in ('ids', 'object_ids'):
+            if alias in value:
+                value['focus_ids'] = value[alias]
+                repaired.append(f'{alias}->focus_ids')
+                break
 
     isolated = value.get('isolated')
     if isinstance(isolated, bool):
@@ -346,8 +379,10 @@ def normalize_schema_payload(name: str, payload: dict[str, Any]) -> tuple[dict[s
             repaired.append('duplicate isolated context removed')
 
     context_aliases_to_remove = []
-    for alias in ('view', 'mode'):
+    for alias in ('view', 'mode', 'render_mode'):
         context = value.get(alias)
+        if isinstance(context, str):
+            context = context.strip().lower().strip('`\"\'')
         if context not in ('scene', 'isolated'):
             continue
         if value.get('context') is None:
@@ -361,9 +396,22 @@ def normalize_schema_payload(name: str, payload: dict[str, Any]) -> tuple[dict[s
     if 'action' not in value:
         for alias in ('action_type', 'tool'):
             if isinstance(value.get(alias), str):
-                value['action'] = value[alias]
+                action = value[alias].strip().lower()
+                action = {'render': 'inspect', 'view': 'inspect', 'observe': 'inspect',
+                          'measurement': 'measure', 'measurements': 'measure',
+                          'answer': 'finish', 'select': 'finish', 'choose': 'finish'}.get(action, action)
+                value['action'] = action
                 repaired.append(f'{alias}->action')
                 break
+
+    if isinstance(value.get('action'), str):
+        action = value['action'].strip().lower()
+        canonical = {'render': 'inspect', 'view': 'inspect', 'observe': 'inspect',
+                     'measurement': 'measure', 'measurements': 'measure',
+                     'answer': 'finish', 'select': 'finish', 'choose': 'finish'}.get(action, action)
+        if canonical != value['action']:
+            value['action'] = canonical
+            repaired.append('action alias canonicalized')
 
     reason = value.get('reason')
     if value.get('action') in ('inspect', 'measure', 'finish') and (
@@ -375,9 +423,136 @@ def normalize_schema_payload(name: str, payload: dict[str, Any]) -> tuple[dict[s
         value.pop(alias, None)
 
     if repaired:
-        for alias in ('action_type', 'tool', 'parameters', 'isolated'):
+        for alias in ('action_type', 'tool', 'parameters', 'params', 'isolated', 'ids', 'object_ids'):
             value.pop(alias, None)
     return value, repaired
+
+
+def _balanced_json_objects(content: str) -> list[dict[str, Any]]:
+    """Extract JSON objects embedded in prose or tool-like text."""
+    objects = []
+    for start, char in enumerate(content):
+        if char != '{':
+            continue
+        depth = 0
+        quoted = False
+        escaped = False
+        for end in range(start, len(content)):
+            current = content[end]
+            if quoted:
+                if escaped:
+                    escaped = False
+                elif current == '\\':
+                    escaped = True
+                elif current == '"':
+                    quoted = False
+                continue
+            if current == '"':
+                quoted = True
+            elif current == '{':
+                depth += 1
+            elif current == '}':
+                depth -= 1
+                if depth == 0:
+                    try:
+                        value = json.loads(content[start:end + 1])
+                    except (ValueError, TypeError):
+                        break
+                    if isinstance(value, dict):
+                        objects.append(value)
+                    break
+    return objects
+
+
+def _number_list(value: str) -> list[int]:
+    return [int(item) for item in re.findall(r'(?<![\w.])-?\d+(?![\w.])', value)]
+
+
+def parse_r18_action_content(content: str) -> dict[str, Any] | None:
+    """Recover an r18 action when an OpenAI-compatible relay ignores JSON mode."""
+    if not isinstance(content, str) or not content.strip():
+        return None
+    objects = _balanced_json_objects(content)
+    action_match = re.search(r'\b(inspect|measure|finish|render|view|observe|select|choose|answer)\b',
+                             content, re.IGNORECASE)
+    action = action_match.group(1).lower() if action_match else None
+    action = {'render': 'inspect', 'view': 'inspect', 'observe': 'inspect',
+              'select': 'finish', 'choose': 'finish', 'answer': 'finish'}.get(action, action)
+    if objects:
+        value = dict(next((item for item in reversed(objects)
+                           if any(key in item for key in ('action', 'action_type', 'tool'))),
+                          max(objects, key=lambda item: len(item))))
+        if action and not any(key in value for key in ('action', 'action_type', 'tool')):
+            value['action'] = action
+        return value
+
+    if not action:
+        return None
+    value: dict[str, Any] = {'action': action}
+    focus = None
+    bracket = re.search(r'\b(?:focus_ids|object_ids|ids)\s*[:=]?\s*\[([^\]]*)\]', content, re.IGNORECASE)
+    if bracket:
+        focus = _number_list(bracket.group(1))
+    elif action in ('inspect', 'measure'):
+        call = re.search(r'\b(?:inspect|measure)\s*\(([^)]*)\)', content, re.IGNORECASE)
+        if call:
+            positional = call.group(1).split(',')
+            numbers = []
+            for item in positional:
+                if '=' in item:
+                    break
+                numbers.extend(_number_list(item))
+            focus = numbers
+    if focus is not None:
+        value['focus_ids'] = focus
+
+    context = re.search(r'\b(?:context|render_mode|mode|view)\s*[:=]\s*[\"\']?\s*(scene|isolated)\b',
+                        content, re.IGNORECASE)
+    if context:
+        value['context'] = context.group(1).lower()
+    else:
+        isolated = re.search(r'\bisolated\s*[:=]\s*(true|false)\b', content, re.IGNORECASE)
+        scene = re.search(r'\bscene\s*[:=]\s*(true|false)\b', content, re.IGNORECASE)
+        if isolated:
+            value['context'] = 'isolated' if isolated.group(1).lower() == 'true' else 'scene'
+        elif scene:
+            value['context'] = 'scene' if scene.group(1).lower() == 'true' else 'isolated'
+
+    for field in ('azimuth_deg', 'elevation_deg'):
+        match = re.search(rf'\b{field}\s*[:=]\s*[\"\']?(-?\d+(?:\.\d+)?)', content, re.IGNORECASE)
+        if match:
+            value[field] = float(match.group(1))
+            if value[field].is_integer():
+                value[field] = int(value[field])
+
+    if action == 'finish':
+        match = re.search(r'\b(?:predicted[_ ]?id|object[_ ]?id)\s*[:=]?\s*[\"\']?(\d+)', content, re.IGNORECASE)
+        if match is None:
+            match = re.search(r'\b(?:answer|choose|select|final)\b[^\n]{0,40}?\b(?:id|object)\s*[#:=]?\s*(\d+)',
+                              content, re.IGNORECASE)
+        if match:
+            value['predicted_id'] = int(match.group(1))
+    return value
+
+
+def parse_scene_grounding_content(content: str) -> dict[str, Any] | None:
+    """Recover a conservative scene decision from a non-JSON relay response."""
+    if not isinstance(content, str) or not content.strip():
+        return None
+    text = content.strip()
+    match = re.search(r'\b(?:predicted[_ ]?id|target[_ ]?id|object[_ ]?id|answer|id)\b[^\d]{0,24}(\d+)',
+                      text, re.IGNORECASE)
+    if match is None:
+        match = re.search(r'\b(?:target|answer|choice|selected)\b\s*[:#-]?\s*(?:object\s*)?(\d+)',
+                          text, re.IGNORECASE)
+    if match is None and re.fullmatch(r'\s*\d+\s*', text):
+        match = re.search(r'\d+', text)
+    if match is None:
+        return None
+    number = match.group(1) if match.lastindex else match.group(0)
+    return {'predicted_id': int(number),
+            'reason': text[:1000], 'evidence': [],
+            'unresolved': ['Relay returned no structured evidence; final validation may abstain.']}
 
 
 def _schema_messages(messages: list[dict[str, Any]], schema: dict[str, Any],
@@ -505,6 +680,10 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
         except ValueError as exc:
             payload = None
             parse_error = str(exc)
+        if not isinstance(payload, dict) and response_schema.get('name') == 'r18_react_action':
+            payload = parse_r18_action_content(content)
+        if not isinstance(payload, dict) and response_schema.get('name') in ('scene_grounding', 'scene_consistency_review'):
+            payload = parse_scene_grounding_content(content)
         if payload is None:
             import re as _re
             _match = _re.search(r'\{.*\}', content, _re.DOTALL)

@@ -7,7 +7,9 @@ from unittest.mock import patch
 from jsonschema import Draft202012Validator
 
 from qwen_api import (QwenAPIError, _chat_once, _chat_schema_retry, effective_timeout,
-                      normalize_schema_payload, repair_missing_nullable_fields)
+                      normalize_schema_payload, parse_r18_action_content,
+                      parse_scene_grounding_content,
+                      repair_missing_nullable_fields)
 
 
 ACTION_SCHEMA = {
@@ -175,6 +177,96 @@ class RelayActionFormatTests(unittest.TestCase):
         self.assertEqual(normalized['context'], 'scene')
         self.assertNotIn('mode', normalized)
         self.assertIn('mode->context', repairs)
+
+    def test_params_and_render_mode_aliases_are_normalized(self):
+        payload = {'action_type': 'inspect', 'params': {
+            'focus_ids': [5, 8, 12], 'isolated': True,
+            'azimuth_deg': 0, 'elevation_deg': 15, 'render_mode': 'isolated'}}
+
+        normalized, repairs = normalize_schema_payload('r18_react_action', payload)
+        normalized, _ = repair_missing_nullable_fields(normalized, ACTION_SCHEMA)
+
+        Draft202012Validator(ACTION_SCHEMA).validate(normalized)
+        self.assertEqual(normalized['action'], 'inspect')
+        self.assertEqual(normalized['focus_ids'], [5, 8, 12])
+        self.assertEqual(normalized['context'], 'isolated')
+        self.assertIn('params->parameters', repairs)
+        self.assertIn('parameters.render_mode->context', repairs)
+
+    def test_function_style_inspect_is_recovered(self):
+        payload = parse_r18_action_content(
+            'inspect(6, 12, 34, azimuth_deg=0, elevation_deg=30, mode="scene")')
+        self.assertEqual(payload, {'action': 'inspect', 'focus_ids': [6, 12, 34],
+                                   'context': 'scene', 'azimuth_deg': 0,
+                                   'elevation_deg': 30})
+
+    def test_colon_style_inspect_is_recovered(self):
+        payload = parse_r18_action_content(
+            'inspect: focus_ids=[16,35,37], mode=scene, azimuth_deg=45, elevation_deg=30')
+        self.assertEqual(payload, {'action': 'inspect', 'focus_ids': [16, 35, 37],
+                                   'context': 'scene', 'azimuth_deg': 45,
+                                   'elevation_deg': 30})
+
+    def test_embedded_json_inside_prose_is_recovered(self):
+        payload = parse_r18_action_content(
+            'I will inspect. `inspect({"focus_ids":[0,1],"render_mode":"scene"})`')
+        self.assertEqual(payload['action'], 'inspect')
+        self.assertEqual(payload['focus_ids'], [0, 1])
+        self.assertEqual(payload['render_mode'], 'scene')
+
+    def test_finish_text_recovers_explicit_id_without_inventing_evidence(self):
+        payload = parse_r18_action_content('Answer: id 7')
+        self.assertEqual(payload, {'action': 'finish', 'predicted_id': 7})
+
+    def test_scene_aliases_are_normalized_without_overwriting_explicit_null(self):
+        normalized, repairs = normalize_schema_payload('scene_grounding', {
+            'target_id': 35, 'reasoning': 'The target is closest.',
+            'predicted_id': None, 'evidence': [], 'unresolved': []})
+        self.assertIsNone(normalized['predicted_id'])
+        self.assertEqual(normalized['reason'], 'The target is closest.')
+        self.assertNotIn('target_id', normalized)
+        self.assertNotIn('reasoning', normalized)
+        self.assertIn('reasoning->reason', repairs)
+
+    def test_scene_plain_text_recovery_is_conservative(self):
+        payload = parse_scene_grounding_content('Based on the scene, the answer is object id 44.')
+        self.assertEqual(payload['predicted_id'], 44)
+        self.assertEqual(payload['evidence'], [])
+        self.assertEqual(parse_scene_grounding_content('**Target: 23**')['predicted_id'], 23)
+        self.assertEqual(parse_scene_grounding_content('57')['predicted_id'], 57)
+        self.assertIsNone(parse_scene_grounding_content('No target can be distinguished.'))
+
+    def test_scene_scalar_response_is_recovered_before_schema_validation(self):
+        response_data = {'choices': [{'message': {'content': '57'}, 'finish_reason': 'stop'}],
+                         'usage': {}}
+
+        class Response:
+            ok = True
+            status_code = 200
+            headers = {}
+            text = '57'
+
+            @staticmethod
+            def json():
+                return response_data
+
+        schema = {'name': 'scene_grounding', 'strict': True, 'schema': {
+            'type': 'object',
+            'properties': {
+                'predicted_id': {'type': ['integer', 'null']},
+                'reason': {'type': 'string'}, 'evidence': {'type': 'array'},
+                'unresolved': {'type': 'array'},
+            },
+            'required': ['predicted_id', 'reason', 'evidence', 'unresolved'],
+            'additionalProperties': False,
+        }}
+        with patch('qwen_api.api_provider', return_value='openai'), \
+                patch('qwen_api._settings', return_value=('https://example.invalid/v1', 'test-model', 'test-key')), \
+                patch('qwen_api.api_request_slot', return_value=nullcontext(0.0)), \
+                patch('qwen_api.requests.post', return_value=Response()):
+            result = _chat_once([], json_mode=True, response_schema=schema)
+
+        self.assertEqual(json.loads(result['_content'])['predicted_id'], 57)
 
     def test_other_schemas_are_untouched(self):
         payload = {'action_type': 'inspect', 'parameters': {'focus_ids': [1]}}

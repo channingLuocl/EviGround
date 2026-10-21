@@ -1,0 +1,53 @@
+{
+  "snapshot": "R18 GPT-6.1 predicted-category Top-5 grounding with relay format recovery",
+  "created_at": "2026-10-22",
+  "branch": "codex/r18-gpt61-formatfix-parsefix-freeze-20261022",
+  "parent_commit": "79c0daf",
+  "policy": {
+    "category_top_k": 5,
+    "historical_predictions_reused": false,
+    "cumulative": false,
+    "ground_truth_categories_supplied": false
+  },
+  "source": {
+    "root": "reproductions/SeeGround/local",
+    "files": [
+      "qwen_api.py",
+      "test_gpt61_action_format.py"
+    ],
+    "sha256": {
+      "reproductions/SeeGround/local/qwen_api.py": "904c14b2c1839007e4338815f6aecddbdc8d8682a4406d4c4fe658dfd2e49b3d",
+      "reproductions/SeeGround/local/test_gpt61_action_format.py": "7f862c28ddd2892ac0cb74041aac5d821ff76fda749900e2950471a9ea00ad99"
+    }
+  },
+  "input": {
+    "path": "/Users/luocl/Desktop/seeground/outputs/r8_grounding_input_20261020/20261020_r8_object_predictions",
+    "sha256": "0b8584448988d124ec64b076ad239f09b1a83d6976883237037d6e5f265fa6c9",
+    "prediction_manifest": "outputs/r13_single_pass_20261020/validation192_manifest.json"
+  },
+  "validation": {
+    "smoke8": "smoke8_summary.json",
+    "validation192": "validation192_merged_summary.json",
+    "row_audit": "validation192_merged_rows.json"
+  },
+  "tests": {
+    "command": "PYTHONPATH=local .venv/bin/python -m unittest local.test_r18_react local.test_gpt61_action_format",
+    "result": "35 passed"
+  },
+  "format_recovery": {
+    "r18": [
+      "params/parameters envelope",
+      "action_type/tool aliases",
+      "render_mode/mode/view aliases",
+      "embedded/fenced JSON",
+      "inspect(...) and inspect: focus_ids=[...]",
+      "explicit finish IDs"
+    ],
+    "scene_grounding": [
+      "target_id/reasoning aliases",
+      "conservative plain-text target IDs; evidence remains required by local validation",
+      "scalar/plain Target/Answer/ID text; evidence remains required by local validation"
+    ]
+  },
+  "secrets": "API credentials remain in the local relay env file and are excluded from Git."
+}

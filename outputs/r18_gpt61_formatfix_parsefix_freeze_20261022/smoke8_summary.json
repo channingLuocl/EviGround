@@ -1,0 +1,22 @@
+{
+  "total": 8,
+  "completed": 8,
+  "correct": 6,
+  "accuracy": 0.75,
+  "errors": 0,
+  "run_succeeded": 8,
+  "answer_coverage": 1.0,
+  "actual_api_attempts": 25,
+  "target_category_rank_groups": {
+    "top1_match": {
+      "queries": 6,
+      "correct": 5,
+      "accuracy": 0.8333333333333334
+    },
+    "top2_to_5_rescue": {
+      "queries": 2,
+      "correct": 1,
+      "accuracy": 0.5
+    }
+  }
+}
