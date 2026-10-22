@@ -1,0 +1,68 @@
+{
+  "checked_at": "2026-10-22T05:15:32.070454+00:00",
+  "scope": "Incomplete running baseline; not a final Overall estimate",
+  "baseline_run": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r18_qwen37_token_plan_full7805_measurefix_20261022",
+  "expected_total": 7805,
+  "completed": 84,
+  "correct": 53,
+  "fatal_errors": 2,
+  "classifier_misses": 2,
+  "pool_misses": 1,
+  "source_unchanged": true,
+  "cumulative": false,
+  "observed_mechanisms": [
+    {
+      "csv_row": 23,
+      "scope": "Offline failure diagnosis only; labels are not sent to workers",
+      "query": "The foremost pillow on the bed of the group of pillows",
+      "predicted_id": 13,
+      "target_in_candidate_pool": true,
+      "decision_reason": "Pillow 13 is foremost on the bed. It has the lowest bottom_z (0.715m) and highest forward distance (2.185m) from bed center facing pillows, confirming it as the front-most pillow in the group.",
+      "unresolved": []
+    },
+    {
+      "csv_row": 30,
+      "scope": "Offline failure diagnosis only; labels are not sent to workers",
+      "query": "When standing at the foot of the bed, the pillow in the middle on the left hand side",
+      "predicted_id": 11,
+      "target_in_candidate_pool": true,
+      "decision_reason": "Measure from bed foot (origin=0) facing pillows confirms left-to-right order: 15(-0.33m), 12(-0.32m), 11(-0.09m), 14(0.34m), 13(0.40m). Pillow 11 is the middle one on the left side.",
+      "unresolved": []
+    },
+    {
+      "csv_row": 36,
+      "scope": "Offline failure diagnosis only; labels are not sent to workers",
+      "query": "The pillow closest to the foot of the bed",
+      "predicted_id": 43,
+      "target_in_candidate_pool": true,
+      "decision_reason": "Pillow 43 is at the foot of bed 13, closest to the end. Pillows 38-40 are at the head. Pillow 42 is also at the foot but further from the edge than 43.",
+      "unresolved": []
+    },
+    {
+      "csv_row": 47,
+      "scope": "Offline failure diagnosis only; labels are not sent to workers",
+      "query": "The single computer tower under the desk in the corner",
+      "predicted_id": 29,
+      "target_in_candidate_pool": true,
+      "decision_reason": "ID 29 is the only rank-1 computer tower with full XY overlap (1.0) and negative vertical gap (-0.91m) relative to desk 14, confirming it is fully under the desk. ID 11 has partial overlap (0.5) and sits beside the desk; IDs 28 and 30 have zero overlap. Corner reference is unbound but 29 is the unique 'under desk' candidate.",
+      "unresolved": [
+        "Corner reference category has no bound candidate instances; selection relies solely on 'under desk' spatial constraint."
+      ]
+    },
+    {
+      "csv_row": 56,
+      "scope": "Offline failure diagnosis only; labels are not sent to workers",
+      "query": "The pillow second from the back of the row on the right hand side of the bed",
+      "predicted_id": 39,
+      "target_in_candidate_pool": true,
+      "decision_reason": "Pillows 38, 39, 40 form a row on the right side of bed 13. Measured forward distances from room center facing bed show 38 is furthest back (0.057m), 39 is middle (-0.108m), and 40 is front (-0.255m). Thus 39 is second from the back.",
+      "unresolved": []
+    }
+  ],
+  "infrastructure_failure": {
+    "csv_row": 211,
+    "http_status": 429,
+    "type": "insufficient_quota",
+    "note": "A provider quota rejection, not a classification failure. Later baseline requests continue to succeed. No outcome is replaced."
+  }
+}

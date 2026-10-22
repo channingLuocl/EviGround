@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-10-22T05:23:26.115949+00:00",
+  "pid": 75179,
+  "command": [
+    "bash",
+    "/Users/luocl/Desktop/seeground/outputs/r18_qwen_token_plan_20261022/run_qwen_token_plan_r18.sh",
+    "--manifest",
+    "/Users/luocl/Desktop/seeground/outputs/r18_qwen_thinking_20261022/finalturn_smoke1_manifest.json",
+    "--workers",
+    "1",
+    "--api-concurrency",
+    "1",
+    "--output",
+    "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r18_qwen37_finalturn_smoke1_20261022"
+  ],
+  "output": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r18_qwen37_finalturn_smoke1_20261022",
+  "log": "/Users/luocl/Desktop/seeground/outputs/r18_qwen_thinking_20261022/finalturn_smoke1.log",
+  "status": "running; completion audit pending",
+  "credentials_saved": false
+}

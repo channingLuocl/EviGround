@@ -1,0 +1,173 @@
+{
+  "purpose": "Directional-order mechanism development test, not an Overall estimate",
+  "selection_rule": "Four observed spatial failures plus first four already-correct directional controls sorted by official csv_row; all eight rerun independently",
+  "failure_rows": [
+    23,
+    30,
+    36,
+    56
+  ],
+  "control_rows": [
+    12,
+    20,
+    21,
+    37
+  ],
+  "rows": [
+    {
+      "csv_row": 23,
+      "scene": "scene0652_00",
+      "query": "The foremost pillow on the bed of the group of pillows",
+      "target_id": 11,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0652_00-pillow-6-11-12-13-14-15-17",
+      "stimulus_candidate_ids": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        17
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 30,
+      "scene": "scene0652_00",
+      "query": "When standing at the foot of the bed, the pillow in the middle on the left hand side",
+      "target_id": 12,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0652_00-pillow-6-12-11-13-14-15-17",
+      "stimulus_candidate_ids": [
+        12,
+        11,
+        13,
+        14,
+        15,
+        17
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 36,
+      "scene": "scene0246_00",
+      "query": "The pillow closest to the foot of the bed",
+      "target_id": 38,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0246_00-pillow-6-38-39-40-41-42-43",
+      "stimulus_candidate_ids": [
+        38,
+        39,
+        40,
+        41,
+        42,
+        43
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 56,
+      "scene": "scene0246_00",
+      "query": "The pillow second from the back of the row on the right hand side of the bed",
+      "target_id": 41,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0246_00-pillow-6-41-38-39-40-42-43",
+      "stimulus_candidate_ids": [
+        41,
+        38,
+        39,
+        40,
+        42,
+        43
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 12,
+      "scene": "scene0565_00",
+      "query": "The chair to the far left hand side of the taller  desk with the computer monitor on it",
+      "target_id": 25,
+      "instance_type": "chair",
+      "stimulus_id": "scene0565_00-chair-4-25-0-1-24",
+      "stimulus_candidate_ids": [
+        25,
+        0,
+        1,
+        24
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 20,
+      "scene": "scene0653_00",
+      "query": "The desk beneath the clock on the right hand side of the two desks grouped together",
+      "target_id": 16,
+      "instance_type": "desk",
+      "stimulus_id": "scene0653_00-desk-6-16-13-14-15-17-18",
+      "stimulus_candidate_ids": [
+        16,
+        13,
+        14,
+        15,
+        17,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 21,
+      "scene": "scene0221_00",
+      "query": "The pillow on the bed that is on the far end of the room and is at the rear and right hand side of the bed",
+      "target_id": 46,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0221_00-pillow-6-46-39-40-41-44-45",
+      "stimulus_candidate_ids": [
+        46,
+        39,
+        40,
+        41,
+        44,
+        45
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 37,
+      "scene": "scene0081_00",
+      "query": "The couch along the wall and on the left hand side of the other couches, when you are facing the group of couches",
+      "target_id": 0,
+      "instance_type": "couch",
+      "stimulus_id": "scene0081_00-couch-3-0-7-8",
+      "stimulus_candidate_ids": [
+        0,
+        7,
+        8
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    }
+  ]
+}

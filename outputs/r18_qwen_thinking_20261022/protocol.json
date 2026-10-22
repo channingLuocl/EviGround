@@ -1,0 +1,31 @@
+{
+  "prepared_at": "2026-10-22T05:12:35.115232+00:00",
+  "scope": "Paired eight-case failure-focused mechanism experiment; not an Overall estimate",
+  "only_inference_change": "enable_thinking=true with the existing 8192-token minimum; same fixed fd2ebe8 ReAct runtime",
+  "source_commit": "fd2ebe86e2ed47fbad0e947c7d6e733a349e3e76",
+  "runtime_project": "/Users/luocl/Desktop/seeground/outputs/r18_qwen_token_plan_20261022/runtime_fd2ebe8",
+  "selection": "/Users/luocl/Desktop/seeground/outputs/r18_qwen_token_plan_20261022/smoke8_manifest.json",
+  "selection_sha256": "5c4e3281d27c8755e17224058986aeca3b893331a8f0271c0f4641732c7356c8",
+  "expected_rows": 8,
+  "output": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r18_qwen37_thinking_smoke8_20261022",
+  "expected_config": {
+    "model": "qwen3.7-plus",
+    "provider": "qwen",
+    "thinking_token_floor": 8192,
+    "request_options": {
+      "temperature": 0.0,
+      "enable_thinking": true,
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "token_parameter": "max_tokens",
+    "allow_http": false
+  },
+  "baseline_run": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r18_qwen37_token_plan_smoke8_measurefix_20261022",
+  "workers": 2,
+  "api_concurrency": 2,
+  "cumulative": false,
+  "gt_categories_supplied_to_model": false,
+  "failures_in_denominator": true
+}
