@@ -13,3 +13,24 @@ The original driver accepted `--prepare-only` in the existing output directory w
 `resume_original_qwen.sh` resumes this same directory. Existing correct, incorrect and failed evaluations are reused equally; only queries without evaluations continue. No result from any newer run is imported. `before_resume.json` inventories the existing evaluations and prediction-file metadata, and `resume_launch.json` identifies the resumed process. The original manifest and all prior outcomes must remain unchanged during continuation.
 
 The original full run is still incomplete. Its final Overall and any 65–66% target require completion of all 7,805 queries with failures and abstentions retained in the denominator.
+
+## Read-only original-format audit
+
+`audit_freeze_manifest.json` freezes the 152 original source hashes and the exact original provider configuration for the external auditor. It explicitly selects the original `category_target_ids` candidate pool, native `json_schema` output, and absent local-validation flag. The newer auditor's default checks remain unchanged. No inference source is edited by this compatibility change.
+
+All nine auditor unit tests pass, including original-format candidate membership, counted empty-category abstentions, and fatal failures retained in the full denominator. `original_preservation_checkpoint_20261022.json` independently verifies that all 2,889 pre-resume evaluation hashes, existing prediction-file metadata, and the original manifest remain unchanged.
+
+Run the read-only benchmark audit from the repository root:
+
+```bash
+reproductions/SeeGround/.venv/bin/python \
+  outputs/r18_context_budget_fix_20261022/audit_single_pass.py \
+  --run '/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r8_r18_thinking_full7805_20261021' \
+  --runtime outputs/r18_qwen_original_resume_20261022/runtime_original/local \
+  --freeze-manifest outputs/r18_qwen_original_resume_20261022/audit_freeze_manifest.json \
+  --output outputs/r18_qwen_original_resume_20261022/original_live_audit_20261022.json
+```
+
+This recomputes correctness from real predicted object IDs and the official selected targets; saved `correct` flags are cross-checked. A live checkpoint can include cases completed while the audit is reading. It is not an atomic snapshot or a final benchmark score. The completion and 66% gates remain false until all 7,805 outcomes are present and structural checks pass.
+
+The first compatible live audit recorded 2,979 outcomes and 2,031 correct real predictions (68.18% of the completed fragment), with 4,826 still missing. It found zero structural issues, 19 recorded fatal errors and 68 category-gate abstentions. Errors and abstentions remain in the denominator. See `original_live_audit_20261022.json` for the complete checkpoint and `original_live_checkpoint_20261022.json` for its compact summary; neither establishes a final Overall or a passed accuracy threshold.

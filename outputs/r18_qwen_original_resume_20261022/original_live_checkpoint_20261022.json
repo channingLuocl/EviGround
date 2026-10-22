@@ -1,0 +1,19 @@
+{
+  "expected_total": 7805,
+  "recorded": 2979,
+  "correct": 2031,
+  "predictions": 2890,
+  "fatal_errors": 19,
+  "category_gate_abstentions": 68,
+  "full_selected_denominator_accuracy": 0.26021780909673287,
+  "verified_complete": false,
+  "threshold": 0.66,
+  "threshold_passed": false,
+  "cumulative": false,
+  "checked_at": "2026-10-22T05:57:24.909862+00:00",
+  "structural_issue_count": 0,
+  "completed_fragment_accuracy": 0.6817724068479355,
+  "remaining": 4826,
+  "audit_report_sha256": "13214d4ad12c2276f23b6ae1d991b36e59e33061aa8f7a3b5039e5e931c36245",
+  "note": "Read-only live checkpoint, not an atomic snapshot or completed Overall. Full-denominator accuracy counts unprocessed rows as not yet correct."
+}

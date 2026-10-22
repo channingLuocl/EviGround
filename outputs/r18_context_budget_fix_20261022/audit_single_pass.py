@@ -12,6 +12,9 @@ def audit_run(directory, expected_rows, expected_code, runtime, expected_total=7
     if expected_config is None:
         expected_config = {'model': 'gpt-6.1-sol', 'provider': 'openai',
                            'thinking_token_floor': 8192}
+    pool_field = expected_config.get('candidate_pool_field', 'candidate_target_ids')
+    if pool_field not in ('candidate_target_ids', 'category_target_ids'):
+        raise ValueError('Unsupported candidate pool provenance')
     issues = []
     if len(expected_rows) != expected_total or manifest['rows'] != expected_rows:
         issues.append('Selection differs from the complete expected cohort')
@@ -28,10 +31,12 @@ def audit_run(directory, expected_rows, expected_code, runtime, expected_total=7
         'policy': manifest['evaluation_policy'] == 'fixed_predictions_no_historical_correct_reuse',
         'provider': manifest['api']['provider'] == expected_config['provider'],
         'thinking_floor': manifest['api'].get('thinking_token_floor') == expected_config['thinking_token_floor'],
-        'local_validation': manifest['api']['local_schema_validation'] is True,
-        'json_object': manifest['api']['request_options']['response_format']['type'] == 'json_object',
+        'local_validation': manifest['api'].get('local_schema_validation') ==
+                            expected_config.get('local_schema_validation', True),
+        'json_format': manifest['api']['request_options']['response_format']['type'] ==
+                       expected_config.get('request_options', {}).get('response_format', {}).get('type', 'json_object'),
     }
-    for key in ('request_options', 'token_parameter', 'allow_http'):
+    for key in ('request_options', 'token_parameter', 'allow_http', 'structured_outputs'):
         if key in expected_config:
             checks[key] = manifest['api'].get(key) == expected_config[key]
     issues.extend('Incorrect configuration: ' + key for key, valid in checks.items() if not valid)
@@ -72,13 +77,13 @@ def audit_run(directory, expected_rows, expected_code, runtime, expected_total=7
             issues.append(f"Reported outcome differs from real prediction: {row['csv_row']}")
         if data.get('gt_categories_supplied_to_model') is not False or data.get('query_target_id_supplied_to_model') is not False:
             issues.append(f"Missing/invalid GT-input audit flags: {row['csv_row']}")
-        if oid is not None and oid not in data.get('candidate_target_ids', []):
+        if oid is not None and oid not in data.get(pool_field, []):
             issues.append(f"Prediction outside actual candidate pool: {row['csv_row']}")
         trace = data.get('active_trace', {})
         category_abstention = (
             oid is None and data.get('bbox_3d') is None
-            and data.get('candidate_target_ids') == [] and data.get('category_target_ids') == []
-            and data.get('visual_fallback_target_ids') == []
+            and data.get(pool_field) == [] and data.get('category_target_ids') == []
+            and data.get('visual_fallback_target_ids', [] if pool_field == 'category_target_ids' else None) == []
             and data.get('prediction_source') == 'abstained'
             and trace.get('stop_reason') == 'category_gate_abstention'
             and data.get('diagnosis', {}).get('candidate_ids') == []

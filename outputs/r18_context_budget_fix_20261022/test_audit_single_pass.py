@@ -120,6 +120,60 @@ class AuditTests(unittest.TestCase):
         p.write_text(json.dumps(value))
         self.assertFalse(self.audit()['verified_complete'])
 
+    def original_qwen_config(self):
+        config = {'model': 'qwen3.7-plus', 'provider': 'openai', 'thinking_token_floor': 8192,
+                  'local_schema_validation': None, 'structured_outputs': True,
+                  'candidate_pool_field': 'category_target_ids',
+                  'request_options': {'enable_thinking': True, 'temperature': 0.,
+                                      'response_format': {'type': 'json_schema'}}}
+        path = self.root / 'manifest.json'
+        manifest = json.loads(path.read_text())
+        manifest['models']['SEEGROUND_MODEL'] = config['model']
+        manifest['api'].pop('local_schema_validation')
+        manifest['api'].update(structured_outputs=True, request_options=config['request_options'])
+        path.write_text(json.dumps(manifest))
+        return config
+
+    def test_original_native_schema_and_pool_keep_failures_in_denominator(self):
+        config = self.original_qwen_config()
+        self.case(self.rows[0], 10)
+        self.case(self.rows[1], None, failure=True)
+        path = self.root / 'q00001/prediction.json'
+        prediction = json.loads(path.read_text())
+        prediction['category_target_ids'] = prediction.pop('candidate_target_ids')
+        path.write_text(json.dumps(prediction))
+        report = audit_run(self.root, self.rows, {}, self.root, expected_total=2,
+                           expected_config=config)
+        self.assertTrue(report['verified_complete'])
+        self.assertEqual(report['fatal_errors'], 1)
+        self.assertEqual(report['full_selected_denominator_accuracy'], .5)
+        self.assertFalse(report['threshold_passed'])
+        self.assertFalse(self.audit()['verified_complete'])
+        prediction['category_target_ids'] = [20]
+        path.write_text(json.dumps(prediction))
+        self.assertFalse(audit_run(self.root, self.rows, {}, self.root, expected_total=2,
+                                  expected_config=config)['verified_complete'])
+
+    def test_original_empty_category_pool_is_a_counted_abstention(self):
+        config = self.original_qwen_config()
+        self.case(self.rows[0], None)
+        self.case(self.rows[1], None, failure=True)
+        path = self.root / 'q00001/prediction.json'
+        prediction = json.loads(path.read_text())
+        prediction.pop('candidate_target_ids')
+        prediction.pop('diagnosis_policy')
+        prediction.update(category_target_ids=[], prediction_source='abstained', bbox_3d=None,
+            diagnosis={'candidate_ids': [],
+                       'missing': ['no retained category hypothesis matches the parsed target']},
+            active_trace={'stop_reason': 'category_gate_abstention'})
+        path.write_text(json.dumps(prediction))
+        report = audit_run(self.root, self.rows, {}, self.root, expected_total=2,
+                           expected_config=config)
+        self.assertTrue(report['verified_complete'])
+        self.assertEqual(report['category_gate_abstentions'], 1)
+        self.assertEqual(report['fatal_errors'], 1)
+        self.assertEqual(report['full_selected_denominator_accuracy'], 0.)
+
 
 if __name__ == '__main__':
     unittest.main()
