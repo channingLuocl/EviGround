@@ -147,7 +147,7 @@ def compact_observations(observations):
     """Encode geometry as columnar rows; retain the original evidence in the trace."""
     compact, covered = [], set()
     for item in reversed(observations):
-        if item.get('tool') != 'measure':
+        if item.get('tool') != 'measure' or item.get('no_evidence_acquired'):
             compact.append(item)
             continue
         ids = frozenset(row['id'] for row in item['objects'])

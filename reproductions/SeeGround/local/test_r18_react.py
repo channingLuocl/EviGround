@@ -73,6 +73,21 @@ class ReactTests(unittest.TestCase):
         self.assertTrue(trace['r18_observations'][0]['no_evidence_acquired'])
         self.assertEqual(result['predicted_id'], 1)
 
+    def test_duplicate_measure_error_survives_the_next_decision(self):
+        result, trace, model, renderer = self.run_actions([
+            self.action('measure', [1, 2]), self.action('measure', [1, 2]),
+            self.action('finish', oid=1)])
+        self.assertEqual(result['predicted_id'], 1)
+        self.assertEqual(trace['r18_model_tool_calls'], 1)
+        error = trace['r18_observations'][1]
+        self.assertTrue(error['no_evidence_acquired'])
+        self.assertIn('already acquired', error['error'])
+        state = json.loads(model.call_args.args[0][1]['content'][0]['text'])
+        self.assertEqual(state['observations'][1], error)
+        encoded = state['observations'][0]['directed_pair_measurements']
+        self.assertEqual([dict(zip(encoded['columns'], row)) for row in encoded['rows']],
+                         trace['r18_observations'][0]['directed_pair_measurements'])
+
     def test_large_requested_group_is_rendered_in_bounded_panels(self):
         self.objects = [prediction(i, ['chair', 'stool']) for i in range(1, 10)]
         result, trace, model, renderer = self.run_actions([
