@@ -1,0 +1,3298 @@
+{
+  "purpose": "Fresh deterministic single-pass holdout; excludes the prior dev96 and validation192; no history reuse",
+  "seed": 20261022,
+  "source_manifest": "reproductions/SeeGround/local/validation/nr3d_val_full.json",
+  "excluded_row_count": 288,
+  "rows": [
+    {
+      "csv_row": 31447,
+      "scene": "scene0655_00",
+      "query": "Please choose the gray chair that is facing the whiteboard.",
+      "target_id": 19,
+      "instance_type": "chair",
+      "stimulus_id": "scene0655_00-chair-2-19-21",
+      "stimulus_candidate_ids": [
+        19,
+        21
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 16692,
+      "scene": "scene0684_00",
+      "query": "The window that is on the right out of the two.",
+      "target_id": 13,
+      "instance_type": "window",
+      "stimulus_id": "scene0684_00-window-2-13-14",
+      "stimulus_candidate_ids": [
+        13,
+        14
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 26949,
+      "scene": "scene0207_00",
+      "query": "You want to pick the window that is behind the rolling office chair.",
+      "target_id": 12,
+      "instance_type": "window",
+      "stimulus_id": "scene0207_00-window-2-12-13",
+      "stimulus_candidate_ids": [
+        12,
+        13
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 13110,
+      "scene": "scene0645_00",
+      "query": "put beds on left side of room. choose curtain farthest to right.",
+      "target_id": 41,
+      "instance_type": "curtain",
+      "stimulus_id": "scene0645_00-curtain-3-41-17-40",
+      "stimulus_candidate_ids": [
+        41,
+        17,
+        40
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 38653,
+      "scene": "scene0338_00",
+      "query": "Facing the boxes, the boxes on the far right.",
+      "target_id": 0,
+      "instance_type": "box",
+      "stimulus_id": "scene0338_00-box-5-0-18-19-20-21",
+      "stimulus_candidate_ids": [
+        0,
+        18,
+        19,
+        20,
+        21
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 8079,
+      "scene": "scene0389_00",
+      "query": "This bag is nearer to the bed",
+      "target_id": 22,
+      "instance_type": "bag",
+      "stimulus_id": "scene0389_00-bag-2-22-23",
+      "stimulus_candidate_ids": [
+        22,
+        23
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 2611,
+      "scene": "scene0063_00",
+      "query": "the chair below the tv",
+      "target_id": 5,
+      "instance_type": "chair",
+      "stimulus_id": "scene0063_00-chair-4-5-4-6-7",
+      "stimulus_candidate_ids": [
+        5,
+        4,
+        6,
+        7
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 37272,
+      "scene": "scene0671_00",
+      "query": "Facing the table with the books on the far end, choose the book on the right.",
+      "target_id": 9,
+      "instance_type": "book",
+      "stimulus_id": "scene0671_00-book-2-9-21",
+      "stimulus_candidate_ids": [
+        9,
+        21
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 11258,
+      "scene": "scene0653_00",
+      "query": "backpack in front on the whiteboard on an endcap",
+      "target_id": 46,
+      "instance_type": "backpack",
+      "stimulus_id": "scene0653_00-backpack-2-46-28",
+      "stimulus_candidate_ids": [
+        46,
+        28
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 10713,
+      "scene": "scene0693_00",
+      "query": "If you were standing in front of the sink, this would be the soap dish on your right.",
+      "target_id": 17,
+      "instance_type": "soap dish",
+      "stimulus_id": "scene0693_00-soap_dish-2-17-18",
+      "stimulus_candidate_ids": [
+        17,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 10917,
+      "scene": "scene0644_00",
+      "query": "Walking into this room, the table would be in front of you and on the left.",
+      "target_id": 26,
+      "instance_type": "table",
+      "stimulus_id": "scene0644_00-table-2-26-25",
+      "stimulus_candidate_ids": [
+        26,
+        25
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 187,
+      "scene": "scene0697_00",
+      "query": "'The lamp to the right if you are lying on the bed. The lamp closest to the doll house.'",
+      "target_id": 20,
+      "instance_type": "lamp",
+      "stimulus_id": "scene0697_00-lamp-2-20-19",
+      "stimulus_candidate_ids": [
+        20,
+        19
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 32802,
+      "scene": "scene0314_00",
+      "query": "Facing the three shelves, it's the monitor on the left, closest to the three shelves.",
+      "target_id": 1,
+      "instance_type": "monitor",
+      "stimulus_id": "scene0314_00-monitor-3-1-2-10",
+      "stimulus_candidate_ids": [
+        1,
+        2,
+        10
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 37338,
+      "scene": "scene0474_00",
+      "query": "window next to the door",
+      "target_id": 23,
+      "instance_type": "window",
+      "stimulus_id": "scene0474_00-window-2-23-36",
+      "stimulus_candidate_ids": [
+        23,
+        36
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 25538,
+      "scene": "scene0565_00",
+      "query": "The cart closest to the printers.",
+      "target_id": 40,
+      "instance_type": "cart",
+      "stimulus_id": "scene0565_00-cart-3-40-22-23",
+      "stimulus_candidate_ids": [
+        40,
+        22,
+        23
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 6232,
+      "scene": "scene0699_00",
+      "query": "It is the box that is not in the closet.",
+      "target_id": 14,
+      "instance_type": "box",
+      "stimulus_id": "scene0699_00-box-2-14-15",
+      "stimulus_candidate_ids": [
+        14,
+        15
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 3023,
+      "scene": "scene0671_00",
+      "query": "The book furthest from the red chair",
+      "target_id": 9,
+      "instance_type": "book",
+      "stimulus_id": "scene0671_00-book-2-9-21",
+      "stimulus_candidate_ids": [
+        9,
+        21
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 9328,
+      "scene": "scene0207_00",
+      "query": "Facing the windows, the window on the left.",
+      "target_id": 12,
+      "instance_type": "window",
+      "stimulus_id": "scene0207_00-window-2-12-13",
+      "stimulus_candidate_ids": [
+        12,
+        13
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 9065,
+      "scene": "scene0011_00",
+      "query": "The left window.",
+      "target_id": 24,
+      "instance_type": "window",
+      "stimulus_id": "scene0011_00-window-2-24-23",
+      "stimulus_candidate_ids": [
+        24,
+        23
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 14333,
+      "scene": "scene0598_00",
+      "query": "The window on the same wall as the desk with two computers",
+      "target_id": 18,
+      "instance_type": "window",
+      "stimulus_id": "scene0598_00-window-2-18-20",
+      "stimulus_candidate_ids": [
+        18,
+        20
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 29545,
+      "scene": "scene0432_00",
+      "query": "if looking at the two chairs from the ottoman/table, the chair on the right",
+      "target_id": 1,
+      "instance_type": "sofa chair",
+      "stimulus_id": "scene0432_00-sofa_chair-2-1-2",
+      "stimulus_candidate_ids": [
+        1,
+        2
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 32364,
+      "scene": "scene0574_00",
+      "query": "Select the shoes closest to the door that is on the wall opposite the sink.",
+      "target_id": 7,
+      "instance_type": "shoes",
+      "stimulus_id": "scene0574_00-shoes-2-7-23",
+      "stimulus_candidate_ids": [
+        7,
+        23
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 37553,
+      "scene": "scene0081_00",
+      "query": "round table near the end of the couch",
+      "target_id": 5,
+      "instance_type": "table",
+      "stimulus_id": "scene0081_00-table-3-5-4-6",
+      "stimulus_candidate_ids": [
+        5,
+        4,
+        6
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 30383,
+      "scene": "scene0246_00",
+      "query": "The correct mirror is sqaure and farther from the ceiling.",
+      "target_id": 32,
+      "instance_type": "mirror",
+      "stimulus_id": "scene0246_00-mirror-2-32-36",
+      "stimulus_candidate_ids": [
+        32,
+        36
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 28889,
+      "scene": "scene0618_00",
+      "query": "The table in the corner where the green wall meets the white wall, on the wall where the doors are.",
+      "target_id": 27,
+      "instance_type": "table",
+      "stimulus_id": "scene0618_00-table-6-27-16-18-20-24-26",
+      "stimulus_candidate_ids": [
+        27,
+        16,
+        18,
+        20,
+        24,
+        26
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 5102,
+      "scene": "scene0663_00",
+      "query": "This wall-mounted shelf has just one monitor under it.",
+      "target_id": 32,
+      "instance_type": "shelf",
+      "stimulus_id": "scene0663_00-shelf-4-32-0-23-30",
+      "stimulus_candidate_ids": [
+        32,
+        0,
+        23,
+        30
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 33851,
+      "scene": "scene0565_00",
+      "query": "When facing the carts it is the one on the very right",
+      "target_id": 23,
+      "instance_type": "cart",
+      "stimulus_id": "scene0565_00-cart-3-23-22-40",
+      "stimulus_candidate_ids": [
+        23,
+        22,
+        40
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 34555,
+      "scene": "scene0221_00",
+      "query": "It is the square table directly across from the bed with the computer on it.",
+      "target_id": 47,
+      "instance_type": "table",
+      "stimulus_id": "scene0221_00-table-2-47-6",
+      "stimulus_candidate_ids": [
+        47,
+        6
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 7116,
+      "scene": "scene0231_00",
+      "query": "painting on the wall between the kitchen and livingroom",
+      "target_id": 45,
+      "instance_type": "picture",
+      "stimulus_id": "scene0231_00-picture-3-45-16-20",
+      "stimulus_candidate_ids": [
+        45,
+        16,
+        20
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 23900,
+      "scene": "scene0435_00",
+      "query": "the black shoes in front of the door",
+      "target_id": 17,
+      "instance_type": "shoes",
+      "stimulus_id": "scene0435_00-shoes-2-17-16",
+      "stimulus_candidate_ids": [
+        17,
+        16
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 5468,
+      "scene": "scene0300_00",
+      "query": "the chair farthest from a window",
+      "target_id": 7,
+      "instance_type": "chair",
+      "stimulus_id": "scene0300_00-chair-3-7-8-9",
+      "stimulus_candidate_ids": [
+        7,
+        8,
+        9
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 10102,
+      "scene": "scene0598_00",
+      "query": "the chair on the left-hand side closest to the window",
+      "target_id": 7,
+      "instance_type": "chair",
+      "stimulus_id": "scene0598_00-chair-6-7-8-9-10-11-12",
+      "stimulus_candidate_ids": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 27410,
+      "scene": "scene0458_00",
+      "query": "the bottle on the floor next to the sink",
+      "target_id": 32,
+      "instance_type": "bottle",
+      "stimulus_id": "scene0458_00-bottle-5-32-18-25-28-29",
+      "stimulus_candidate_ids": [
+        32,
+        18,
+        25,
+        28,
+        29
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 21389,
+      "scene": "scene0565_00",
+      "query": "This desk is closer to the door and has more items on it, such as a monitor and 2 printers.",
+      "target_id": 13,
+      "instance_type": "desk",
+      "stimulus_id": "scene0565_00-desk-2-13-12",
+      "stimulus_candidate_ids": [
+        13,
+        12
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 365,
+      "scene": "scene0081_00",
+      "query": "The small blue couch that is on the end.",
+      "target_id": 8,
+      "instance_type": "couch",
+      "stimulus_id": "scene0081_00-couch-3-8-0-7",
+      "stimulus_candidate_ids": [
+        8,
+        0,
+        7
+      ],
+      "stage": "compound_size_language",
+      "size_form": "adjective",
+      "size_words": [
+        "small"
+      ],
+      "size_scope": "target_likely",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 27376,
+      "scene": "scene0699_00",
+      "query": "Select the bag that is closest to the wall.",
+      "target_id": 31,
+      "instance_type": "bag",
+      "stimulus_id": "scene0699_00-bag-4-31-33-34-37",
+      "stimulus_candidate_ids": [
+        31,
+        33,
+        34,
+        37
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 5412,
+      "scene": "scene0616_00",
+      "query": "The picture above the two arm chairs",
+      "target_id": 27,
+      "instance_type": "picture",
+      "stimulus_id": "scene0616_00-picture-4-27-26-29-30",
+      "stimulus_candidate_ids": [
+        27,
+        26,
+        29,
+        30
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 17520,
+      "scene": "scene0357_00",
+      "query": "the green books on the shelf (lower box)",
+      "target_id": 0,
+      "instance_type": "box",
+      "stimulus_id": "scene0357_00-box-2-0-1",
+      "stimulus_candidate_ids": [
+        0,
+        1
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 6572,
+      "scene": "scene0389_00",
+      "query": "the nightstand is on the right side of the bed where your head lies and is used to store stuff",
+      "target_id": 19,
+      "instance_type": "nightstand",
+      "stimulus_id": "scene0389_00-nightstand-2-19-20",
+      "stimulus_candidate_ids": [
+        19,
+        20
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 27172,
+      "scene": "scene0651_00",
+      "query": "I am sitting in the chair to the right of the chair that has it's back to the kitchen",
+      "target_id": 10,
+      "instance_type": "chair",
+      "stimulus_id": "scene0651_00-chair-4-10-7-8-9",
+      "stimulus_candidate_ids": [
+        10,
+        7,
+        8,
+        9
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 16452,
+      "scene": "scene0621_00",
+      "query": "The only table that is resting against a wall on it's own",
+      "target_id": 1,
+      "instance_type": "table",
+      "stimulus_id": "scene0621_00-table-5-1-0-2-3-4",
+      "stimulus_candidate_ids": [
+        1,
+        0,
+        2,
+        3,
+        4
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 22440,
+      "scene": "scene0591_00",
+      "query": "Chair at monitor with keyboard",
+      "target_id": 1,
+      "instance_type": "chair",
+      "stimulus_id": "scene0591_00-chair-2-1-2",
+      "stimulus_candidate_ids": [
+        1,
+        2
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 2941,
+      "scene": "scene0084_00",
+      "query": "The correct rail is under the window. It is beside the white radiator.",
+      "target_id": 34,
+      "instance_type": "rail",
+      "stimulus_id": "scene0084_00-rail-5-34-39-43-44-45",
+      "stimulus_candidate_ids": [
+        34,
+        39,
+        43,
+        44,
+        45
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 3147,
+      "scene": "scene0565_00",
+      "query": "The taller desk with white filing cabinets behind it.",
+      "target_id": 12,
+      "instance_type": "desk",
+      "stimulus_id": "scene0565_00-desk-2-12-13",
+      "stimulus_candidate_ids": [
+        12,
+        13
+      ],
+      "stage": "compound_size_language",
+      "size_form": "comparative",
+      "size_words": [
+        "taller"
+      ],
+      "size_scope": "target_likely",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 37724,
+      "scene": "scene0025_00",
+      "query": "Pick the dark color couch that is next to the tall file cabinet.",
+      "target_id": 3,
+      "instance_type": "couch",
+      "stimulus_id": "scene0025_00-couch-2-3-4",
+      "stimulus_candidate_ids": [
+        3,
+        4
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 6956,
+      "scene": "scene0084_00",
+      "query": "The toilet paper that is on a roll next to the toilet.",
+      "target_id": 35,
+      "instance_type": "toilet paper",
+      "stimulus_id": "scene0084_00-toilet_paper-4-35-6-7-8",
+      "stimulus_candidate_ids": [
+        35,
+        6,
+        7,
+        8
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 6890,
+      "scene": "scene0565_00",
+      "query": "Facing the printers, the printer on the left.",
+      "target_id": 15,
+      "instance_type": "printer",
+      "stimulus_id": "scene0565_00-printer-2-15-14",
+      "stimulus_candidate_ids": [
+        15,
+        14
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 21694,
+      "scene": "scene0474_00",
+      "query": "the window above the couch.",
+      "target_id": 36,
+      "instance_type": "window",
+      "stimulus_id": "scene0474_00-window-2-36-23",
+      "stimulus_candidate_ids": [
+        36,
+        23
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 3287,
+      "scene": "scene0699_00",
+      "query": "Facing the foot of the bed, the pillow on the right.",
+      "target_id": 25,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0699_00-pillow-2-25-26",
+      "stimulus_candidate_ids": [
+        25,
+        26
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 41487,
+      "scene": "scene0700_00",
+      "query": "office chair that is pushed underneath a desk",
+      "target_id": 2,
+      "instance_type": "chair",
+      "stimulus_id": "scene0700_00-chair-3-2-0-1",
+      "stimulus_candidate_ids": [
+        2,
+        0,
+        1
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 5157,
+      "scene": "scene0663_00",
+      "query": "The desk closest to the brown door",
+      "target_id": 4,
+      "instance_type": "desk",
+      "stimulus_id": "scene0663_00-desk-2-4-3",
+      "stimulus_candidate_ids": [
+        4,
+        3
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 26300,
+      "scene": "scene0647_00",
+      "query": "The square table in front of the fabric teal couches.",
+      "target_id": 10,
+      "instance_type": "table",
+      "stimulus_id": "scene0647_00-table-3-10-9-11",
+      "stimulus_candidate_ids": [
+        10,
+        9,
+        11
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 10431,
+      "scene": "scene0084_00",
+      "query": "choose the bigger trash can.",
+      "target_id": 10,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0084_00-trash_can-3-10-25-26",
+      "stimulus_candidate_ids": [
+        10,
+        25,
+        26
+      ],
+      "stage": "simple_relative",
+      "size_form": "comparative",
+      "size_words": [
+        "bigger"
+      ],
+      "size_scope": "target_likely",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 24115,
+      "scene": "scene0670_00",
+      "query": "The highest kitchen cabinet.",
+      "target_id": 29,
+      "instance_type": "kitchen cabinets",
+      "stimulus_id": "scene0670_00-kitchen_cabinets-3-29-28-30",
+      "stimulus_candidate_ids": [
+        29,
+        28,
+        30
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 24140,
+      "scene": "scene0618_00",
+      "query": "the table in the corner by the dark colored wall.",
+      "target_id": 20,
+      "instance_type": "table",
+      "stimulus_id": "scene0618_00-table-6-20-16-18-24-26-27",
+      "stimulus_candidate_ids": [
+        20,
+        16,
+        18,
+        24,
+        26,
+        27
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 15738,
+      "scene": "scene0338_00",
+      "query": "Locate the box that is both on top and NOT touching the wall.",
+      "target_id": 18,
+      "instance_type": "box",
+      "stimulus_id": "scene0338_00-box-5-18-0-19-20-21",
+      "stimulus_candidate_ids": [
+        18,
+        0,
+        19,
+        20,
+        21
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 4575,
+      "scene": "scene0435_00",
+      "query": "The correct bed is the one closer the window.",
+      "target_id": 11,
+      "instance_type": "bed",
+      "stimulus_id": "scene0435_00-bed-2-11-10",
+      "stimulus_candidate_ids": [
+        11,
+        10
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 38171,
+      "scene": "scene0535_00",
+      "query": "Underneath the desk is a box that is on the right side on the floor",
+      "target_id": 29,
+      "instance_type": "box",
+      "stimulus_id": "scene0535_00-box-3-29-8-30",
+      "stimulus_candidate_ids": [
+        29,
+        8,
+        30
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 8334,
+      "scene": "scene0607_00",
+      "query": "from the sink, the front row of chairs, the leftmost",
+      "target_id": 9,
+      "instance_type": "chair",
+      "stimulus_id": "scene0607_00-chair-6-9-6-7-8-10-11",
+      "stimulus_candidate_ids": [
+        9,
+        6,
+        7,
+        8,
+        10,
+        11
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 20777,
+      "scene": "scene0246_00",
+      "query": "There is a small bathroom behind the bed and you need to find the cieling light that is in the bathroom.",
+      "target_id": 26,
+      "instance_type": "light",
+      "stimulus_id": "scene0246_00-light-2-26-2",
+      "stimulus_candidate_ids": [
+        26,
+        2
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 28540,
+      "scene": "scene0030_00",
+      "query": "The window closest to the shelves filled with books.",
+      "target_id": 27,
+      "instance_type": "window",
+      "stimulus_id": "scene0030_00-window-3-27-26-58",
+      "stimulus_candidate_ids": [
+        27,
+        26,
+        58
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 34705,
+      "scene": "scene0616_00",
+      "query": "The picture directly over the 2 sofa chairs",
+      "target_id": 27,
+      "instance_type": "picture",
+      "stimulus_id": "scene0616_00-picture-4-27-26-29-30",
+      "stimulus_candidate_ids": [
+        27,
+        26,
+        29,
+        30
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 19903,
+      "scene": "scene0608_00",
+      "query": "by the window opening there is  a sink and cabinet. the plant your are lookng for is in front of this sink were you can  just make out something whtie. this is what you are looking for",
+      "target_id": 4,
+      "instance_type": "plant",
+      "stimulus_id": "scene0608_00-plant-3-4-14-18",
+      "stimulus_candidate_ids": [
+        4,
+        14,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 4333,
+      "scene": "scene0527_00",
+      "query": "it is the cabinet over the lighted sink, closest to the door.",
+      "target_id": 5,
+      "instance_type": "cabinet",
+      "stimulus_id": "scene0527_00-cabinet-3-5-17-30",
+      "stimulus_candidate_ids": [
+        5,
+        17,
+        30
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 20300,
+      "scene": "scene0251_00",
+      "query": "The closed white door.",
+      "target_id": 15,
+      "instance_type": "door",
+      "stimulus_id": "scene0251_00-door-3-15-13-14",
+      "stimulus_candidate_ids": [
+        15,
+        13,
+        14
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 21672,
+      "scene": "scene0207_00",
+      "query": "The kitchen sink beneath the open cabinets.",
+      "target_id": 17,
+      "instance_type": "sink",
+      "stimulus_id": "scene0207_00-sink-2-17-57",
+      "stimulus_candidate_ids": [
+        17,
+        57
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 32662,
+      "scene": "scene0153_00",
+      "query": "The towel across from the toilet",
+      "target_id": 17,
+      "instance_type": "towel",
+      "stimulus_id": "scene0153_00-towel-3-17-8-20",
+      "stimulus_candidate_ids": [
+        17,
+        8,
+        20
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 34936,
+      "scene": "scene0077_00",
+      "query": "I am the trash can in front of the white door",
+      "target_id": 13,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0077_00-trash_can-2-13-8",
+      "stimulus_candidate_ids": [
+        13,
+        8
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 35560,
+      "scene": "scene0488_00",
+      "query": "the counter next to the stove",
+      "target_id": 10,
+      "instance_type": "kitchen counter",
+      "stimulus_id": "scene0488_00-kitchen_counter-2-10-11",
+      "stimulus_candidate_ids": [
+        10,
+        11
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 2478,
+      "scene": "scene0353_00",
+      "query": "Facing the window, choose the blue pillow at the top right  ",
+      "target_id": 41,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0353_00-pillow-4-41-27-28-48",
+      "stimulus_candidate_ids": [
+        41,
+        27,
+        28,
+        48
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 5972,
+      "scene": "scene0699_00",
+      "query": "the bag is closest to the desk",
+      "target_id": 33,
+      "instance_type": "bag",
+      "stimulus_id": "scene0699_00-bag-4-33-31-34-37",
+      "stimulus_candidate_ids": [
+        33,
+        31,
+        34,
+        37
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 38649,
+      "scene": "scene0552_00",
+      "query": "The table not next to the other two tables.",
+      "target_id": 11,
+      "instance_type": "table",
+      "stimulus_id": "scene0552_00-table-3-11-9-10",
+      "stimulus_candidate_ids": [
+        11,
+        9,
+        10
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 18358,
+      "scene": "scene0426_00",
+      "query": "The chair in the upper corner next to the door.",
+      "target_id": 4,
+      "instance_type": "chair",
+      "stimulus_id": "scene0426_00-chair-3-4-3-7",
+      "stimulus_candidate_ids": [
+        4,
+        3,
+        7
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 24648,
+      "scene": "scene0591_00",
+      "query": "The largest, tallest cabinet beside the brown door and the couch with orange and yellow pillows.",
+      "target_id": 4,
+      "instance_type": "cabinet",
+      "stimulus_id": "scene0591_00-cabinet-3-4-30-31",
+      "stimulus_candidate_ids": [
+        4,
+        30,
+        31
+      ],
+      "stage": "compound_size_language",
+      "size_form": "superlative",
+      "size_words": [
+        "largest",
+        "tallest"
+      ],
+      "size_scope": "target_likely",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 9704,
+      "scene": "scene0663_00",
+      "query": "This suitcase is sitting closer to the window.",
+      "target_id": 20,
+      "instance_type": "suitcase",
+      "stimulus_id": "scene0663_00-suitcase-2-20-18",
+      "stimulus_candidate_ids": [
+        20,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 34454,
+      "scene": "scene0086_00",
+      "query": "Face the sinks.  The sink you want is the one on the left, closest to the bathroom stall",
+      "target_id": 19,
+      "instance_type": "sink",
+      "stimulus_id": "scene0086_00-sink-2-19-20",
+      "stimulus_candidate_ids": [
+        19,
+        20
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 2985,
+      "scene": "scene0030_00",
+      "query": "The correct table is the brown one closest to the reclining chair in the corner.",
+      "target_id": 47,
+      "instance_type": "table",
+      "stimulus_id": "scene0030_00-table-5-47-48-49-50-51",
+      "stimulus_candidate_ids": [
+        47,
+        48,
+        49,
+        50,
+        51
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 39267,
+      "scene": "scene0645_00",
+      "query": "The window closest to the bed.",
+      "target_id": 55,
+      "instance_type": "window",
+      "stimulus_id": "scene0645_00-window-2-55-42",
+      "stimulus_candidate_ids": [
+        55,
+        42
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 3583,
+      "scene": "scene0458_00",
+      "query": "the highest soapdish",
+      "target_id": 10,
+      "instance_type": "soap dish",
+      "stimulus_id": "scene0458_00-soap_dish-3-10-9-11",
+      "stimulus_candidate_ids": [
+        10,
+        9,
+        11
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 17731,
+      "scene": "scene0030_00",
+      "query": "The blue office chair in the middle of the room, behind another chair.",
+      "target_id": 1,
+      "instance_type": "office chair",
+      "stimulus_id": "scene0030_00-office_chair-3-1-0-2",
+      "stimulus_candidate_ids": [
+        1,
+        0,
+        2
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 4611,
+      "scene": "scene0100_00",
+      "query": "Pick the cup in the center.",
+      "target_id": 18,
+      "instance_type": "cup",
+      "stimulus_id": "scene0100_00-cup-3-18-3-19",
+      "stimulus_candidate_ids": [
+        18,
+        3,
+        19
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 13841,
+      "scene": "scene0693_00",
+      "query": "The soap dish on the left of the sink and holding a blue cup.",
+      "target_id": 18,
+      "instance_type": "soap dish",
+      "stimulus_id": "scene0693_00-soap_dish-2-18-17",
+      "stimulus_candidate_ids": [
+        18,
+        17
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 23763,
+      "scene": "scene0665_00",
+      "query": "The table against the wall, with one chair under it.",
+      "target_id": 18,
+      "instance_type": "table",
+      "stimulus_id": "scene0665_00-table-5-18-15-16-17-19",
+      "stimulus_candidate_ids": [
+        18,
+        15,
+        16,
+        17,
+        19
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 8917,
+      "scene": "scene0552_00",
+      "query": "The correct cabinet is on the ground.",
+      "target_id": 13,
+      "instance_type": "kitchen cabinets",
+      "stimulus_id": "scene0552_00-kitchen_cabinets-2-13-27",
+      "stimulus_candidate_ids": [
+        13,
+        27
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 405,
+      "scene": "scene0462_00",
+      "query": "Choose the large, black trash can.",
+      "target_id": 10,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0462_00-trash_can-2-10-8",
+      "stimulus_candidate_ids": [
+        10,
+        8
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 4877,
+      "scene": "scene0084_00",
+      "query": "This toilet paper is on the counter but is not stacked.",
+      "target_id": 8,
+      "instance_type": "toilet paper",
+      "stimulus_id": "scene0084_00-toilet_paper-4-8-6-7-35",
+      "stimulus_candidate_ids": [
+        8,
+        6,
+        7,
+        35
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 3711,
+      "scene": "scene0565_00",
+      "query": "It's the shelf behind the statue.",
+      "target_id": 35,
+      "instance_type": "shelf",
+      "stimulus_id": "scene0565_00-shelf-2-35-36",
+      "stimulus_candidate_ids": [
+        35,
+        36
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 18534,
+      "scene": "scene0432_00",
+      "query": "Choose the chair with a rip in the upholstery.",
+      "target_id": 1,
+      "instance_type": "sofa chair",
+      "stimulus_id": "scene0432_00-sofa_chair-2-1-2",
+      "stimulus_candidate_ids": [
+        1,
+        2
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 10288,
+      "scene": "scene0616_00",
+      "query": "The chair next to the chair closest to the fireeplace.",
+      "target_id": 10,
+      "instance_type": "chair",
+      "stimulus_id": "scene0616_00-chair-5-10-9-11-12-13",
+      "stimulus_candidate_ids": [
+        10,
+        9,
+        11,
+        12,
+        13
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 26540,
+      "scene": "scene0608_00",
+      "query": "The smallest plant that is sitting close to the floor on a table, to the left of the keyboard and guitar. To the right of the TV",
+      "target_id": 4,
+      "instance_type": "plant",
+      "stimulus_id": "scene0608_00-plant-3-4-14-18",
+      "stimulus_candidate_ids": [
+        4,
+        14,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 22942,
+      "scene": "scene0565_00",
+      "query": "the desk is facing a wall with a door directly to the right.",
+      "target_id": 13,
+      "instance_type": "desk",
+      "stimulus_id": "scene0565_00-desk-2-13-12",
+      "stimulus_candidate_ids": [
+        13,
+        12
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 22633,
+      "scene": "scene0086_00",
+      "query": "the higher up dispenser",
+      "target_id": 17,
+      "instance_type": "paper towel dispenser",
+      "stimulus_id": "scene0086_00-paper_towel_dispenser-2-17-18",
+      "stimulus_candidate_ids": [
+        17,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 29012,
+      "scene": "scene0203_00",
+      "query": "The shelf along the wall.",
+      "target_id": 5,
+      "instance_type": "shelf",
+      "stimulus_id": "scene0203_00-shelf-2-5-7",
+      "stimulus_candidate_ids": [
+        5,
+        7
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 3679,
+      "scene": "scene0685_00",
+      "query": "The smaller trash can to the right of the door underneath the red cannister.",
+      "target_id": 7,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0685_00-trash_can-2-7-0",
+      "stimulus_candidate_ids": [
+        7,
+        0
+      ],
+      "stage": "compound_size_language",
+      "size_form": "comparative",
+      "size_words": [
+        "smaller"
+      ],
+      "size_scope": "target_likely",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 33797,
+      "scene": "scene0187_00",
+      "query": "facing the wall, right chair",
+      "target_id": 1,
+      "instance_type": "chair",
+      "stimulus_id": "scene0187_00-chair-4-1-0-13-14",
+      "stimulus_candidate_ids": [
+        1,
+        0,
+        13,
+        14
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 24921,
+      "scene": "scene0086_00",
+      "query": "The sink closest to the hand dryer",
+      "target_id": 20,
+      "instance_type": "sink",
+      "stimulus_id": "scene0086_00-sink-2-20-19",
+      "stimulus_candidate_ids": [
+        20,
+        19
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 38706,
+      "scene": "scene0432_00",
+      "query": "The darker of the soft chairs.",
+      "target_id": 1,
+      "instance_type": "sofa chair",
+      "stimulus_id": "scene0432_00-sofa_chair-2-1-2",
+      "stimulus_candidate_ids": [
+        1,
+        2
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 34654,
+      "scene": "scene0246_00",
+      "query": "Smaller picture on the white wall, there is nothing else on that wall.",
+      "target_id": 44,
+      "instance_type": "picture",
+      "stimulus_id": "scene0246_00-picture-2-44-46",
+      "stimulus_candidate_ids": [
+        44,
+        46
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 3048,
+      "scene": "scene0697_00",
+      "query": "The nightstand to the right of the bed with the blue dog toy in front of it.",
+      "target_id": 6,
+      "instance_type": "nightstand",
+      "stimulus_id": "scene0697_00-nightstand-2-6-7",
+      "stimulus_candidate_ids": [
+        6,
+        7
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 17439,
+      "scene": "scene0643_00",
+      "query": "the chair near the middle of the room and not right at its place at the desk",
+      "target_id": 3,
+      "instance_type": "chair",
+      "stimulus_id": "scene0643_00-chair-5-3-2-4-5-6",
+      "stimulus_candidate_ids": [
+        3,
+        2,
+        4,
+        5,
+        6
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 2230,
+      "scene": "scene0565_00",
+      "query": "Of the side-by-side chairs, this is the darker greenish chair by the open box.",
+      "target_id": 24,
+      "instance_type": "chair",
+      "stimulus_id": "scene0565_00-chair-4-24-0-1-25",
+      "stimulus_candidate_ids": [
+        24,
+        0,
+        1,
+        25
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 35190,
+      "scene": "scene0697_00",
+      "query": "select the pillow nearest the door",
+      "target_id": 25,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0697_00-pillow-3-25-17-18",
+      "stimulus_candidate_ids": [
+        25,
+        17,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 40276,
+      "scene": "scene0389_00",
+      "query": "the door next to the painting.",
+      "target_id": 12,
+      "instance_type": "door",
+      "stimulus_id": "scene0389_00-door-2-12-7",
+      "stimulus_candidate_ids": [
+        12,
+        7
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 27548,
+      "scene": "scene0690_00",
+      "query": "Facing the cabinets select the armchair on the bottom right.",
+      "target_id": 15,
+      "instance_type": "armchair",
+      "stimulus_id": "scene0690_00-armchair-4-15-16-17-18",
+      "stimulus_candidate_ids": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 18050,
+      "scene": "scene0665_00",
+      "query": "Choose the circular table located in the corner of the room.",
+      "target_id": 19,
+      "instance_type": "table",
+      "stimulus_id": "scene0665_00-table-5-19-15-16-17-18",
+      "stimulus_candidate_ids": [
+        19,
+        15,
+        16,
+        17,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 375,
+      "scene": "scene0591_00",
+      "query": "Facing the door, the desk on the right side.",
+      "target_id": 19,
+      "instance_type": "desk",
+      "stimulus_id": "scene0591_00-desk-2-19-5",
+      "stimulus_candidate_ids": [
+        19,
+        5
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 33357,
+      "scene": "scene0663_00",
+      "query": "facing the window, far right  shelf",
+      "target_id": 23,
+      "instance_type": "shelf",
+      "stimulus_id": "scene0663_00-shelf-4-23-0-30-32",
+      "stimulus_candidate_ids": [
+        23,
+        0,
+        30,
+        32
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 22678,
+      "scene": "scene0494_00",
+      "query": "hen looking at the table from the position of the trashcan it is the top right chair slightly at an angle",
+      "target_id": 11,
+      "instance_type": "chair",
+      "stimulus_id": "scene0494_00-chair-4-11-1-2-3",
+      "stimulus_candidate_ids": [
+        11,
+        1,
+        2,
+        3
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 2000,
+      "scene": "scene0653_00",
+      "query": "It's the desk in the corner, under the window.",
+      "target_id": 13,
+      "instance_type": "desk",
+      "stimulus_id": "scene0653_00-desk-6-13-14-15-16-17-18",
+      "stimulus_candidate_ids": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 11101,
+      "scene": "scene0643_00",
+      "query": "the desk closest to the door",
+      "target_id": 0,
+      "instance_type": "desk",
+      "stimulus_id": "scene0643_00-desk-4-0-20-31-40",
+      "stimulus_candidate_ids": [
+        0,
+        20,
+        31,
+        40
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 40031,
+      "scene": "scene0278_00",
+      "query": "Find the chair that is closer to the Stanford poster.",
+      "target_id": 10,
+      "instance_type": "chair",
+      "stimulus_id": "scene0278_00-chair-2-10-11",
+      "stimulus_candidate_ids": [
+        10,
+        11
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 1583,
+      "scene": "scene0462_00",
+      "query": "Smaller box behind a slightly bigger box.",
+      "target_id": 21,
+      "instance_type": "box",
+      "stimulus_id": "scene0462_00-box-2-21-1",
+      "stimulus_candidate_ids": [
+        21,
+        1
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 34449,
+      "scene": "scene0458_00",
+      "query": "When standing in the middle of the room facing the toilet paper, the correct one is on the far right, closest to the shower.",
+      "target_id": 4,
+      "instance_type": "toilet paper",
+      "stimulus_id": "scene0458_00-toilet_paper-3-4-5-24",
+      "stimulus_candidate_ids": [
+        4,
+        5,
+        24
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 32620,
+      "scene": "scene0616_00",
+      "query": "Select the chair who's back is facing the door next to the notice board.",
+      "target_id": 12,
+      "instance_type": "chair",
+      "stimulus_id": "scene0616_00-chair-5-12-9-10-11-13",
+      "stimulus_candidate_ids": [
+        12,
+        9,
+        10,
+        11,
+        13
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 7594,
+      "scene": "scene0030_00",
+      "query": "The green chalkboard on the wall closest to the door.",
+      "target_id": 22,
+      "instance_type": "blackboard",
+      "stimulus_id": "scene0030_00-blackboard-2-22-21",
+      "stimulus_candidate_ids": [
+        22,
+        21
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 14180,
+      "scene": "scene0207_00",
+      "query": "The blue towel in the bathroom",
+      "target_id": 70,
+      "instance_type": "towel",
+      "stimulus_id": "scene0207_00-towel-2-70-47",
+      "stimulus_candidate_ids": [
+        70,
+        47
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 38819,
+      "scene": "scene0307_00",
+      "query": "The middle doorway to get into the other room, connects what looks like the pantry in the middle of the room and pipes on the other side.",
+      "target_id": 0,
+      "instance_type": "door",
+      "stimulus_id": "scene0307_00-door-4-0-2-33-35",
+      "stimulus_candidate_ids": [
+        0,
+        2,
+        33,
+        35
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 24263,
+      "scene": "scene0664_00",
+      "query": "The long towel in the shower.",
+      "target_id": 15,
+      "instance_type": "towel",
+      "stimulus_id": "scene0664_00-towel-3-15-14-24",
+      "stimulus_candidate_ids": [
+        15,
+        14,
+        24
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 23651,
+      "scene": "scene0568_00",
+      "query": "This table is sitting between the red couch and the television.",
+      "target_id": 9,
+      "instance_type": "table",
+      "stimulus_id": "scene0568_00-table-2-9-6",
+      "stimulus_candidate_ids": [
+        9,
+        6
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 33766,
+      "scene": "scene0568_00",
+      "query": "The table by the window with a green top.",
+      "target_id": 6,
+      "instance_type": "table",
+      "stimulus_id": "scene0568_00-table-2-6-9",
+      "stimulus_candidate_ids": [
+        6,
+        9
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 24296,
+      "scene": "scene0423_00",
+      "query": "This armchair has the stool sitting closest to it and from the top has less see-through on it",
+      "target_id": 4,
+      "instance_type": "armchair",
+      "stimulus_id": "scene0423_00-armchair-4-4-1-2-3",
+      "stimulus_candidate_ids": [
+        4,
+        1,
+        2,
+        3
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 30770,
+      "scene": "scene0278_00",
+      "query": "the trash can right next to the chairs",
+      "target_id": 5,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0278_00-trash_can-2-5-4",
+      "stimulus_candidate_ids": [
+        5,
+        4
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 17663,
+      "scene": "scene0207_00",
+      "query": "Locate the window that is further from the bed.",
+      "target_id": 12,
+      "instance_type": "window",
+      "stimulus_id": "scene0207_00-window-2-12-13",
+      "stimulus_candidate_ids": [
+        12,
+        13
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 33446,
+      "scene": "scene0697_00",
+      "query": "When facing the bed, the lamp that is on the right side of the bed.",
+      "target_id": 19,
+      "instance_type": "lamp",
+      "stimulus_id": "scene0697_00-lamp-2-19-20",
+      "stimulus_candidate_ids": [
+        19,
+        20
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 2261,
+      "scene": "scene0648_00",
+      "query": "Red book on the desk",
+      "target_id": 5,
+      "instance_type": "book",
+      "stimulus_id": "scene0648_00-book-2-5-6",
+      "stimulus_candidate_ids": [
+        5,
+        6
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 38780,
+      "scene": "scene0518_00",
+      "query": "Don't choose the tall and skinny item. Choose the smaller item that's up higher. (The AI says that both boxes show \"cabinets\" but I don't think the small items are really cabinets!)",
+      "target_id": 11,
+      "instance_type": "cabinet",
+      "stimulus_id": "scene0518_00-cabinet-2-11-13",
+      "stimulus_candidate_ids": [
+        11,
+        13
+      ],
+      "stage": "compound_size_language",
+      "size_form": "comparative",
+      "size_words": [
+        "tall",
+        "skinny",
+        "smaller",
+        "small"
+      ],
+      "size_scope": "target_likely",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 14311,
+      "scene": "scene0474_00",
+      "query": "The second monitor closest to the door.",
+      "target_id": 10,
+      "instance_type": "monitor",
+      "stimulus_id": "scene0474_00-monitor-5-10-11-12-29-41",
+      "stimulus_candidate_ids": [
+        10,
+        11,
+        12,
+        29,
+        41
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 22156,
+      "scene": "scene0222_00",
+      "query": "The bed next to the windows.",
+      "target_id": 5,
+      "instance_type": "bed",
+      "stimulus_id": "scene0222_00-bed-2-5-0",
+      "stimulus_candidate_ids": [
+        5,
+        0
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 960,
+      "scene": "scene0652_00",
+      "query": "choose the one pillow box selection that is by itself",
+      "target_id": 17,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0652_00-pillow-6-17-11-12-13-14-15",
+      "stimulus_candidate_ids": [
+        17,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 38290,
+      "scene": "scene0426_00",
+      "query": "box by the coat rack/storage boxes",
+      "target_id": 33,
+      "instance_type": "box",
+      "stimulus_id": "scene0426_00-box-4-33-25-26-43",
+      "stimulus_candidate_ids": [
+        33,
+        25,
+        26,
+        43
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 5663,
+      "scene": "scene0077_00",
+      "query": "the trash can closest to the door",
+      "target_id": 13,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0077_00-trash_can-2-13-8",
+      "stimulus_candidate_ids": [
+        13,
+        8
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 1725,
+      "scene": "scene0665_00",
+      "query": "The desk sitting by itself away from the other desks.",
+      "target_id": 2,
+      "instance_type": "desk",
+      "stimulus_id": "scene0665_00-desk-4-2-20-29-31",
+      "stimulus_candidate_ids": [
+        2,
+        20,
+        29,
+        31
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 40894,
+      "scene": "scene0426_00",
+      "query": "The box sitting under the chair.",
+      "target_id": 43,
+      "instance_type": "box",
+      "stimulus_id": "scene0426_00-box-4-43-25-26-33",
+      "stimulus_candidate_ids": [
+        43,
+        25,
+        26,
+        33
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 13621,
+      "scene": "scene0153_00",
+      "query": "The bar closest to the sink.",
+      "target_id": 15,
+      "instance_type": "rail",
+      "stimulus_id": "scene0153_00-rail-2-15-18",
+      "stimulus_candidate_ids": [
+        15,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 27011,
+      "scene": "scene0222_00",
+      "query": "the bed with blue blankets",
+      "target_id": 5,
+      "instance_type": "bed",
+      "stimulus_id": "scene0222_00-bed-2-5-0",
+      "stimulus_candidate_ids": [
+        5,
+        0
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 27409,
+      "scene": "scene0653_00",
+      "query": "You want the window with the desk and monitor leaning on it to the right of the clock",
+      "target_id": 7,
+      "instance_type": "window",
+      "stimulus_id": "scene0653_00-window-2-7-25",
+      "stimulus_candidate_ids": [
+        7,
+        25
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 2702,
+      "scene": "scene0699_00",
+      "query": "Of the three bags near the bed, it is the one closest to the wall.",
+      "target_id": 31,
+      "instance_type": "bag",
+      "stimulus_id": "scene0699_00-bag-4-31-33-34-37",
+      "stimulus_candidate_ids": [
+        31,
+        33,
+        34,
+        37
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 41293,
+      "scene": "scene0699_00",
+      "query": "The box in the bedroom",
+      "target_id": 14,
+      "instance_type": "box",
+      "stimulus_id": "scene0699_00-box-2-14-15",
+      "stimulus_candidate_ids": [
+        14,
+        15
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 2421,
+      "scene": "scene0338_00",
+      "query": "Facing the box, it is the box out in front that is on top of the other box.",
+      "target_id": 18,
+      "instance_type": "box",
+      "stimulus_id": "scene0338_00-box-5-18-0-19-20-21",
+      "stimulus_candidate_ids": [
+        18,
+        0,
+        19,
+        20,
+        21
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 33423,
+      "scene": "scene0251_00",
+      "query": "The side with the sole window.",
+      "target_id": 21,
+      "instance_type": "window",
+      "stimulus_id": "scene0251_00-window-3-21-18-19",
+      "stimulus_candidate_ids": [
+        21,
+        18,
+        19
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 23768,
+      "scene": "scene0574_00",
+      "query": "The lower, smaller door furthest from the counter top.",
+      "target_id": 10,
+      "instance_type": "door",
+      "stimulus_id": "scene0574_00-door-2-10-9",
+      "stimulus_candidate_ids": [
+        10,
+        9
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 35312,
+      "scene": "scene0378_00",
+      "query": "cup nearest the shelfs",
+      "target_id": 32,
+      "instance_type": "cup",
+      "stimulus_id": "scene0378_00-cup-2-32-31",
+      "stimulus_candidate_ids": [
+        32,
+        31
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 923,
+      "scene": "scene0203_00",
+      "query": "The grey pillow under the brown blanket near the papason",
+      "target_id": 17,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0203_00-pillow-4-17-14-15-25",
+      "stimulus_candidate_ids": [
+        17,
+        14,
+        15,
+        25
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 18369,
+      "scene": "scene0329_00",
+      "query": "It is the couch that does not have a bag on it.",
+      "target_id": 2,
+      "instance_type": "couch",
+      "stimulus_id": "scene0329_00-couch-2-2-1",
+      "stimulus_candidate_ids": [
+        2,
+        1
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 24174,
+      "scene": "scene0030_00",
+      "query": "It is the table directly under the chalkboard.",
+      "target_id": 50,
+      "instance_type": "table",
+      "stimulus_id": "scene0030_00-table-5-50-47-48-49-51",
+      "stimulus_candidate_ids": [
+        50,
+        47,
+        48,
+        49,
+        51
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 13007,
+      "scene": "scene0704_00",
+      "query": "Of the group of 3 pictures, choose the small one on the right.",
+      "target_id": 22,
+      "instance_type": "picture",
+      "stimulus_id": "scene0704_00-picture-4-22-10-11-25",
+      "stimulus_candidate_ids": [
+        22,
+        10,
+        11,
+        25
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 20532,
+      "scene": "scene0552_00",
+      "query": "It is the trash can to the right of the copy machine.",
+      "target_id": 16,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0552_00-trash_can-2-16-32",
+      "stimulus_candidate_ids": [
+        16,
+        32
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 1168,
+      "scene": "scene0648_00",
+      "query": "Directly next to the bed (pillow side) you will find a desk.  On the desk are two books on the far left.  you are looking for the darker book that has white pages.",
+      "target_id": 6,
+      "instance_type": "book",
+      "stimulus_id": "scene0648_00-book-2-6-5",
+      "stimulus_candidate_ids": [
+        6,
+        5
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 21796,
+      "scene": "scene0647_00",
+      "query": "The sofa that is against the wall facing the ping pong table",
+      "target_id": 20,
+      "instance_type": "couch",
+      "stimulus_id": "scene0647_00-couch-2-20-1",
+      "stimulus_candidate_ids": [
+        20,
+        1
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 33399,
+      "scene": "scene0314_00",
+      "query": "when facing the table, the office chair is the one that's at the table and on the right.",
+      "target_id": 8,
+      "instance_type": "office chair",
+      "stimulus_id": "scene0314_00-office_chair-4-8-3-4-7",
+      "stimulus_candidate_ids": [
+        8,
+        3,
+        4,
+        7
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 16020,
+      "scene": "scene0644_00",
+      "query": "The cabinet furthest away from the brown door.",
+      "target_id": 61,
+      "instance_type": "cabinet",
+      "stimulus_id": "scene0644_00-cabinet-2-61-8",
+      "stimulus_candidate_ids": [
+        61,
+        8
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 30805,
+      "scene": "scene0144_00",
+      "query": "The dresser opposite of the bed.",
+      "target_id": 14,
+      "instance_type": "dresser",
+      "stimulus_id": "scene0144_00-dresser-2-14-18",
+      "stimulus_candidate_ids": [
+        14,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 9410,
+      "scene": "scene0645_00",
+      "query": "The highest soap dish on the wall in the shower.",
+      "target_id": 83,
+      "instance_type": "soap dish",
+      "stimulus_id": "scene0645_00-soap_dish-3-83-75-84",
+      "stimulus_candidate_ids": [
+        83,
+        75,
+        84
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 31782,
+      "scene": "scene0357_00",
+      "query": "The shelf is at the bottom of the stairs in the corner.",
+      "target_id": 10,
+      "instance_type": "shelf",
+      "stimulus_id": "scene0357_00-shelf-2-10-27",
+      "stimulus_candidate_ids": [
+        10,
+        27
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 14787,
+      "scene": "scene0647_00",
+      "query": "the door with a large knob.",
+      "target_id": 16,
+      "instance_type": "door",
+      "stimulus_id": "scene0647_00-door-2-16-22",
+      "stimulus_candidate_ids": [
+        16,
+        22
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 29651,
+      "scene": "scene0565_00",
+      "query": "the tall black desk with the rolling chair tucked underneath",
+      "target_id": 12,
+      "instance_type": "desk",
+      "stimulus_id": "scene0565_00-desk-2-12-13",
+      "stimulus_candidate_ids": [
+        12,
+        13
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 39960,
+      "scene": "scene0086_00",
+      "query": "toilet in the larger stall.",
+      "target_id": 6,
+      "instance_type": "toilet",
+      "stimulus_id": "scene0086_00-toilet-2-6-7",
+      "stimulus_candidate_ids": [
+        6,
+        7
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 27951,
+      "scene": "scene0670_00",
+      "query": "The small trash can next to the big trash can",
+      "target_id": 3,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0670_00-trash_can-3-3-24-25",
+      "stimulus_candidate_ids": [
+        3,
+        24,
+        25
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 26077,
+      "scene": "scene0221_00",
+      "query": "If you just walk through the door, the trash can on the right that's the farthest away.",
+      "target_id": 30,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0221_00-trash_can-3-30-17-48",
+      "stimulus_candidate_ids": [
+        30,
+        17,
+        48
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 40316,
+      "scene": "scene0187_00",
+      "query": "The correct chair is not against a wall. It has a backpack directly behind it. It is closest to the middle of the room.",
+      "target_id": 13,
+      "instance_type": "chair",
+      "stimulus_id": "scene0187_00-chair-4-13-0-1-14",
+      "stimulus_candidate_ids": [
+        13,
+        0,
+        1,
+        14
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 31834,
+      "scene": "scene0645_00",
+      "query": "Looking straight at the the tv, the backpack directly to its left.",
+      "target_id": 3,
+      "instance_type": "backpack",
+      "stimulus_id": "scene0645_00-backpack-3-3-0-14",
+      "stimulus_candidate_ids": [
+        3,
+        0,
+        14
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 31037,
+      "scene": "scene0608_00",
+      "query": "The pillow on the bed closest to the wall.",
+      "target_id": 27,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0608_00-pillow-2-27-25",
+      "stimulus_candidate_ids": [
+        27,
+        25
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 24075,
+      "scene": "scene0644_00",
+      "query": "With the door to the room on the right hand side, choose the keyboard that is furthest to the right.",
+      "target_id": 41,
+      "instance_type": "keyboard",
+      "stimulus_id": "scene0644_00-keyboard-5-41-38-40-43-57",
+      "stimulus_candidate_ids": [
+        41,
+        38,
+        40,
+        43,
+        57
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 33190,
+      "scene": "scene0490_00",
+      "query": "looking at the wall with tv from the end of the table, the whiteboard on the right.",
+      "target_id": 13,
+      "instance_type": "whiteboard",
+      "stimulus_id": "scene0490_00-whiteboard-2-13-14",
+      "stimulus_candidate_ids": [
+        13,
+        14
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 22907,
+      "scene": "scene0599_00",
+      "query": "The brighter looking window",
+      "target_id": 14,
+      "instance_type": "window",
+      "stimulus_id": "scene0599_00-window-2-14-12",
+      "stimulus_candidate_ids": [
+        14,
+        12
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 12947,
+      "scene": "scene0500_00",
+      "query": "When facing the five windows, it is 2nd from left.",
+      "target_id": 27,
+      "instance_type": "window",
+      "stimulus_id": "scene0500_00-window-5-27-23-25-26-28",
+      "stimulus_candidate_ids": [
+        27,
+        23,
+        25,
+        26,
+        28
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 34170,
+      "scene": "scene0655_00",
+      "query": "The chair at the end of the table below the white board.",
+      "target_id": 21,
+      "instance_type": "chair",
+      "stimulus_id": "scene0655_00-chair-2-21-19",
+      "stimulus_candidate_ids": [
+        21,
+        19
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 30667,
+      "scene": "scene0474_00",
+      "query": "The backpack on the floor.",
+      "target_id": 8,
+      "instance_type": "backpack",
+      "stimulus_id": "scene0474_00-backpack-2-8-9",
+      "stimulus_candidate_ids": [
+        8,
+        9
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 38662,
+      "scene": "scene0246_00",
+      "query": "The mirror is located above the vanity that is located outside the washroom",
+      "target_id": 36,
+      "instance_type": "mirror",
+      "stimulus_id": "scene0246_00-mirror-2-36-32",
+      "stimulus_candidate_ids": [
+        36,
+        32
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 11947,
+      "scene": "scene0077_00",
+      "query": "largest out of the trash cans",
+      "target_id": 8,
+      "instance_type": "trash can",
+      "stimulus_id": "scene0077_00-trash_can-2-8-13",
+      "stimulus_candidate_ids": [
+        8,
+        13
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 14756,
+      "scene": "scene0494_00",
+      "query": "If you were standing with your back to the waste basket, this chair would be the one nearest to you on your left as you face the desk.",
+      "target_id": 1,
+      "instance_type": "chair",
+      "stimulus_id": "scene0494_00-chair-4-1-2-3-11",
+      "stimulus_candidate_ids": [
+        1,
+        2,
+        3,
+        11
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 24198,
+      "scene": "scene0351_00",
+      "query": "if looking at the window, the chair in the back left corner.",
+      "target_id": 2,
+      "instance_type": "chair",
+      "stimulus_id": "scene0351_00-chair-4-2-0-1-3",
+      "stimulus_candidate_ids": [
+        2,
+        0,
+        1,
+        3
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 18914,
+      "scene": "scene0702_00",
+      "query": "It is the toilet paper on top.",
+      "target_id": 7,
+      "instance_type": "toilet paper",
+      "stimulus_id": "scene0702_00-toilet_paper-2-7-8",
+      "stimulus_candidate_ids": [
+        7,
+        8
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 37932,
+      "scene": "scene0653_00",
+      "query": "The white box with a small brown box on top of it.",
+      "target_id": 51,
+      "instance_type": "box",
+      "stimulus_id": "scene0653_00-box-4-51-32-38-52",
+      "stimulus_candidate_ids": [
+        51,
+        32,
+        38,
+        52
+      ],
+      "stage": "compound_size_language",
+      "size_form": "adjective",
+      "size_words": [
+        "small"
+      ],
+      "size_scope": "target_likely",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 36164,
+      "scene": "scene0686_00",
+      "query": "Pick the toilet that has the seat down.",
+      "target_id": 24,
+      "instance_type": "toilet",
+      "stimulus_id": "scene0686_00-toilet-2-24-23",
+      "stimulus_candidate_ids": [
+        24,
+        23
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 25931,
+      "scene": "scene0549_00",
+      "query": "The window on the right when facing the wall.",
+      "target_id": 30,
+      "instance_type": "window",
+      "stimulus_id": "scene0549_00-window-2-30-31",
+      "stimulus_candidate_ids": [
+        30,
+        31
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 37030,
+      "scene": "scene0458_00",
+      "query": "The bottom soap dish with orange shampoo bottle on it.",
+      "target_id": 11,
+      "instance_type": "soap dish",
+      "stimulus_id": "scene0458_00-soap_dish-3-11-9-10",
+      "stimulus_candidate_ids": [
+        11,
+        9,
+        10
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 26544,
+      "scene": "scene0643_00",
+      "query": "In about the center of one wall there is what appears to be a white mini fridge, look directly across from it and you will see a brown chair.",
+      "target_id": 4,
+      "instance_type": "chair",
+      "stimulus_id": "scene0643_00-chair-5-4-2-3-5-6",
+      "stimulus_candidate_ids": [
+        4,
+        2,
+        3,
+        5,
+        6
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 16833,
+      "scene": "scene0144_00",
+      "query": "It is the chair closest to the bed.",
+      "target_id": 3,
+      "instance_type": "chair",
+      "stimulus_id": "scene0144_00-chair-2-3-4",
+      "stimulus_candidate_ids": [
+        3,
+        4
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 32884,
+      "scene": "scene0063_00",
+      "query": "from the kitchen, the chair at the counter on the left, away from the wall",
+      "target_id": 6,
+      "instance_type": "chair",
+      "stimulus_id": "scene0063_00-chair-4-6-4-5-7",
+      "stimulus_candidate_ids": [
+        6,
+        4,
+        5,
+        7
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 33611,
+      "scene": "scene0580_00",
+      "query": "The backpack on the floor next to the ipad on the bed",
+      "target_id": 9,
+      "instance_type": "backpack",
+      "stimulus_id": "scene0580_00-backpack-2-9-16",
+      "stimulus_candidate_ids": [
+        9,
+        16
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 36297,
+      "scene": "scene0328_00",
+      "query": "When facing the kitchen sink, choose the sign farthest to the right.",
+      "target_id": 30,
+      "instance_type": "sign",
+      "stimulus_id": "scene0328_00-sign-4-30-27-28-29",
+      "stimulus_candidate_ids": [
+        30,
+        27,
+        28,
+        29
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 37924,
+      "scene": "scene0203_00",
+      "query": "The blanket is stacked on top of other blankets",
+      "target_id": 16,
+      "instance_type": "blanket",
+      "stimulus_id": "scene0203_00-blanket-2-16-18",
+      "stimulus_candidate_ids": [
+        16,
+        18
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 16989,
+      "scene": "scene0187_00",
+      "query": "Choose the single tan chair that has the black cord laying on the floor beside of it.",
+      "target_id": 1,
+      "instance_type": "chair",
+      "stimulus_id": "scene0187_00-chair-4-1-0-13-14",
+      "stimulus_candidate_ids": [
+        1,
+        0,
+        13,
+        14
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 8354,
+      "scene": "scene0552_00",
+      "query": "Facing he copiers, the table by itself.",
+      "target_id": 11,
+      "instance_type": "table",
+      "stimulus_id": "scene0552_00-table-3-11-9-10",
+      "stimulus_candidate_ids": [
+        11,
+        9,
+        10
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 7134,
+      "scene": "scene0665_00",
+      "query": "It is the only desk against a wall.",
+      "target_id": 18,
+      "instance_type": "table",
+      "stimulus_id": "scene0665_00-table-5-18-15-16-17-19",
+      "stimulus_candidate_ids": [
+        18,
+        15,
+        16,
+        17,
+        19
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 23597,
+      "scene": "scene0030_00",
+      "query": "the shelf touching the left side of the white door.",
+      "target_id": 17,
+      "instance_type": "bookshelf",
+      "stimulus_id": "scene0030_00-bookshelf-5-17-18-19-20-68",
+      "stimulus_candidate_ids": [
+        17,
+        18,
+        19,
+        20,
+        68
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 7159,
+      "scene": "scene0187_00",
+      "query": "Light brown tan table with a green stool underneath it.",
+      "target_id": 8,
+      "instance_type": "table",
+      "stimulus_id": "scene0187_00-table-3-8-6-7",
+      "stimulus_candidate_ids": [
+        8,
+        6,
+        7
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 22049,
+      "scene": "scene0701_00",
+      "query": "L shaped couch",
+      "target_id": 0,
+      "instance_type": "couch",
+      "stimulus_id": "scene0701_00-couch-2-0-3",
+      "stimulus_candidate_ids": [
+        0,
+        3
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": false
+    },
+    {
+      "csv_row": 24215,
+      "scene": "scene0221_00",
+      "query": "bag on a table",
+      "target_id": 31,
+      "instance_type": "bag",
+      "stimulus_id": "scene0221_00-bag-3-31-18-19",
+      "stimulus_candidate_ids": [
+        31,
+        18,
+        19
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 13589,
+      "scene": "scene0203_00",
+      "query": "couch that is multicolored pattern with two pillows",
+      "target_id": 3,
+      "instance_type": "couch",
+      "stimulus_id": "scene0203_00-couch-3-3-2-26",
+      "stimulus_candidate_ids": [
+        3,
+        2,
+        26
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 21430,
+      "scene": "scene0329_00",
+      "query": "monitor facing black chair",
+      "target_id": 12,
+      "instance_type": "monitor",
+      "stimulus_id": "scene0329_00-monitor-5-12-30-31-32-33",
+      "stimulus_candidate_ids": [
+        12,
+        30,
+        31,
+        32,
+        33
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    }
+  ]
+}

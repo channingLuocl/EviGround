@@ -1,0 +1,53 @@
+{
+  "frozen_before_fix": {
+    "returncode": 1,
+    "summary": [
+      "Ran 101 tests in 1.676s",
+      "FAILED (failures=12, errors=3, skipped=1)"
+    ],
+    "failed_checks": [
+      "test_explicit_legacy_token_parameter_and_temperature_do_not_auto_retry (local.test_openai_api.OpenAIAPITests.test_explicit_legacy_token_parameter_and_temperature_do_not_auto_retry)",
+      "test_attribute_repair_uses_its_own_contract (local.test_v62_structured_outputs.StructuredOutputsTests.test_attribute_repair_uses_its_own_contract)",
+      "test_visual_report_uses_strict_contract_without_certifying_unknown (local.test_v62_structured_outputs.StructuredOutputsTests.test_visual_report_uses_strict_contract_without_certifying_unknown)",
+      "test_invalid_parameter_configuration_fails_before_network (local.test_openai_api.OpenAIAPITests.test_invalid_parameter_configuration_fails_before_network) (variable='SEEGROUND_OPENAI_TEMPERATURE', value='nan')",
+      "test_invalid_parameter_configuration_fails_before_network (local.test_openai_api.OpenAIAPITests.test_invalid_parameter_configuration_fails_before_network) (variable='SEEGROUND_OPENAI_TEMPERATURE', value='invalid')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='not JSON')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='\\'\\'\\'json\\n{\"Target\": [\"chair\"], \"Anchor\": [], \"Relations\": [], \"Viewpoint\": \"\", \"Observer\": {\"origin\": {\"kind\": \"unspecified\", \"category\": \"\", \"phrase\": \"\"}, \"facing\": {\"category\": \"\", \"group\": false, \"phrase\": \"\"}}, \"Attributes\": [], \"Unhandled\": []}\\n\\'\\'\\'')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='{\"Anchor\": [], \"Relations\": [], \"Viewpoint\": \"\", \"Observer\": {\"origin\": {\"kind\": \"unspecified\", \"category\": \"\", \"phrase\": \"\"}, \"facing\": {\"category\": \"\", \"group\": false, \"phrase\": \"\"}}, \"Attributes\": [], \"Unhandled\": []}')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='{\"Target\": \"chair\", \"Anchor\": [], \"Relations\": [], \"Viewpoint\": \"\", \"Observer\": {\"origin\": {\"kind\": \"unspecified\", \"category\": \"\", \"phrase\": \"\"}, \"facing\": {\"category\": \"\", \"group\": false, \"phrase\": \"\"}}, \"Attributes\": [], \"Unhandled\": []}')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='{\"Target\": [\"chair\"], \"Anchor\": [], \"Relations\": [], \"Viewpoint\": \"\", \"Observer\": {\"origin\": {\"kind\": \"unspecified\", \"category\": \"\", \"phrase\": \"\"}, \"facing\": {\"category\": \"\", \"group\": false, \"phrase\": \"\"}}, \"Attributes\": [], \"Unhandled\": [], \"invented\": true}')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='{\"Target\": [\"chair\"], \"Anchor\": [], \"Relations\": [], \"Viewpoint\": \"\", \"Observer\": {\"origin\": {\"kind\": \"guessed\", \"category\": \"\", \"phrase\": \"\"}, \"facing\": {\"category\": \"\", \"group\": false, \"phrase\": \"\"}}, \"Attributes\": [], \"Unhandled\": []}')",
+      "test_real_parser_sends_strict_schema_and_records_actual_format (local.test_v62_structured_outputs.StructuredOutputsTests.test_real_parser_sends_strict_schema_and_records_actual_format)",
+      "test_transient_retry_preserves_the_strict_schema (local.test_v62_structured_outputs.StructuredOutputsTests.test_transient_retry_preserves_the_strict_schema)",
+      "test_unsupported_schema_is_not_silently_downgraded (local.test_v62_structured_outputs.StructuredOutputsTests.test_unsupported_schema_is_not_silently_downgraded)",
+      "test_v62_opt_in_enables_v6_and_records_version (local.test_v62_structured_outputs.StructuredOutputsTests.test_v62_opt_in_enables_v6_and_records_version)"
+    ]
+  },
+  "current_fix_isolated": {
+    "returncode": 1,
+    "summary": [
+      "Ran 110 tests in 1.477s",
+      "FAILED (failures=12, errors=3, skipped=1)"
+    ],
+    "failed_checks": [
+      "test_explicit_legacy_token_parameter_and_temperature_do_not_auto_retry (local.test_openai_api.OpenAIAPITests.test_explicit_legacy_token_parameter_and_temperature_do_not_auto_retry)",
+      "test_attribute_repair_uses_its_own_contract (local.test_v62_structured_outputs.StructuredOutputsTests.test_attribute_repair_uses_its_own_contract)",
+      "test_visual_report_uses_strict_contract_without_certifying_unknown (local.test_v62_structured_outputs.StructuredOutputsTests.test_visual_report_uses_strict_contract_without_certifying_unknown)",
+      "test_invalid_parameter_configuration_fails_before_network (local.test_openai_api.OpenAIAPITests.test_invalid_parameter_configuration_fails_before_network) (variable='SEEGROUND_OPENAI_TEMPERATURE', value='nan')",
+      "test_invalid_parameter_configuration_fails_before_network (local.test_openai_api.OpenAIAPITests.test_invalid_parameter_configuration_fails_before_network) (variable='SEEGROUND_OPENAI_TEMPERATURE', value='invalid')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='not JSON')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='\\'\\'\\'json\\n{\"Target\": [\"chair\"], \"Anchor\": [], \"Relations\": [], \"Viewpoint\": \"\", \"Observer\": {\"origin\": {\"kind\": \"unspecified\", \"category\": \"\", \"phrase\": \"\"}, \"facing\": {\"category\": \"\", \"group\": false, \"phrase\": \"\"}}, \"Attributes\": [], \"Unhandled\": []}\\n\\'\\'\\'')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='{\"Anchor\": [], \"Relations\": [], \"Viewpoint\": \"\", \"Observer\": {\"origin\": {\"kind\": \"unspecified\", \"category\": \"\", \"phrase\": \"\"}, \"facing\": {\"category\": \"\", \"group\": false, \"phrase\": \"\"}}, \"Attributes\": [], \"Unhandled\": []}')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='{\"Target\": \"chair\", \"Anchor\": [], \"Relations\": [], \"Viewpoint\": \"\", \"Observer\": {\"origin\": {\"kind\": \"unspecified\", \"category\": \"\", \"phrase\": \"\"}, \"facing\": {\"category\": \"\", \"group\": false, \"phrase\": \"\"}}, \"Attributes\": [], \"Unhandled\": []}')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='{\"Target\": [\"chair\"], \"Anchor\": [], \"Relations\": [], \"Viewpoint\": \"\", \"Observer\": {\"origin\": {\"kind\": \"unspecified\", \"category\": \"\", \"phrase\": \"\"}, \"facing\": {\"category\": \"\", \"group\": false, \"phrase\": \"\"}}, \"Attributes\": [], \"Unhandled\": [], \"invented\": true}')",
+      "test_invalid_schema_output_is_rejected_once_without_fallback (local.test_v62_structured_outputs.StructuredOutputsTests.test_invalid_schema_output_is_rejected_once_without_fallback) (content='{\"Target\": [\"chair\"], \"Anchor\": [], \"Relations\": [], \"Viewpoint\": \"\", \"Observer\": {\"origin\": {\"kind\": \"guessed\", \"category\": \"\", \"phrase\": \"\"}, \"facing\": {\"category\": \"\", \"group\": false, \"phrase\": \"\"}}, \"Attributes\": [], \"Unhandled\": []}')",
+      "test_real_parser_sends_strict_schema_and_records_actual_format (local.test_v62_structured_outputs.StructuredOutputsTests.test_real_parser_sends_strict_schema_and_records_actual_format)",
+      "test_transient_retry_preserves_the_strict_schema (local.test_v62_structured_outputs.StructuredOutputsTests.test_transient_retry_preserves_the_strict_schema)",
+      "test_unsupported_schema_is_not_silently_downgraded (local.test_v62_structured_outputs.StructuredOutputsTests.test_unsupported_schema_is_not_silently_downgraded)",
+      "test_v62_opt_in_enables_v6_and_records_version (local.test_v62_structured_outputs.StructuredOutputsTests.test_v62_opt_in_enables_v6_and_records_version)"
+    ]
+  },
+  "new_failed_checks": [],
+  "note": "Older tests include remote json_schema and no-format-retry contracts that differ from authorized json_object + local validation + retries. These older tests are not claimed passing.",
+  "test_isolation_fix": "R18 test setup explicitly selects OpenAI instead of relying on local .env; production Python modules remain unchanged."
+}

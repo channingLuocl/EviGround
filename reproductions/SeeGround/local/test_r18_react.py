@@ -14,6 +14,7 @@ from test_r8_grounding import prediction
 class ReactTests(unittest.TestCase):
     def setUp(self):
         env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1',
+            'SEEGROUND_API_PROVIDER': 'openai',
             'SEEGROUND_V7_4': '1', 'SEEGROUND_V9': '1', 'SEEGROUND_V9_SOURCE': 'r8',
             'SEEGROUND_R8_GROUNDING_REVISION': 'r18'})
         env.start(); self.addCleanup(env.stop)

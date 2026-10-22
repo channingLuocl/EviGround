@@ -1,0 +1,65 @@
+{
+  "purpose": "Development stress smoke for relay/context/budget failures, not representative or independent accuracy",
+  "source_commit": "eb261cea6f4e91afa9dd01ee523303efaa58b73f",
+  "source_manifest": "smoke8_manifest.json",
+  "output_directory": "smoke8_exported",
+  "run_revision": "r18",
+  "model": "gpt-6.1-sol",
+  "thinking_token_floor": 8192,
+  "category_top_k": 5,
+  "single_pass": true,
+  "cumulative": false,
+  "total": 8,
+  "correct": 3,
+  "overall": 0.375,
+  "fatal_errors": 0,
+  "predictions": 8,
+  "candidate_recall": 1.0,
+  "maximum_react_images": 4,
+  "maximum_react_state_chars": 113029,
+  "maximum_reported_prompt_tokens": 93742,
+  "gt_input_audit": [
+    {
+      "row": 48,
+      "gt_categories_supplied": false,
+      "target_id_supplied": false
+    },
+    {
+      "row": 1154,
+      "gt_categories_supplied": false,
+      "target_id_supplied": false
+    },
+    {
+      "row": 1445,
+      "gt_categories_supplied": false,
+      "target_id_supplied": false
+    },
+    {
+      "row": 6030,
+      "gt_categories_supplied": false,
+      "target_id_supplied": false
+    },
+    {
+      "row": 8956,
+      "gt_categories_supplied": false,
+      "target_id_supplied": false
+    },
+    {
+      "row": 34902,
+      "gt_categories_supplied": false,
+      "target_id_supplied": false
+    },
+    {
+      "row": 35075,
+      "gt_categories_supplied": false,
+      "target_id_supplied": false
+    },
+    {
+      "row": 35103,
+      "gt_categories_supplied": false,
+      "target_id_supplied": false
+    }
+  ],
+  "unit_tests_passed": 56,
+  "next_gate": "Complete fixed dev32, then fresh holdout192, then all 7805; full goal remains unverified."
+}

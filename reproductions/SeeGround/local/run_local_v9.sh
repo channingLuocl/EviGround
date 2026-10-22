@@ -7,6 +7,11 @@ if [[ -f .env ]]; then
   source .env
   set +a
 fi
+if [[ -n "${SEEGROUND_API_PROFILE:-}" ]]; then
+  set -a
+  source "$SEEGROUND_API_PROFILE"
+  set +a
+fi
 export SEEGROUND_V4=1 SEEGROUND_V7=1 SEEGROUND_V7_4=1 SEEGROUND_V9=1
 export SEEGROUND_V7_2=0 SEEGROUND_V7_3=0
 export PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=local
