@@ -162,6 +162,11 @@ class ReactTests(unittest.TestCase):
             self.action('finish', oid=1)], limit=1)
         states = [json.loads(call.args[0][1]['content'][0]['text']) for call in model.call_args_list]
         self.assertEqual([s['remaining_tool_calls'] for s in states], [1, 1, 0])
+        self.assertEqual([s['available_actions'] for s in states],
+                         [['inspect', 'measure', 'finish'], ['inspect', 'measure', 'finish'], ['finish']])
+        for state, call in zip(states, model.call_args_list):
+            self.assertEqual(state['available_actions'],
+                             call.kwargs['response_schema']['schema']['properties']['action']['enum'])
         self.assertEqual(states[-1]['decision_phase'], 'final_choice')
         self.assertIn('acquisition is CLOSED', model.call_args.args[0][0]['content'])
         self.assertEqual(model.call_args.kwargs['response_schema']['schema']['properties']['action']['enum'], ['finish'])

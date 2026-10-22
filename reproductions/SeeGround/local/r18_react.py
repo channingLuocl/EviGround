@@ -19,6 +19,11 @@ Read the scene, compare the plausible target instances, and request the next obs
 distinguish them. Then reconsider the alternatives using the returned evidence. There is no fixed
 sequence of tools. Every request and final choice must be grounded in the original description.
 
+This application executes the JSON actions you return. inspect and measure are available through
+this JSON interface, even though there are no native API function-call tools. Return the requested
+action object; the application will execute it and supply the observation on your next turn.
+The state's available_actions and remaining_tool_calls describe what you can request now.
+
 Actions:
 - inspect: render 1-12 focus_ids in panels of at most 6, including targets AND references. Use isolated to compare
   category, shape, texture or color without contamination. Use scene to see their physical context.
@@ -303,10 +308,12 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
         final_only = remaining == 0
         state = {**payload, 'observations': compact_observations(observations),
                  'previous_actions': actions, 'remaining_tool_calls': remaining,
+                 'available_actions': ['finish'] if final_only else ['inspect', 'measure', 'finish'],
                  'decision_phase': 'final_choice' if final_only else 'evidence_acquisition',
                  'instruction': ('Tool budget exhausted: return action=finish using the supplied evidence. '
                                  'Disclose unresolved assumptions; do not request inspect/measure.'
-                                 if final_only else 'Select the next useful observation or finish.'),
+                                 if final_only else 'Request inspect or measure by returning its JSON action; '
+                                 'the application will execute it. Select useful evidence or finish.'),
                  'views': [{k: v for k, v in view.items() if k in
                             ('kind', 'marked_ids', 'focus_ids', 'context', 'azimuth_deg', 'elevation_deg', 'layout')}
                            for view in attached]}
