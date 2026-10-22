@@ -1,0 +1,122 @@
+{
+  "observed_at": "2026-10-22T04:15:33.817228+00:00",
+  "purpose": "Observed first JSON actions only; relay 502 prevents an accuracy conclusion",
+  "not_full7805_result": true,
+  "source_change": "ReAct JSON action interface clarification only",
+  "arms": {
+    "baseline5": {
+      "expected": 5,
+      "recorded_evaluations": 4,
+      "fatal_errors": 4,
+      "first_actions_observed": 4,
+      "first_inspect": 0,
+      "first_finish": 4,
+      "cases": [
+        {
+          "csv_row": 212,
+          "evaluation_correct": false,
+          "fatal_error": true,
+          "first_action": "finish",
+          "first_reason": "Essential evidence is unavailable: the step ladder is not identified, and the bed-foot viewing frame is unverified. Pillow 43 is a plausible candidate, but the supplied overview cannot establish all clauses or distinguish it conclusively from pillow 42.",
+          "first_call_final_only": false,
+          "run_sha256": "3c7a2a614e56c0dbb5a2357fdc176615fdbd4018156fbb396d0ab6fcd408e559",
+          "error_http_status": 502
+        },
+        {
+          "csv_row": 213,
+          "evaluation_correct": false,
+          "fatal_error": true,
+          "first_action": "finish",
+          "first_reason": "The supplied views do not establish which pillow is bottom-left in the described observer frame. No further inspection or measurement is available, so selecting an ID would require unsupported assumptions.",
+          "first_call_final_only": false,
+          "run_sha256": "6c3d07245a19062f23324d178d46f8f1a7f9c14a6094ca1b534f3fd0a5852119",
+          "error_http_status": 502
+        },
+        {
+          "csv_row": 231,
+          "evaluation_correct": false,
+          "fatal_error": true,
+          "first_action": "finish",
+          "first_reason": "Essential evidence is unavailable: the overview does not establish the intended book group or observer-relative left. No inspection or directional measurements are available to distinguish the candidates reliably.",
+          "first_call_final_only": false,
+          "run_sha256": "17c0dc238be6920f92ab6f751a9e3d2abb7ce57d19bde840fd74404c06eacb82",
+          "error_http_status": 502
+        },
+        {
+          "csv_row": 232,
+          "evaluation_correct": false,
+          "fatal_error": true,
+          "first_action": "finish",
+          "first_reason": "Essential evidence is unavailable: the overview does not reliably distinguish a red book among IDs 5, 6, 7, 8, 12, and 47. No inspection or support measurement is available to resolve the target without guessing.",
+          "first_call_final_only": false,
+          "run_sha256": "3a1d611d43e15f0d530317501ccdcd1fb83f46eda8c1aab66cb87ee6c8fd80f5",
+          "error_http_status": 502
+        },
+        {
+          "csv_row": 233
+        }
+      ]
+    },
+    "contract5": {
+      "expected": 5,
+      "recorded_evaluations": 5,
+      "fatal_errors": 4,
+      "first_actions_observed": 5,
+      "first_inspect": 5,
+      "first_finish": 0,
+      "cases": [
+        {
+          "csv_row": 212,
+          "evaluation_correct": false,
+          "fatal_error": true,
+          "first_action": "inspect",
+          "first_reason": "Identify the bed's head and foot, verify which small object is the step ladder, and compare the left-side pillows and their vertical placement without treating overview image-left as speaker-left.",
+          "first_call_final_only": false,
+          "run_sha256": "d9d56f6c57eeb8addbdc55af7adee77e34ff69333ab8e46c549ae2ff16614932",
+          "error_http_status": 502
+        },
+        {
+          "csv_row": 213,
+          "evaluation_correct": false,
+          "fatal_error": true,
+          "first_action": "inspect",
+          "first_reason": "Identify the bed's head and foot and compare pillow layers on both sides before binding speaker-left and bottom.",
+          "first_call_final_only": false,
+          "run_sha256": "ed0470613d0ac034b392aa70b17a42779ecdb6c796a168df5bfd6a7ab6daa8dc",
+          "error_http_status": 502
+        },
+        {
+          "csv_row": 231,
+          "evaluation_correct": false,
+          "fatal_error": true,
+          "first_action": "inspect",
+          "first_reason": "Compare the primary book candidates with alternative book hypotheses to establish which objects form the described books before measuring observer-relative left order.",
+          "first_call_final_only": false,
+          "run_sha256": "c9b7892fc33cd6c956b001cccac8efca293b68ab0ccd794de998fa0d30577d8b",
+          "error_http_status": 502
+        },
+        {
+          "csv_row": 232,
+          "evaluation_correct": true,
+          "fatal_error": false,
+          "first_action": "inspect",
+          "first_reason": "Compare book candidates' colors and shapes while verifying the two primary desk references; the overview does not resolve which book is red.",
+          "first_call_final_only": false,
+          "run_sha256": "c5771817216442207fb8bb3a6be9fa0b5d7e147dee027493bdd9e79eb831dfb9",
+          "error_http_status": null
+        },
+        {
+          "csv_row": 233,
+          "evaluation_correct": false,
+          "fatal_error": true,
+          "first_action": "inspect",
+          "first_reason": "Compare book hypotheses and desk references visually before binding the desk and measuring observer-relative left.",
+          "first_call_final_only": false,
+          "run_sha256": "00e918dd858b187d2211e88c80d152e4d6162a3793aaba14fdd17e144dfda79e",
+          "error_http_status": 502
+        }
+      ]
+    }
+  },
+  "both_arms_complete": false
+}

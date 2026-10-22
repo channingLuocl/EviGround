@@ -1,0 +1,20 @@
+[
+  {
+    "observed_at": "2026-10-22T04:10:37.227677+00:00",
+    "purpose": "Multimodal relay availability probe; no benchmark query or GT input",
+    "image_count": 1,
+    "image_bytes": 281132,
+    "status": 200,
+    "elapsed_s": 12.328,
+    "body_excerpt": "{\"id\":\"resp_0d1477ba9a6b6348016ad98cc4019887d298cd42a5a2fdd780\",\"object\":\"chat.completion\",\"created\":1792642249,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":23678,\"completion_tokens\":9,\"total_tokens\":23687},\"service_tier\":\"default\"}"
+  },
+  {
+    "observed_at": "2026-10-22T04:10:49.557936+00:00",
+    "purpose": "Multimodal relay availability probe; no benchmark query or GT input",
+    "image_count": 4,
+    "image_bytes": 1590213,
+    "status": 200,
+    "elapsed_s": 29.375,
+    "body_excerpt": "{\"id\":\"resp_0030572df889064c016ad98ce1236087d29a99185c5baf2c9c\",\"object\":\"chat.completion\",\"created\":1792642278,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":27366,\"completion_tokens\":9,\"total_tokens\":27375},\"service_tier\":\"default\"}"
+  }
+]

@@ -1,0 +1,28 @@
+{
+  "observed_at": "2026-10-22T04:13:22.452339+00:00",
+  "health_evidence": "outputs/r18_json_action_contract_20261022/relay_image_health_20261022T041118Z.json",
+  "resumed_same_processes": [
+    {
+      "pid": 58411,
+      "output_marker": "fresh_validation192",
+      "signal": "SIGCONT"
+    },
+    {
+      "pid": 62112,
+      "output_marker": "v74_r18_gpt61_context_budget_full7805_20261022",
+      "signal": "SIGCONT"
+    },
+    {
+      "pid": 65235,
+      "output_marker": "contract5",
+      "signal": "SIGCONT"
+    },
+    {
+      "pid": 65236,
+      "output_marker": "baseline5",
+      "signal": "SIGCONT"
+    }
+  ],
+  "previous_failures_preserved": true,
+  "source_unchanged": true
+}
