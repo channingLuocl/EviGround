@@ -1,0 +1,15 @@
+{
+  "checked_at": "2026-10-22T05:42:33.313342+00:00",
+  "checks": {
+    "all_152_inference_hashes_match": true,
+    "original_manifest_bytes_unchanged": true,
+    "all_2889_outcomes_unchanged": true,
+    "prepare_only_accepted_original_manifest": true,
+    "old_run_not_already_complete": true,
+    "new_experiments_stopped": true
+  },
+  "passed": true,
+  "initial_recorded": 2889,
+  "remaining": 4916,
+  "prepare_started_inference": false
+}
