@@ -1,0 +1,20 @@
+{
+  "expected_total": 8,
+  "recorded": 8,
+  "correct": 3,
+  "predictions": 8,
+  "fatal_errors": 0,
+  "category_gate_abstentions": 0,
+  "full_selected_denominator_accuracy": 0.375,
+  "missing_rows": [],
+  "structural_issues": [],
+  "verified_complete": true,
+  "threshold": 0.66,
+  "threshold_passed": false,
+  "cumulative": false,
+  "checked_at": "2026-10-22T05:04:56.371329+00:00",
+  "scope": "Fixed failure-focused mechanism smoke; not an independent benchmark estimate",
+  "benchmark_verified_complete": false,
+  "run": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r18_qwen37_token_plan_smoke8_measurefix_20261022",
+  "source_commit": "fd2ebe86e2ed47fbad0e947c7d6e733a349e3e76"
+}
