@@ -33,6 +33,41 @@ ACTION_SCHEMA = {
 
 
 class RelayActionFormatTests(unittest.TestCase):
+    def test_scene_prose_without_explicit_focus_is_not_an_action(self):
+        for content in ['I will inspect the scene first.', 'Let me measure the objects.',
+                        'inspect()', 'inspect: focus_ids=[]']:
+            with self.subTest(content=content):
+                self.assertIsNone(parse_r18_action_content(content))
+
+    def test_empty_focus_is_a_format_error_and_retried_before_any_tool(self):
+        def response(focus):
+            data = {'choices': [{'message': {'content': json.dumps({
+                'action': 'inspect', 'focus_ids': focus, 'context': 'isolated'})},
+                'finish_reason': 'stop'}], 'usage': {}}
+            result = unittest.mock.Mock(ok=True, status_code=200, headers={}, text=json.dumps(data))
+            result.json.return_value = data
+            return result
+        schema = {'name': 'r18_react_action', 'strict': True, 'schema': ACTION_SCHEMA}
+        with patch('qwen_api.api_provider', return_value='openai'), \
+                patch('qwen_api._settings', return_value=('https://example.invalid/v1', 'test-model', 'test-key')), \
+                patch('qwen_api.api_request_slot', return_value=nullcontext(0.0)), \
+                patch('qwen_api.requests.post', side_effect=[response([]), response([1, 2])]) as post:
+            result = _chat_schema_retry([], json_mode=True, response_schema=schema)
+        self.assertEqual(json.loads(result['_content'])['focus_ids'], [1, 2])
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(result['_baseline']['schema_retry'], 1)
+
+    def test_quota_exhaustion_is_not_retried_as_a_temporary_rate_limit(self):
+        failure = QwenAPIError('quota', diagnostic={'failure_kind': 'http_4xx',
+            'http_status': 429, 'response_body': '{"code":"insufficient_quota"}'})
+        with patch('qwen_api.api_provider', return_value='openai'), \
+                patch('qwen_api._chat_once', side_effect=failure) as request, \
+                patch('qwen_api.time.sleep') as sleep:
+            with self.assertRaises(QwenAPIError):
+                _chat_schema_retry([])
+        self.assertEqual(request.call_count, 1)
+        sleep.assert_not_called()
+
     def test_openai_read_timeout_is_raised_and_qwen_default_is_unchanged(self):
         with patch('qwen_api.api_provider', return_value='openai'):
             self.assertEqual(effective_timeout((15, 120)), (15, 240))

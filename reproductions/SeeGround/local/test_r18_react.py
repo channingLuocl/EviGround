@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from r18_react import ground, measure
+from r18_react import compact_observations, current_views, ground, measure, measured_together
 from test_r8_grounding import prediction
 
 
@@ -58,7 +58,9 @@ class ReactTests(unittest.TestCase):
         self.assertEqual([o['tool'] for o in trace['r18_observations']], ['render', 'measure'])
         state = json.loads(model.call_args.args[0][1]['content'][0]['text'])
         self.assertEqual(state['observations'][0]['focus_ids'], [2])
-        self.assertEqual(len(state['observations'][1]['directed_pair_measurements']), 2)
+        encoded = state['observations'][1]['directed_pair_measurements']
+        self.assertEqual([dict(zip(encoded['columns'], row)) for row in encoded['rows']],
+                         trace['r18_observations'][1]['directed_pair_measurements'])
         self.assertNotIn('target_id', state)
         self.assertNotIn('correct', state)
         self.assertEqual(trace['final_candidate_ids'], [1])
@@ -123,10 +125,11 @@ class ReactTests(unittest.TestCase):
         self.query = 'the chair next to the desk'
         result, trace, model, renderer = self.run_actions([
             self.action('finish', oid=1), self.action('finish', oid=1),
-            self.action('finish', oid=1), self.action('finish', oid=1)],
+            self.action('finish', oid=1), self.action('finish', oid=1),
+            self.action('finish', oid=1)],
             candidate_objects=[self.objects[0], self.objects[2]])
         self.assertEqual(result['predicted_id'], 1)
-        self.assertEqual(model.call_count, 4)
+        self.assertEqual(model.call_count, 5)
         forced = trace['r18_observations'][0]
         self.assertTrue(forced['controller_forced'])
         self.assertEqual(forced['tool'], 'measure')
@@ -150,6 +153,70 @@ class ReactTests(unittest.TestCase):
         initial = trace['r18_initial_input']
         self.assertIn('center_x_m', initial['objects'][0])
         self.assertEqual(initial['objects'][0]['category_hypotheses'][1], {'category': 'stool', 'rank': 2, 'gap_from_top1': 0.25})
+
+    def test_guard_reminder_does_not_consume_evidence_budget(self):
+        self.objects[0] = prediction(1, ['stool', 'chair'])
+        result, trace, model, renderer = self.run_actions([
+            self.action('finish', oid=1), self.action('inspect', [1, 2]),
+            self.action('finish', oid=1)], limit=1)
+        states = [json.loads(call.args[0][1]['content'][0]['text']) for call in model.call_args_list]
+        self.assertEqual([s['remaining_tool_calls'] for s in states], [1, 1, 0])
+        self.assertEqual(states[-1]['decision_phase'], 'final_choice')
+        self.assertIn('acquisition is CLOSED', model.call_args.args[0][0]['content'])
+        self.assertEqual(model.call_args.kwargs['response_schema']['schema']['properties']['action']['enum'], ['finish'])
+        self.assertEqual(trace['r18_model_tool_calls'], 1)
+        self.assertEqual(trace['r18_controller_tool_calls'], 0)
+
+    def test_reference_guard_does_not_skip_visual_fallback(self):
+        self.objects.append(prediction(3, ['shelf'], (4, 0, 1)))
+        self.parsed['candidate_generation'] = {'visual_fallback_ids': [3]}
+        view = {'image': 'fallback.png', 'marked_ids': [2, 3], 'focus_ids': [2, 3]}
+        result, trace, model, renderer = self.run_actions([
+            self.action('measure', [1, 2, 3]), self.action('finish', oid=1),
+            self.action('finish', oid=1), self.action('finish', oid=1),
+            self.action('finish', oid=1)], candidate_objects=[self.objects[0], self.objects[2]],
+            render_side_effect=[view])
+        self.assertEqual(renderer.call_args.args[0]['focus_ids'], [2, 3])
+        self.assertEqual(trace['r18_model_tool_calls'], 1)
+        self.assertEqual(trace['r18_controller_tool_calls'], 1)
+        self.assertEqual(trace['r18_final_decision']['unresolved'], [])
+
+    def test_compaction_is_lossless_and_leaves_audit_evidence_unchanged(self):
+        self.objects = [prediction(i, ['chair'], (i, i % 3, 1)) for i in range(20)]
+        raw = measure(list(range(20)), self.objects, self.parsed, self.objects[:1], self.query)
+        before = json.dumps(raw, sort_keys=True)
+        encoded = compact_observations([raw])[0]['directed_pair_measurements']
+        self.assertEqual([dict(zip(encoded['columns'], row)) for row in encoded['rows']],
+                         raw['directed_pair_measurements'])
+        self.assertEqual(json.dumps(raw, sort_keys=True), before)
+        self.assertLess(len(json.dumps(compact_observations([raw]))), len(before) / 2)
+
+    def test_later_measurement_supersedes_only_same_frame_subsets(self):
+        small = measure([1], self.objects, self.parsed, self.objects[:1], self.query)
+        whole = measure([1, 2], self.objects, self.parsed, self.objects[:1], self.query)
+        self.assertEqual(len(compact_observations([small, whole])), 1)
+        small['selected_observer_frame'] = {'origin_ids': [], 'facing_ids': [2]}
+        self.assertEqual(len(compact_observations([small, whole])), 2)
+
+    def test_disjoint_measurements_do_not_establish_a_complete_comparison(self):
+        observations = [measure([i], self.objects, self.parsed, self.objects[:1], self.query)
+                        for i in (1, 2)]
+        self.assertFalse(measured_together([1, 2], observations))
+        observations.append(measure([1, 2], self.objects, self.parsed, self.objects[:1], self.query))
+        self.assertTrue(measured_together([1, 2], observations))
+
+    def test_attached_images_are_bounded_and_old_views_remain_in_result(self):
+        views = [{'image': f'view-{i}.png', 'marked_ids': [1, 2]} for i in range(4)]
+        result, trace, model, renderer = self.run_actions([
+            self.action('inspect', [1]), self.action('inspect', [2]),
+            self.action('inspect', [1]), self.action('inspect', [2]),
+            self.action('finish', oid=1)], limit=4, render_side_effect=views)
+        self.assertEqual(len(result['images']), 6)
+        self.assertEqual(renderer.call_count, 4)
+        for call in model.call_args_list:
+            self.assertLessEqual(len(call.args[0][1]['content']), 5)
+        self.assertEqual([v['image'] for v in current_views([{'image': 'overview.png'}, *views])],
+                         ['overview.png', 'view-1.png', 'view-2.png', 'view-3.png'])
 
     def test_observer_frame_uses_model_chosen_origin_and_facing(self):
         objects = [prediction(1, ['desk'], (0, 2, 1)),

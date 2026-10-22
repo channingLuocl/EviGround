@@ -133,13 +133,35 @@ def reference_review_ids(parsed, objects):
     return list(dict.fromkeys(ids))[:12]
 
 
-def measured_ids(observations):
-    ids = set()
-    for item in observations:
+def measured_together(required_ids, observations):
+    return any(item.get('tool') == 'measure' and set(required_ids).issubset(
+        row['id'] for row in item.get('objects', [])) for item in observations)
+
+
+def compact_observations(observations):
+    """Encode geometry as columnar rows; retain the original evidence in the trace."""
+    compact, covered = [], set()
+    for item in reversed(observations):
         if item.get('tool') != 'measure':
+            compact.append(item)
             continue
-        ids.update(row.get('id') for row in item.get('objects', []) if type(row.get('id')) is int)
-    return ids
+        ids = frozenset(row['id'] for row in item['objects'])
+        frame = json.dumps(item.get('selected_observer_frame'), sort_keys=True)
+        if any(ids <= previous_ids and frame == previous_frame
+               for previous_ids, previous_frame in covered):
+            continue
+        covered.add((ids, frame))
+        pairs = item['directed_pair_measurements']
+        columns = list(pairs[0]) if pairs else []
+        compact.append({**item, 'directed_pair_measurements': {
+            'columns': columns, 'rows': [[row[key] for key in columns] for row in pairs]}})
+    return list(reversed(compact))
+
+
+def current_views(views):
+    """Keep the overview and latest three images; old views can be inspected again."""
+    recent = views[-3:]
+    return recent if views[0] in recent else [views[0], *recent]
 
 
 def latest_frame_hint(actions):
@@ -272,21 +294,38 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
     guard_attempts = 0
     final_review_done = False
     reserved_evidence = False
-    for step in range(limit+5):
-        state = {**payload, 'observations': observations, 'previous_actions': actions,
-                 'remaining_tool_calls': max(0, limit-step),
+    tool_calls = 0
+    guard_prompted = False
+    budget_reminder_sent = False
+    for step in range(limit+12):
+        attached = current_views(views)
+        remaining = max(0, limit-tool_calls) + int(reserved_evidence)
+        final_only = remaining == 0
+        state = {**payload, 'observations': compact_observations(observations),
+                 'previous_actions': actions, 'remaining_tool_calls': remaining,
+                 'decision_phase': 'final_choice' if final_only else 'evidence_acquisition',
+                 'instruction': ('Tool budget exhausted: return action=finish using the supplied evidence. '
+                                 'Disclose unresolved assumptions; do not request inspect/measure.'
+                                 if final_only else 'Select the next useful observation or finish.'),
                  'views': [{k: v for k, v in view.items() if k in
                             ('kind', 'marked_ids', 'focus_ids', 'context', 'azimuth_deg', 'elevation_deg', 'layout')}
-                           for view in views]}
+                           for view in attached]}
         action_schema = json.loads(json.dumps(schema))
-        if step > limit and not reserved_evidence:
+        if final_only:
             action_schema['properties']['action'] = enum('finish')
         call = {'stage': 'r18_react_decision', 'role': 'multimodal_evidence_planner',
-                'step': step, 'images': [v['image'] for v in views]}
+                'step': step, 'images': [v['image'] for v in attached],
+                'model_tool_calls': tool_calls, 'controller_tool_calls': guard_attempts,
+                'final_only': final_only, 'state_chars': len(json.dumps(state, ensure_ascii=False))}
         calls.append(call)
-        response = chat([{'role': 'system', 'content': INSTRUCTIONS+CATEGORY_INSTRUCTIONS},
+        final_instruction = ('\nFor this turn evidence acquisition is CLOSED. The only allowed action is finish. '
+            'The supplied observations are the evidence already acquired; do not restart the scene analysis. '
+            'If an evidence obligation remains unmet, disclose it in unresolved and choose the best supported '
+            'allowed target, or null if essential evidence is unavailable. Do not call inspect or measure.'
+            if final_only else '')
+        response = chat([{'role': 'system', 'content': INSTRUCTIONS+CATEGORY_INSTRUCTIONS+final_instruction},
             {'role': 'user', 'content': [{'type': 'text', 'text': json.dumps(state, ensure_ascii=False)},
-                                      *[image_part(v['image']) for v in views]]}],
+                                      *[image_part(v['image']) for v in attached]]}],
             max_tokens=1600, json_mode=True, **schema_kwargs('r18_react_action', action_schema))
         call.update(response=response['_content'], usage=response.get('usage'), **response.get('_baseline', {}))
         if response.get('_finish_reason') != 'stop':
@@ -302,7 +341,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
             if len(allowed) > 1 and not observations:
                 missing.append('compare the multiple target candidates with one evidence observation before finishing')
             if (len(allowed) > 1 and requires_measure(query, parsed)
-                    and not set(required_ids).issubset(measured_ids(observations))):
+                    and not measured_together(required_ids, observations)):
                 missing.append('measure all target candidates and bound references for the spatial/size clause')
             unseen_references = set(reference_ids) - inspected
             if (len(allowed) > 1 and requires_measure(query, parsed) and unseen_references):
@@ -313,11 +352,10 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
             unseen_fallback = sorted(fallback_ids - inspected)
             if (len(allowed) > 1 and requires_measure(query, parsed) and unseen_fallback):
                 missing.append('inspect geometry-only fallback candidates before accepting the spatial comparison')
-            if missing and guard_attempts < 3:
-                # A controller-enforced observation only fills a missing evidence obligation; the
-                # model still receives it and must make the final decision on the next turn.
+            if missing and guard_attempts < 4:
+                # Controller evidence is separately bounded; reminders never consume tools.
                 if (len(allowed) > 1 and requires_measure(query, parsed)
-                        and not set(required_ids).issubset(measured_ids(observations))):
+                        and not measured_together(required_ids, observations)):
                     observation = measure(required_ids, objects, parsed, candidates, query,
                                           latest_frame_hint(actions))
                     observation.update(controller_forced=True,
@@ -327,21 +365,25 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
                     trace['internal_usage']['compute'] += 1
                     guard_attempts += 1
                     continue
-                if unseen_references:
-                    gap = ('Reference candidates remain uninspected. Inspect every reference ID that could satisfy '
-                           'the described noun or qualifier before finishing.')
-                    if step < limit and not any(item.get('tool') == 'finish_check' for item in observations):
-                        observation = {'tool': 'finish_check', 'accepted': False, 'missing': gap}
-                        observations.append(observation)
-                        trace['steps'].append({'action': action, 'observation': observation})
-                        guard_attempts += 1
-                        continue
-                    focus = sorted(unseen_references)
+                focus = set(category_ids) - inspected
+                if len(allowed) > 1 and requires_measure(query, parsed):
+                    focus.update(unseen_references)
+                    focus.update(unseen_fallback)
+                if len(allowed) > 1 and not observations:
+                    focus.update(allowed)
+                if focus and not guard_prompted and tool_calls < limit:
+                    observation = {'tool': 'finish_check', 'accepted': False,
+                                   'missing': missing, 'focus_ids': sorted(focus)}
+                    observations.append(observation)
+                    trace['steps'].append({'action': action, 'observation': observation})
+                    guard_prompted = True
+                    continue
+                if focus:
+                    focus = sorted(focus)[:12]
                     camera = {'azimuth_deg': 315, 'elevation_deg': 30, 'context': 'isolated'}
-                    rendered = []
                     try:
                         rendered = [render_action({**camera, 'focus_ids': focus[offset:offset+6]},
-                            objects, xyz, rgb, ids, Path(out), 3200+2*step+offset//6)
+                            objects, xyz, rgb, ids, Path(out), 3200+12*step+offset//6)
                             for offset in range(0, len(focus), 6)]
                         views.extend(rendered)
                         inspected.update(i for view in rendered for i in view.get('marked_ids', []))
@@ -353,90 +395,13 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
                     except ValueError as exc:
                         observation = {'tool': 'render', 'focus_ids': focus,
                             'controller_forced': True, 'error': str(exc), 'no_evidence_acquired': True}
-                    observations.append(observation)
-                    trace['steps'].append({'action': action, 'observation': observation})
-                    guard_attempts += 1
-                    continue
-                if category_ids and not set(category_ids).issubset(inspected):
-                    gap = ('The selected target is an alternative-only category match and has not been visibly '
-                           'inspected with its rank-1 rivals. Inspect those IDs before finishing.')
-                    if step < limit and not any(item.get('tool') == 'finish_check' for item in observations):
-                        observation = {'tool': 'finish_check', 'accepted': False, 'missing': gap}
-                        observations.append(observation)
-                        trace['steps'].append({'action': action, 'observation': observation})
-                        guard_attempts += 1
-                        continue
-                    focus = category_ids
-                    camera = {'azimuth_deg': 315, 'elevation_deg': 30, 'context': 'isolated'}
-                    rendered = []
-                    try:
-                        rendered = [render_action({**camera, 'focus_ids': focus[offset:offset+6]},
-                            objects, xyz, rgb, ids, Path(out), 3000+2*step+offset//6)
-                            for offset in range(0, len(focus), 6)]
-                        views.extend(rendered)
-                        inspected.update(i for view in rendered for i in view.get('marked_ids', []))
-                        observation = {'tool': 'render', 'focus_ids': focus,
-                            'controller_forced': True,
-                            'views': [{k: v for k, v in view.items() if k not in ('image', 'panels')}
-                                      for view in rendered]}
-                        trace['internal_usage']['render'] += sum(v.get('views_rendered', 1) for v in rendered)
-                    except ValueError as exc:
-                        observation = {'tool': 'render', 'focus_ids': focus,
-                            'controller_forced': True, 'error': str(exc), 'no_evidence_acquired': True}
-                    observations.append(observation)
-                    trace['steps'].append({'action': action, 'observation': observation})
-                    guard_attempts += 1
-                    continue
-                if unseen_fallback:
-                    gap = ('Geometry-only fallback candidates remain uninspected. Inspect them before deciding '
-                           'an extreme, order or spatial relation that may exclude the classifier pool.')
-                    if step < limit and not any(item.get('tool') == 'fallback_finish_check' for item in observations):
-                        observation = {'tool': 'fallback_finish_check', 'accepted': False, 'missing': gap,
-                                       'focus_ids': unseen_fallback}
-                        observations.append(observation)
-                        trace['steps'].append({'action': action, 'observation': observation})
-                        guard_attempts += 1
-                        continue
-                    camera = {'azimuth_deg': 315, 'elevation_deg': 30, 'context': 'isolated'}
-                    rendered = []
-                    try:
-                        rendered = [render_action({**camera, 'focus_ids': unseen_fallback[offset:offset+6]},
-                            objects, xyz, rgb, ids, Path(out), 3400+2*step+offset//6)
-                            for offset in range(0, len(unseen_fallback), 6)]
-                        views.extend(rendered)
-                        inspected.update(i for view in rendered for i in view.get('marked_ids', []))
-                        observation = {'tool': 'render', 'focus_ids': unseen_fallback,
-                            'controller_forced': True,
-                            'views': [{k: v for k, v in view.items() if k not in ('image', 'panels')}
-                                      for view in rendered]}
-                        trace['internal_usage']['render'] += sum(v.get('views_rendered', 1) for v in rendered)
-                    except ValueError as exc:
-                        observation = {'tool': 'render', 'focus_ids': unseen_fallback,
-                            'controller_forced': True, 'error': str(exc), 'no_evidence_acquired': True}
-                    observations.append(observation)
-                    trace['steps'].append({'action': action, 'observation': observation})
-                    guard_attempts += 1
-                    continue
-                if not observations:
-                    focus = allowed[:12]
-                    camera = {'azimuth_deg': 315, 'elevation_deg': 30, 'context': 'isolated'}
-                    rendered = [render_action({**camera, 'focus_ids': focus[offset:offset+6]},
-                        objects, xyz, rgb, ids, Path(out), 3000+2*step+offset//6)
-                        for offset in range(0, len(focus), 6)]
-                    views.extend(rendered)
-                    inspected.update(i for view in rendered for i in view.get('marked_ids', []))
-                    observation = {'tool': 'render', 'focus_ids': focus,
-                        'controller_forced': True,
-                        'views': [{k: v for k, v in view.items() if k not in ('image', 'panels')}
-                                  for view in rendered]}
-                    trace['internal_usage']['render'] += sum(v.get('views_rendered', 1) for v in rendered)
                     observations.append(observation)
                     trace['steps'].append({'action': action, 'observation': observation})
                     guard_attempts += 1
                     continue
             if missing:
                 decision.setdefault('unresolved', []).extend(missing)
-            elif len(allowed) > 1 and not final_review_done and guard_attempts < 3:
+            elif len(allowed) > 1 and not final_review_done:
                 review = {
                     'tool': 'finish_check', 'accepted': False,
                     'proposed_id': oid,
@@ -447,19 +412,19 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
                 trace['steps'].append({'action': action, 'observation': review})
                 final_review_done = True
                 reserved_evidence = True
-                guard_attempts += 1
                 continue
             break
-        if step >= limit and not reserved_evidence:
-            if step > limit:
+        if final_only:
+            if budget_reminder_sent:
                 raise ValueError('ReAct must finish after the budget-exhausted reminder')
             observation = {'tool': 'budget_exhausted', 'requested_tool': action['action'],
                 'no_evidence_acquired': True,
                 'message': 'No evidence calls remain; finish using the observations already acquired.'}
             observations.append(observation)
             trace['steps'].append({'action': action, 'observation': observation})
+            budget_reminder_sent = True
             continue
-        if reserved_evidence:
+        if reserved_evidence and tool_calls >= limit:
             # One extra model-selected observation is reserved after the adversarial
             # finish check; this is still bounded and is the only budget extension.
             reserved_evidence = False
@@ -470,15 +435,16 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
                 raise ValueError('Supply distinct known focus_ids for evidence acquisition')
             signature = json.dumps({k: action.get(k) for k in
                                     ('action', 'focus_ids', 'context', 'azimuth_deg', 'elevation_deg', 'frame')}, sort_keys=True)
-            if signature in signatures:
+            if signature in signatures and action['action'] != 'inspect':
                 raise ValueError('This observation was already acquired; select different evidence or finish')
+            tool_calls += 1
             if action['action'] == 'inspect':
                 if len(focus) > 12:
                     raise ValueError('Inspect at most 12 objects; select the relevant comparison group')
                 camera = {key: action.get(key) if action.get(key) is not None else default
                           for key, default in (('azimuth_deg', 315), ('elevation_deg', 30))}
                 rendered = [render_action({**action, **camera, 'focus_ids': focus[offset:offset+6]},
-                    objects, xyz, rgb, ids, Path(out), 2000+2*step+offset//6)
+                    objects, xyz, rgb, ids, Path(out), 2000+12*step+offset//6)
                     for offset in range(0, len(focus), 6)]
                 views.extend(rendered)
                 inspected.update(i for view in rendered for i in view.get('marked_ids', []))
@@ -497,6 +463,9 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
             observation = {'tool': action.get('action'), 'error': str(exc), 'no_evidence_acquired': True}
         observations.append(observation)
         trace['steps'].append({'action': action, 'observation': observation})
+    else:
+        raise ValueError('ReAct failed to produce a final decision within its bounded trajectory')
+    trace.update(r18_model_tool_calls=tool_calls, r18_controller_tool_calls=guard_attempts)
     oid = decision['predicted_id']
     selected = next((o for o in candidates if o['bbox_id'] == oid), None)
     trace.update(stop_reason='r18_react_finish', final_candidate_ids=allowed, r18_final_decision=decision,

@@ -505,6 +505,8 @@ def parse_r18_action_content(content: str) -> dict[str, Any] | None:
             focus = numbers
     if focus is not None:
         value['focus_ids'] = focus
+    if action in ('inspect', 'measure') and not focus:
+        return None
 
     context = re.search(r'\b(?:context|render_mode|mode|view)\s*[:=]\s*[\"\']?\s*(scene|isolated)\b',
                         content, re.IGNORECASE)
@@ -595,6 +597,7 @@ def _chat_schema_retry(messages: list[dict[str, Any]], **kwargs: Any) -> dict[st
             failure_kind = diagnostic.get('failure_kind')
             if (api_provider() == 'openai' and transport_retries < 1
                     and failure_kind in {'timeout', 'network', 'http_4xx', 'http_5xx'}
+                    and 'insufficient_quota' not in str(diagnostic.get('response_body', ''))
                     and diagnostic.get('http_status') in (None, 408, 429, 500, 502, 503, 504)):
                 transport_retries += 1
                 if diagnostic.get('http_status') == 429:
@@ -719,6 +722,10 @@ def _chat_once(messages: list[dict[str, Any]], *, max_tokens: int = 512, tempera
                 payload, _repaired = repair_missing_nullable_fields(payload, response_schema['schema'])
                 content = json.dumps(payload, ensure_ascii=False)
             Draft202012Validator(response_schema['schema']).validate(payload)
+            if (response_schema['name'] == 'r18_react_action'
+                    and payload.get('action') in ('inspect', 'measure')
+                    and not payload.get('focus_ids')):
+                raise ValidationError('inspect/measure require explicit nonempty focus_ids')
             if (response_schema['name'] == 'r18_react_action'
                     and payload.get('action') == 'finish' and payload.get('predicted_id') is not None
                     and not any(payload['predicted_id'] in row.get('object_ids', [])
