@@ -43,4 +43,38 @@ bash /Users/luocl/Desktop/seeground/outputs/r18_context_budget_fix_20261022/run_
   --output /Users/luocl/Desktop/seeground/outputs/r18_context_budget_fix_20261022/dev32
 ```
 
-全量命令必须等开发和独立验证结果审计后再决定是否启动。任何开发集、部分结果或成功子集都不能替代 7,805 条 Overall。
+## 2026-10-22 版本定格
+
+冻结分支：`codex/r18-top5-single-pass-freeze-20261022`。`freeze_manifest.json` 固定源码、预测数据、全量清单和运行配置的 SHA256；预测数据 140 个文件已包含在 Git 的 `outputs/r8_grounding_input_20261020/20261020_r8_object_predictions/`，与本机运行输入逐个核对，不重复提交同一份数据。外置盘的场景资产以启动清单中的 `scene_sha256` 固定，原始点云和运行中持续产生的图片不在此次 Git 快照中。
+
+开发 32 条完整通过稳定性检查后，全量 7,805 条已与独立验证 192 条并行启动，使用相同的 149 个推理源码哈希。全量输出为 `/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r18_gpt61_context_budget_full7805_20261022`。`full7805_started_manifest.json` 保存实际启动配置；`checkpoint_at_freeze.json` 仅记录定格时进度，不是最终成绩。现有任务继续运行，不要重复启动。任何开发集、部分结果或成功子集都不能替代 7,805 条 Overall。
+
+全量结束后运行审计（审计不会调用模型）：
+
+```bash
+/Users/luocl/Desktop/seeground/reproductions/SeeGround/.venv/bin/python \
+  /Users/luocl/Desktop/seeground/outputs/r18_context_budget_fix_20261022/audit_single_pass.py \
+  --run /Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r18_gpt61_context_budget_full7805_20261022 \
+  --runtime /Users/luocl/Desktop/seeground/outputs/r18_context_budget_fix_20261022/runtime_eb261ce/local \
+  --output /Users/luocl/Desktop/seeground/outputs/r18_context_budget_fix_20261022/full7805_audit.json
+```
+
+`verified_complete` 只有在全部 7,805 条记录齐全且结构检查通过时才为 true；失败仍留在分母。65%～66% 的全量目标尚未验证。
+
+从本冻结分支的完整 checkout 复现时，先将 canonical 预测目录恢复到启动器使用的位置：
+
+```bash
+cd /Users/luocl/Desktop/seeground
+cp -R -n outputs/r8_grounding_input_20261020/20261020_r8_object_predictions outputs/
+```
+
+须另备外置盘场景数据、工程依赖和外部凭据 profile。启动器默认使用 checkout 的 `reproductions/SeeGround` 源码，源码已与当前固定运行副本逐个比对。下面仅为将来复现使用，输出必须换成不存在的新目录：
+
+```bash
+bash /Users/luocl/Desktop/seeground/outputs/r18_context_budget_fix_20261022/run_gpt61_r18.sh \
+  --manifest /Users/luocl/Desktop/seeground/reproductions/SeeGround/local/validation/nr3d_val_full.json \
+  --workers 8 --api-concurrency 8 \
+  --output /Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/r18_top5_fresh_reproduction
+```
+
+审计器默认核验 checkout 源码；使用固定副本时显式传入 `--runtime`。四项审计测试覆盖不完整样本、失败分母、伪造正确标记和 GT 输入标记。
