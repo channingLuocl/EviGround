@@ -1,0 +1,50 @@
+{
+  "checked_at": "2026-10-22T04:51:45.676877+00:00",
+  "profile_path": "/Users/luocl/.config/seeground/qwen-token-plan-20261022.env",
+  "credential_values_saved": false,
+  "benchmark_predictions": false,
+  "checks": [
+    {
+      "contains_image": false,
+      "requested_model": "qwen3.7-plus",
+      "base_url": "https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1",
+      "http_status": 200,
+      "returned_model": "qwen3.7-plus",
+      "finish_reason": "stop",
+      "content": "{\"ok\":true}",
+      "usage": {
+        "prompt_tokens": 29,
+        "total_tokens": 34,
+        "completion_tokens": 5,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "text_tokens": 29
+        }
+      },
+      "elapsed_s": 1.15
+    },
+    {
+      "contains_image": true,
+      "requested_model": "qwen3.7-plus",
+      "base_url": "https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1",
+      "http_status": 200,
+      "returned_model": "qwen3.7-plus",
+      "finish_reason": "stop",
+      "content": "{\n  \"image_received\": true,\n  \"description\": \"A point-cloud or depth-map rendering of a backpack viewed from the back. Visible features include the main body (7), shoulder straps with padding (8, 9, 10), and lower sections or pockets (6, 11). A portion of another object, possibly a bag or furniture, is visible on the far left.\"\n}",
+      "usage": {
+        "prompt_tokens": 997,
+        "total_tokens": 1084,
+        "completion_tokens": 87,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "image_tokens": 963,
+          "text_tokens": 34
+        },
+        "completion_tokens_details": {
+          "text_tokens": 87
+        }
+      },
+      "elapsed_s": 2.77
+    }
+  ]
+}

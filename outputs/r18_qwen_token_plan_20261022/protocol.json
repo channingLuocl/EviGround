@@ -1,0 +1,29 @@
+{
+  "prepared_at": "2026-10-22T04:53:08.449830+00:00",
+  "source_commit": "4ea57f8f2eb84f22ef7309e6b3edf4bcbb7e03c1",
+  "runtime_project": "/Users/luocl/Desktop/seeground/outputs/r18_qwen_single_pass_20261022/runtime_4ea57f8",
+  "runtime_source_manifest": "/Users/luocl/Desktop/seeground/outputs/r18_qwen_single_pass_20261022/runtime_4ea57f8/source_manifest.json",
+  "provider": "qwen",
+  "model": "qwen3.7-plus",
+  "endpoint": "https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1",
+  "profile_path": "/Users/luocl/.config/seeground/qwen-token-plan-20261022.env",
+  "category_top_k": 5,
+  "enable_thinking": false,
+  "cumulative": false,
+  "gt_categories_supplied_to_model": false,
+  "query_target_id_supplied_to_model": false,
+  "smoke8": {
+    "selection": "/Users/luocl/Desktop/seeground/outputs/r18_qwen_token_plan_20261022/smoke8_manifest.json",
+    "selection_sha256": "5c4e3281d27c8755e17224058986aeca3b893331a8f0271c0f4641732c7356c8",
+    "expected_rows": 8,
+    "workers": 2,
+    "api_concurrency": 2,
+    "output": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r18_qwen37_token_plan_smoke8_20261022"
+  },
+  "full7805_requirement": {
+    "expected_rows": 7805,
+    "threshold": 0.66,
+    "errors_and_abstentions_in_denominator": true,
+    "new_output_required": true
+  }
+}
