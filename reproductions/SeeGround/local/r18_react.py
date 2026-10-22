@@ -204,6 +204,10 @@ def observer_frame(frame, objects, selected):
     if result is None:
         raise ValueError('Observer origin and facing group coincide; choose a supported frame')
     result.update(origin_ids=origin_ids, facing_ids=facing_ids,
+        rows_forward_increasing=sorted(result['rows_left_to_right'], key=lambda row: (row[2], row[0])),
+        coordinate_semantics=('Origin and facing groups use mean bounding-box centers; empty origin uses room center. '
+            'right_m is positive toward observer right. forward_m is signed distance along the gaze: '
+            'negative behind the origin, positive ahead; rows_forward_increasing sorts this coordinate.'),
         assumption='model-selected origin and facing groups; verify against the original description')
     return result
 

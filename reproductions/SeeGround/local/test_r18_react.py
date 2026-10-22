@@ -296,6 +296,19 @@ class ReactTests(unittest.TestCase):
         self.assertIn('known origin_ids', result['observer_frame_error'])
         self.assertEqual(len(result['directed_pair_measurements']), 2)
 
+    def test_observer_frame_provides_both_signed_axis_orders(self):
+        objects = self.objects + [prediction(3, ['chair'], (3, -1, 1)),
+                                  prediction(4, ['chair'], (1, 1, 1)),
+                                  prediction(5, ['chair'], (-1, 0, 1))]
+        result = measure([3, 4, 5], objects, self.parsed, objects[2:], self.query,
+                         {'origin_ids': [1], 'facing_ids': [2]})
+        frame = result['selected_observer_frame']
+        self.assertEqual([row[0] for row in frame['rows_left_to_right']], [4, 5, 3])
+        self.assertEqual([row[0] for row in frame['rows_forward_increasing']], [5, 4, 3])
+        self.assertEqual([row[2] for row in frame['rows_forward_increasing']], [-1., 1., 3.])
+        self.assertEqual(frame['columns'], ['target_id', 'right_m', 'forward_m'])
+        self.assertIn('bounding-box centers', frame['coordinate_semantics'])
+
     def test_coincident_frame_does_not_discard_valid_distances(self):
         result = measure([1, 2], self.objects, self.parsed, self.objects[:1], self.query,
                          {'origin_ids': [2], 'facing_ids': [2]})
