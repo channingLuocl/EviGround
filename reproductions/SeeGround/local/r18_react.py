@@ -304,13 +304,16 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
     budget_reminder_sent = False
     for step in range(limit+12):
         attached = current_views(views)
-        remaining = max(0, limit-tool_calls) + int(reserved_evidence)
+        # Rejected duplicate actions do not consume tools; still reserve the last
+        # bounded decision turn for a finish using the evidence already acquired.
+        last_step = step == limit+11
+        remaining = 0 if last_step else max(0, limit-tool_calls) + int(reserved_evidence)
         final_only = remaining == 0
         state = {**payload, 'observations': compact_observations(observations),
                  'previous_actions': actions, 'remaining_tool_calls': remaining,
                  'available_actions': ['finish'] if final_only else ['inspect', 'measure', 'finish'],
                  'decision_phase': 'final_choice' if final_only else 'evidence_acquisition',
-                 'instruction': ('Tool budget exhausted: return action=finish using the supplied evidence. '
+                 'instruction': ('Evidence acquisition closed: return action=finish using the supplied evidence. '
                                  'Disclose unresolved assumptions; do not request inspect/measure.'
                                  if final_only else 'Request inspect or measure by returning its JSON action; '
                                  'the application will execute it. Select useful evidence or finish.'),
@@ -359,7 +362,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
             unseen_fallback = sorted(fallback_ids - inspected)
             if (len(allowed) > 1 and requires_measure(query, parsed) and unseen_fallback):
                 missing.append('inspect geometry-only fallback candidates before accepting the spatial comparison')
-            if missing and guard_attempts < 4:
+            if missing and guard_attempts < 4 and not last_step:
                 # Controller evidence is separately bounded; reminders never consume tools.
                 if (len(allowed) > 1 and requires_measure(query, parsed)
                         and not measured_together(required_ids, observations)):
@@ -408,7 +411,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
                     continue
             if missing:
                 decision.setdefault('unresolved', []).extend(missing)
-            elif len(allowed) > 1 and not final_review_done:
+            elif len(allowed) > 1 and not final_review_done and not last_step:
                 review = {
                     'tool': 'finish_check', 'accepted': False,
                     'proposed_id': oid,

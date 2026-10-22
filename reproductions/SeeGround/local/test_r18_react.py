@@ -88,6 +88,43 @@ class ReactTests(unittest.TestCase):
         self.assertEqual([dict(zip(encoded['columns'], row)) for row in encoded['rows']],
                          trace['r18_observations'][0]['directed_pair_measurements'])
 
+    def test_repeated_measurements_reserve_a_final_decision_turn(self):
+        def reply(messages, **kwargs):
+            state = json.loads(messages[1]['content'][0]['text'])
+            if state['available_actions'] == ['finish']:
+                return self.action('finish', oid=1)
+            return self.action('measure', [1, 2])
+
+        result, trace, model, renderer = self.run_actions(reply, limit=3)
+        self.assertEqual(result['predicted_id'], 1)
+        self.assertEqual(model.call_count, 15)
+        self.assertEqual(trace['r18_model_tool_calls'], 1)
+        state = json.loads(model.call_args.args[0][1]['content'][0]['text'])
+        self.assertEqual(state['remaining_tool_calls'], 0)
+        self.assertEqual(state['decision_phase'], 'final_choice')
+        self.assertEqual(model.call_args.kwargs['response_schema']['schema']
+                         ['properties']['action']['enum'], ['finish'])
+        self.assertTrue(all(item.get('no_evidence_acquired')
+                            for item in trace['r18_observations'][1:]))
+
+    def test_final_reserved_turn_discloses_unmet_evidence_without_reopening_tools(self):
+        self.objects.append(prediction(3, ['chair'], (4, 0, 1)))
+
+        def reply(messages, **kwargs):
+            state = json.loads(messages[1]['content'][0]['text'])
+            if state['available_actions'] == ['finish']:
+                return self.action('finish', oid=1)
+            return self.action('measure', [1, 2])
+
+        result, trace, model, renderer = self.run_actions(
+            reply, limit=3, candidate_objects=[self.objects[0], self.objects[2]])
+        self.assertEqual(result['predicted_id'], 1)
+        self.assertEqual(model.call_count, 15)
+        self.assertEqual(trace['r18_controller_tool_calls'], 0)
+        self.assertIn('measure all target candidates and bound references for the spatial/size clause',
+                      trace['r18_final_decision']['unresolved'])
+        renderer.assert_not_called()
+
     def test_large_requested_group_is_rendered_in_bounded_panels(self):
         self.objects = [prediction(i, ['chair', 'stool']) for i in range(1, 10)]
         result, trace, model, renderer = self.run_actions([
