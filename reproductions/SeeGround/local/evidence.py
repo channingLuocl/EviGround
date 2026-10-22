@@ -44,6 +44,17 @@ DISTANCE_METRIC_ALIASES = {
 }
 DISTANCE_TIE_TOLERANCE_M = 0.01
 
+# A classifier miss is most recoverable when the description already gives a
+# spatial or visual relation.  Keep this gate lexical and conservative: the
+# fallback is a small geometry neighborhood, never the whole scene.
+_VISUAL_FALLBACK_TERMS = re.compile(
+    r'\b(?:both|group|one|another|left|right|front|behind|back|above|below|under|'
+    r'near|next\s+to|beside|alongside|closest|nearest|farthest|furthest|'
+    r'between|against|inside|outside|middle|corner|end|row|stack|largest|'
+    r'smallest|tallest|lowest|highest|white|black|red|blue|green|brown|'
+    r'wooden|plain|open|closed|flat|pane|floor-length)\b', re.IGNORECASE)
+_SHELL_CATEGORIES = {'wall', 'floor', 'ground', 'ceiling'}
+
 
 def normalize_distance_metric(value):
     """Return a stable metric name, or ``None`` for an unsupported metric."""
@@ -218,6 +229,106 @@ def retrieval_category(name):
     modifiers = {'large', 'small', 'big', 'little', 'black', 'white', 'red', 'blue',
                  'green', 'gray', 'grey', 'brown', 'wooden', 'wall', 'mounted'}
     return ' '.join(word for word in text.split() if word not in modifiers)
+
+
+def visual_fallback_candidates(query, parsed, objects, targets, anchors, limit=6):
+    """Return a bounded geometry neighborhood for visual classifier misses.
+
+    The returned objects retain their predicted Top-5 hypotheses, but callers
+    must label them as fallback candidates because their category did not match
+    the parsed target.  This function never reads evaluation labels or target
+    IDs.  It is intentionally disabled for descriptions without a relation or
+    appearance clue, where adding unrelated objects would add noise.
+    """
+    if limit < 1 or not _VISUAL_FALLBACK_TERMS.search(query or ''):
+        return []
+    seeds = []
+    seen_seed_ids = set()
+    for item in [*targets, *anchors]:
+        if item['bbox_id'] not in seen_seed_ids:
+            seen_seed_ids.add(item['bbox_id'])
+            seeds.append(item)
+    if not seeds:
+        return []
+    seed_ids = {item['bbox_id'] for item in seeds}
+    ranked = []
+    for item in objects:
+        oid = item['bbox_id']
+        if oid in seed_ids:
+            continue
+        hypotheses = item.get('category_hypotheses', [])
+        categories = {retrieval_category(h.get('category', '')) for h in hypotheses}
+        if categories and categories.issubset(_SHELL_CATEGORIES):
+            continue
+        gap = min(distance_pair_metrics(item, seed)['aabb_gap'] for seed in seeds)
+        center = min(distance_pair_metrics(item, seed)['center'] for seed in seeds)
+        ranked.append((gap, center, oid, item))
+    ranked.sort(key=lambda row: (row[0], row[1], row[2]))
+    by_id = {item['bbox_id']: item for _, _, _, item in ranked}
+    selected = []
+
+    def add(item, reason):
+        if item is None or item['bbox_id'] in seed_ids or item['bbox_id'] in selected:
+            return
+        selected.append(item['bbox_id'])
+        row = dict(item)
+        row['candidate_role'] = 'visual_fallback'
+        row['fallback_reason'] = reason
+        pair = next((entry for entry in ranked if entry[2] == item['bbox_id']), None)
+        if pair is not None:
+            row['fallback_distance_to_seed_m'] = round(float(pair[0]), 4)
+            row['fallback_center_distance_to_seed_m'] = round(float(pair[1]), 4)
+        return row
+
+    # Preserve the React candidate pool while making explicit extreme queries
+    # visible even when the classifier's top-5 category misses the target.
+    lower = (query or '').casefold()
+    extreme = []
+    if re.search(r'\b(?:farthest|furthest)\b', lower):
+        relation_anchors = []
+        for relation in parsed.get('Relations', []):
+            if not isinstance(relation, dict) or relation.get('relation') != 'farthest':
+                continue
+            name = relation.get('anchor_category')
+            if isinstance(name, str) and name.strip():
+                relation_anchors.extend(match_retrieval_categories([name], objects))
+        relation_anchors = list({item['bbox_id']: item for item in relation_anchors}.values()) or list(anchors)
+        if relation_anchors:
+            distance_rows = []
+            for item in by_id.values():
+                distances = [distance_pair_metrics(item, anchor)['aabb_gap']
+                             for anchor in relation_anchors if item['bbox_id'] != anchor['bbox_id']]
+                if distances:
+                    distance_rows.append((max(distances), item['bbox_id'], item))
+            extreme.extend(item for _, _, item in sorted(distance_rows, reverse=True)[:3])
+    if re.search(r'\b(?:lowest|shortest)\b', lower):
+        extreme.extend(sorted(by_id.values(), key=lambda item: (
+            float(item['bbox_3d'][2] - item['bbox_3d'][5] / 2), item['bbox_id']))[:10])
+    if re.search(r'\b(?:highest|tallest)\b', lower):
+        if 'highest' in lower:
+            key = lambda item: float(item['bbox_3d'][2] + item['bbox_3d'][5] / 2)
+        else:
+            key = lambda item: float(item['bbox_3d'][5])
+        extreme.extend(sorted(by_id.values(), key=lambda item: (-key(item), item['bbox_id']))[:10])
+    if re.search(r'\b(?:largest|smallest)\b', lower):
+        volumes = lambda item: float(np.prod(np.asarray(item['bbox_3d'][3:], dtype=float)))
+        reverse = 'largest' in lower
+        extreme.extend(sorted(by_id.values(), key=lambda item: ((-1 if reverse else 1) * volumes(item), item['bbox_id']))[:10])
+
+    result = []
+    for item in extreme:
+        row = add(item, 'query_extreme')
+        if row is not None:
+            result.append(row)
+        if len(result) >= limit:
+            return result
+    for gap, center, _, item in ranked:
+        row = add(item, 'geometry_neighborhood')
+        if row is not None:
+            result.append(row)
+        if len(result) >= limit:
+            break
+    return result
 
 
 def match_retrieval_categories(names, objects):

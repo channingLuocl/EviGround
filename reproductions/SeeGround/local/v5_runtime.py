@@ -23,7 +23,9 @@ def save_checkpoint(path, value):
 
 
 def retryable(diagnostic):
-    return diagnostic.get('failure_kind') in ('timeout', 'network') or diagnostic.get('http_status') in (502, 503, 504)
+    if str(diagnostic.get('response_body', '')).find('insufficient_quota') != -1:
+        return False
+    return diagnostic.get('failure_kind') in ('timeout', 'network') or diagnostic.get('http_status') in (429, 502, 503, 504)
 
 
 def file_identity(paths):

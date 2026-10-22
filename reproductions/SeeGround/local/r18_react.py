@@ -58,6 +58,10 @@ that instance and plausible primary-category rivals. Geometry alone cannot
 turn a monitor stand into a monitor, or a toilet into a stool. A finish without that inspection is
 deferred while a tool call remains. Check reference categories and their qualifiers independently;
 do not select whichever door, desk or shelf happens to make a convenient distance minimum.
+Some allowed IDs may be marked candidate_role=visual_fallback. Their classifier category did not
+match the parsed target; they were added only from a bounded geometric neighborhood because a
+Top-5 miss is possible. Treat them as unknown-category visual hypotheses: inspect them before
+choosing them, and compare them with the matched target candidates.
 For a nested relation such as an object ON a desk, first bind the object to its actual support desk
 using overlap and vertical surface gap; only then compare targets relative to that SAME desk.
 Preserve every clause: color, visible part, group, negation and relative order cannot be replaced by
@@ -236,11 +240,15 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
     basic = precision_evidence(query, parsed, objects, candidates)['objects']
     # Keep all original category alternatives available when the parser has missed a reference.
     by_id = {o['bbox_id']: o for o in objects}
+    fallback_ids = set(parsed.get('candidate_generation', {}).get('visual_fallback_ids', []))
     for row in basic:
         row['category_hypotheses'] = [{'category': h['category'], 'rank': h['rank'],
                                        'gap_from_top1': round(h['gap_from_top1'], 4)}
                                      for h in by_id[row['id']].get('category_hypotheses', [])]
+        if row['id'] in fallback_ids:
+            row['candidate_role'] = 'visual_fallback'
     payload = {'description': query, 'allowed_target_ids': allowed, 'objects': basic,
+               'visual_fallback_target_ids': sorted(fallback_ids),
                'parsed_target_categories': parsed.get('Target', []),
                'parsed_reference_categories': parsed.get('Anchor', []),
                'category_policy': 'Target pool and class ranks come only from the classifier; parser bindings are hypotheses.',
@@ -302,6 +310,9 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
             category_ids = category_review_ids(oid, best_ranks)
             if category_ids and not set(category_ids).issubset(inspected):
                 missing.append('inspect the selected alternative category together with every rank-1 target-category rival')
+            unseen_fallback = sorted(fallback_ids - inspected)
+            if (len(allowed) > 1 and requires_measure(query, parsed) and unseen_fallback):
+                missing.append('inspect geometry-only fallback candidates before accepting the spatial comparison')
             if missing and guard_attempts < 3:
                 # A controller-enforced observation only fills a missing evidence obligation; the
                 # model still receives it and must make the final decision on the next turn.
@@ -371,6 +382,36 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, diagno
                         trace['internal_usage']['render'] += sum(v.get('views_rendered', 1) for v in rendered)
                     except ValueError as exc:
                         observation = {'tool': 'render', 'focus_ids': focus,
+                            'controller_forced': True, 'error': str(exc), 'no_evidence_acquired': True}
+                    observations.append(observation)
+                    trace['steps'].append({'action': action, 'observation': observation})
+                    guard_attempts += 1
+                    continue
+                if unseen_fallback:
+                    gap = ('Geometry-only fallback candidates remain uninspected. Inspect them before deciding '
+                           'an extreme, order or spatial relation that may exclude the classifier pool.')
+                    if step < limit and not any(item.get('tool') == 'fallback_finish_check' for item in observations):
+                        observation = {'tool': 'fallback_finish_check', 'accepted': False, 'missing': gap,
+                                       'focus_ids': unseen_fallback}
+                        observations.append(observation)
+                        trace['steps'].append({'action': action, 'observation': observation})
+                        guard_attempts += 1
+                        continue
+                    camera = {'azimuth_deg': 315, 'elevation_deg': 30, 'context': 'isolated'}
+                    rendered = []
+                    try:
+                        rendered = [render_action({**camera, 'focus_ids': unseen_fallback[offset:offset+6]},
+                            objects, xyz, rgb, ids, Path(out), 3400+2*step+offset//6)
+                            for offset in range(0, len(unseen_fallback), 6)]
+                        views.extend(rendered)
+                        inspected.update(i for view in rendered for i in view.get('marked_ids', []))
+                        observation = {'tool': 'render', 'focus_ids': unseen_fallback,
+                            'controller_forced': True,
+                            'views': [{k: v for k, v in view.items() if k not in ('image', 'panels')}
+                                      for view in rendered]}
+                        trace['internal_usage']['render'] += sum(v.get('views_rendered', 1) for v in rendered)
+                    except ValueError as exc:
+                        observation = {'tool': 'render', 'focus_ids': unseen_fallback,
                             'controller_forced': True, 'error': str(exc), 'no_evidence_acquired': True}
                     observations.append(observation)
                     trace['steps'].append({'action': action, 'observation': observation})

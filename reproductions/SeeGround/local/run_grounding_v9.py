@@ -45,8 +45,15 @@ def run_case(row, scene_root, output, top_k, review_limit):
                 raise ValueError(f'Worker failed ({process.returncode}); see {log}')
         result = evaluate(row, prediction, log, table)
         data = json.loads(prediction.read_text())
-        result['category_candidate_recall'] = row['target_id'] in data['category_target_ids']
-        result['category_candidate_count'] = len(data['category_target_ids'])
+        # The generation pipeline records its actual bounded target pool and the
+        # prediction object is the only inference-derived input available here;
+        # do not silently switch to the classifier-only pool when fallback exists.
+        if data.get('visual_fallback_target_ids') and 'candidate_target_ids' not in data:
+            raise ValueError('visual fallback prediction is missing candidate_target_ids provenance')
+        candidate_ids = data.get('candidate_target_ids', data['category_target_ids'])
+        result['category_candidate_recall'] = row['target_id'] in candidate_ids
+        result['category_candidate_count'] = len(candidate_ids)
+        result['classifier_category_candidate_recall'] = row['target_id'] in data['category_target_ids']
         target_binding = next((b for b in data.get('category_bindings', {}).get('targets', [])
                                if b['bbox_id'] == row['target_id']), {})
         ranks = [h['rank'] for h in target_binding.get('matched_hypotheses', [])]

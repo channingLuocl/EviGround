@@ -12,7 +12,8 @@ from qwen_api import (chat, parse_json_object, QwenAPIError, _redact, api_provid
                       api_config_summary, request_options)
 from response_schemas import ATTRIBUTES, parser_schema, schema_kwargs
 from evidence import (match_categories, distance_evidence, match_retrieval_categories,
-                      distance_rankings, propose_category_checks, validate_distance_relations)
+                      distance_rankings, propose_category_checks, validate_distance_relations,
+                      visual_fallback_candidates)
 
 MODES=['baseline','geometry','visual_review','ranked_geometry','category_review','diagnostic','active_diagnostic']
 OBJECT_TABLES={'pred':'objects.json','gt':'objects_gt.json'}
@@ -409,11 +410,22 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             matched_targets = list(objects)
         matched_anchors=matcher(parsed['Anchor'],geometry_objects)
         if mode in ('diagnostic','active_diagnostic'):
+            # Keep the complete React pool bounded while reserving room for
+            # geometry-only rescue hypotheses when the classifier misses a
+            # target category.  Extreme queries need a wider fallback than a
+            # plain nearest-neighborhood query.
+            fallback_limit = max(3, min(10, 14 - len(matched_targets)))
+            fallback = (visual_fallback_candidates(query, parsed, objects, matched_targets,
+                                                    matched_anchors, limit=fallback_limit)
+                        if is_v9 else [])
             parsed['candidate_generation']={
                 'status':'bound' if matched_targets else 'unknown',
                 'source':('gated_category_hypotheses' if is_v9 else 'category_retrieval') if matched_targets
                          else ('threshold_abstention' if is_v9 else 'broad_fallback'),
                 'category_pool_ids':[obj['bbox_id'] for obj in matched_targets],
+                'visual_fallback_ids':[obj['bbox_id'] for obj in fallback],
+                'visual_fallback_policy': ('bounded geometry neighborhood around classifier-covered '
+                                           'targets/references; category remains unknown') if fallback else None,
             }
             if generic_target:
                 parsed['candidate_generation']['source'] = 'generic_target_visual_pool'
@@ -423,7 +435,13 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
             from active_diagnostic import active_ground
             stage='active_diagnostic'
             proposed=[] if object_table=='gt' or is_v9 else propose_category_checks(objects,matched_targets,anchors,review_limit)
-            candidates=list({obj['bbox_id']:obj for obj in matched_targets+proposed}.values())
+            fallback_ids = set(parsed.get('candidate_generation', {}).get('visual_fallback_ids', []))
+            fallback_objects = [obj for obj in objects if obj['bbox_id'] in fallback_ids]
+            candidates=list({obj['bbox_id']:obj for obj in
+                             matched_targets+proposed+fallback_objects}.values())
+            if is_v9 and fallback_ids:
+                candidates = [{**obj, 'candidate_role': 'visual_fallback'} if obj['bbox_id'] in fallback_ids else obj
+                              for obj in candidates]
             if not is_v9:
                 candidates = candidates or objects
             trace={}
@@ -455,6 +473,8 @@ def run_query(scene_dir, query, out, query_source='manually authored exploratory
                     ('version', 'gate', 'source_predictions_sha256', 'cloud_sha256')}
                 prediction['category_input']['table_sha256'] = sha256(objects_path)
                 prediction['category_target_ids'] = [o['bbox_id'] for o in matched_targets]
+                prediction['visual_fallback_target_ids'] = sorted(fallback_ids)
+                prediction['candidate_target_ids'] = [o['bbox_id'] for o in candidates]
                 prediction['category_anchor_ids'] = [o['bbox_id'] for o in matched_anchors]
                 prediction['category_bindings'] = {
                     'targets': [{'bbox_id': o['bbox_id'], 'matched_hypotheses': [h for h in o['category_hypotheses']

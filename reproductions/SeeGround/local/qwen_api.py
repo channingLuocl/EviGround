@@ -594,8 +594,11 @@ def _chat_schema_retry(messages: list[dict[str, Any]], **kwargs: Any) -> dict[st
                               transport_retries=transport_retries)
             failure_kind = diagnostic.get('failure_kind')
             if (api_provider() == 'openai' and transport_retries < 1
-                    and failure_kind in {'timeout', 'network', 'http_5xx'}):
+                    and failure_kind in {'timeout', 'network', 'http_4xx', 'http_5xx'}
+                    and diagnostic.get('http_status') in (None, 408, 429, 500, 502, 503, 504)):
                 transport_retries += 1
+                if diagnostic.get('http_status') == 429:
+                    time.sleep(30)  # Relay rate limits are per-minute; wait out the window.
                 continue
             if (schema is None or failure_kind != 'response_schema' or schema_attempt >= 3
                     or diagnostic.get('validation_error') == 'Model refused'):
@@ -813,6 +816,8 @@ def chat(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: 
                 budget['used'] = True
                 budget['attempts'].append({'reason': diagnostic.get('failure_kind'), 'context_compressed': changed})
                 persist_api_recovery(budget)
+                if diagnostic.get('http_status') == 429:
+                    time.sleep(20)  # Relay rate limits are per-minute; back off before the single retry.
                 messages = retry_messages
                 continue
             diagnostic.update(api_attempts=attempts, extra_attempts=len(attempts) - 1,

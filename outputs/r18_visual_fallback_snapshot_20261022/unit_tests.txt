@@ -1,0 +1,6 @@
+$ PYTHONPATH=local .venv/bin/python -m unittest local.test_r8_grounding local.test_r18_react local.test_gpt61_action_format
+...............................................
+----------------------------------------------------------------------
+Ran 47 tests in 0.067s
+
+OK

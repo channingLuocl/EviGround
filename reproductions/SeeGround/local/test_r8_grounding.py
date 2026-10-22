@@ -10,6 +10,7 @@ import numpy as np
 
 from categories_v9 import R8_SCORE_TYPE
 from r8_grounding import camera_eye, isolated_target_views, query_evidence, target_head_hint
+from evidence import visual_fallback_candidates
 from run import project
 from test_v7_evidence import obj
 from v4_policy import settings
@@ -121,6 +122,44 @@ class R8GroundingTests(unittest.TestCase):
             self.assertTrue(Path(views[0]['image']).is_file())
             self.assertEqual(views[0]['marked_ids'], [1, 2])
             self.assertIn('independently framed', views[0]['layout'])
+
+    def test_visual_fallback_is_bounded_and_marks_unknown_category(self):
+        target = prediction(1, ['lamp'], xyz=(0, 0, 1))
+        reference = prediction(2, ['lamp'], xyz=(0, 1, 1))
+        nearby = prediction(3, ['table'], xyz=(0, 1.1, .5))
+        distant = prediction(4, ['chair'], xyz=(20, 20, 1))
+        result = visual_fallback_candidates(
+            'looking at both lamps, choose the lamp on the right',
+            {'Target': ['lamp'], 'Anchor': ['lamp']},
+            [target, reference, nearby, distant], [target, reference], [target, reference], limit=1)
+        self.assertEqual([item['bbox_id'] for item in result], [3])
+        self.assertEqual(result[0]['candidate_role'], 'visual_fallback')
+        self.assertEqual(visual_fallback_candidates(
+            'choose the lamp', {'Target': ['lamp'], 'Anchor': []},
+            [target, nearby], [target], [], limit=3), [])
+
+    def test_visual_fallback_prioritizes_farthest_unknown_candidate(self):
+        door = prediction(10, ['door'], xyz=(0, 0, 1))
+        near = prediction(11, ['chair'], xyz=(1, 0, 1))
+        far = prediction(12, ['monitor'], xyz=(8, 0, 1))
+        result = visual_fallback_candidates(
+            'the desk farthest from the door',
+            {'Target': ['desk'], 'Anchor': ['door'],
+             'Relations': [{'relation': 'farthest', 'anchor_category': 'door'}]},
+            [door, near, far], [], [door], limit=1)
+        self.assertEqual([item['bbox_id'] for item in result], [12])
+        self.assertEqual(result[0]['fallback_reason'], 'query_extreme')
+
+    def test_visual_fallback_includes_low_geometry_extreme(self):
+        seed = prediction(10, ['towel'], xyz=(0, 0, 2))
+        low = prediction(11, ['box'], xyz=(0, 0, .1))
+        middle = prediction(12, ['chair'], xyz=(0, 0, 1))
+        result = visual_fallback_candidates(
+            'the lowest folded towel',
+            {'Target': ['towel'], 'Anchor': [], 'Relations': []},
+            [seed, low, middle], [seed], [], limit=1)
+        self.assertEqual([item['bbox_id'] for item in result], [11])
+        self.assertEqual(result[0]['fallback_reason'], 'query_extreme')
 
 
 if __name__ == '__main__':
