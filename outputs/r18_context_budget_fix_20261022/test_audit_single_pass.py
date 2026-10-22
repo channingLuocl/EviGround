@@ -68,6 +68,58 @@ class AuditTests(unittest.TestCase):
         value = json.loads(p.read_text()); value['gt_categories_supplied_to_model'] = True; p.write_text(json.dumps(value))
         self.assertFalse(self.audit()['threshold_passed'])
 
+    def test_qwen_requires_explicit_matching_configuration_and_same_denominator(self):
+        config = {'model': 'qwen3-vl-plus', 'provider': 'qwen',
+                  'thinking_token_floor': None, 'token_parameter': 'max_tokens'}
+        p = self.root / 'manifest.json'
+        value = json.loads(p.read_text())
+        value['models']['SEEGROUND_MODEL'] = config['model']
+        value['api'].update(provider='qwen', token_parameter='max_tokens')
+        value['api'].pop('thinking_token_floor')
+        p.write_text(json.dumps(value))
+        self.case(self.rows[0], 10)
+        self.case(self.rows[1], None, failure=True)
+        report = audit_run(self.root, self.rows, {}, self.root, expected_total=2,
+                           expected_config=config)
+        self.assertTrue(report['verified_complete'])
+        self.assertEqual(report['full_selected_denominator_accuracy'], .5)
+        self.assertFalse(report['threshold_passed'])
+        self.assertFalse(self.audit()['verified_complete'])
+        value['api']['token_parameter'] = 'max_completion_tokens'
+        p.write_text(json.dumps(value))
+        self.assertFalse(audit_run(self.root, self.rows, {}, self.root, expected_total=2,
+                                  expected_config=config)['verified_complete'])
+
+    def test_actual_call_model_mismatch_prevents_completion(self):
+        for row in self.rows:
+            self.case(row, row['target_id'])
+        (self.root / 'q00002/run.json').write_text(json.dumps({
+            'calls': [{'model': 'qwen3-vl-plus', 'provider': 'qwen'}]}))
+        report = self.audit()
+        self.assertFalse(report['verified_complete'])
+        self.assertTrue(any('Mixed inference' in issue for issue in report['structural_issues']))
+
+    def test_empty_category_pool_is_a_counted_abstention(self):
+        self.case(self.rows[0], 10)
+        self.case(self.rows[1], None)
+        p = self.root / 'q00002/prediction.json'
+        value = json.loads(p.read_text())
+        value.pop('diagnosis_policy')
+        value.update(candidate_target_ids=[], category_target_ids=[], visual_fallback_target_ids=[],
+            prediction_source='abstained', bbox_3d=None,
+            diagnosis={'candidate_ids': [],
+                       'missing': ['no retained category hypothesis matches the parsed target']},
+            active_trace={'stop_reason': 'category_gate_abstention'})
+        p.write_text(json.dumps(value))
+        report = self.audit()
+        self.assertTrue(report['verified_complete'])
+        self.assertEqual(report['category_gate_abstentions'], 1)
+        self.assertEqual(report['full_selected_denominator_accuracy'], .5)
+        self.assertFalse(report['threshold_passed'])
+        value['candidate_target_ids'] = [10, 20]
+        p.write_text(json.dumps(value))
+        self.assertFalse(self.audit()['verified_complete'])
+
 
 if __name__ == '__main__':
     unittest.main()

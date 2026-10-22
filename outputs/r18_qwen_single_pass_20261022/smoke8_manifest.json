@@ -1,0 +1,152 @@
+{
+  "purpose": "Fixed development smoke for real relay-format and evidence-budget failures, not an independent accuracy evaluation",
+  "source_manifest": "/Users/luocl/Desktop/seeground/outputs/r18_extreme_dev32_20261022_manifest.json",
+  "rows": [
+    {
+      "csv_row": 1154,
+      "scene": "scene0665_00",
+      "query": "The desk is in the corner of the room farthest from the door and at the end of a row of desks.",
+      "target_id": 20,
+      "instance_type": "desk",
+      "stimulus_id": "scene0665_00-desk-4-20-2-29-31",
+      "stimulus_candidate_ids": [
+        20,
+        2,
+        29,
+        31
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 34902,
+      "scene": "scene0690_00",
+      "query": "Standing in the middle of the room looking at both lamps, it's the lamp on the right.",
+      "target_id": 14,
+      "instance_type": "table",
+      "stimulus_id": "scene0690_00-table-2-14-13",
+      "stimulus_candidate_ids": [
+        14,
+        13
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": true,
+      "view_dep": true
+    },
+    {
+      "csv_row": 35075,
+      "scene": "scene0527_00",
+      "query": "the lowest folded towel",
+      "target_id": 27,
+      "instance_type": "towel",
+      "stimulus_id": "scene0527_00-towel-3-27-11-23",
+      "stimulus_candidate_ids": [
+        27,
+        11,
+        23
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    },
+    {
+      "csv_row": 8956,
+      "scene": "scene0607_00",
+      "query": "Facing the wall, the upper left chair opposite the sink.",
+      "target_id": 6,
+      "instance_type": "chair",
+      "stimulus_id": "scene0607_00-chair-6-6-7-8-9-10-11",
+      "stimulus_candidate_ids": [
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 48,
+      "scene": "scene0221_00",
+      "query": "The rear, left hand side pillow on the bed that is closest to the cabinets",
+      "target_id": 40,
+      "instance_type": "pillow",
+      "stimulus_id": "scene0221_00-pillow-6-40-39-41-44-45-46",
+      "stimulus_candidate_ids": [
+        40,
+        39,
+        41,
+        44,
+        45,
+        46
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 1445,
+      "scene": "scene0353_00",
+      "query": "Facing the wall with the large clothes cabinet, choose the shoes that are third from the back wall.",
+      "target_id": 1,
+      "instance_type": "shoes",
+      "stimulus_id": "scene0353_00-shoes-4-1-23-31-33",
+      "stimulus_candidate_ids": [
+        1,
+        23,
+        31,
+        33
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 35103,
+      "scene": "scene0095_00",
+      "query": "The first mouse on the right.",
+      "target_id": 27,
+      "instance_type": "mouse",
+      "stimulus_id": "scene0095_00-mouse-3-27-20-24",
+      "stimulus_candidate_ids": [
+        27,
+        20,
+        24
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": true
+    },
+    {
+      "csv_row": 6030,
+      "scene": "scene0095_00",
+      "query": "The keyboard where there is only one keyboard on its side.",
+      "target_id": 22,
+      "instance_type": "keyboard",
+      "stimulus_id": "scene0095_00-keyboard-6-22-23-25-26-28-29",
+      "stimulus_candidate_ids": [
+        22,
+        23,
+        25,
+        26,
+        28,
+        29
+      ],
+      "stage": "nr3d_full",
+      "size_form": "not_classified",
+      "easy": false,
+      "view_dep": false
+    }
+  ]
+}
