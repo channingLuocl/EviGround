@@ -117,11 +117,11 @@ def request_options(max_tokens: int, temperature: float | None, json_mode: bool,
     if 'temperature' in options and not 0 <= options['temperature'] <= 2:
         raise QwenAPIError('temperature must be finite and between 0 and 2')
     if response_schema is not None:
-        if provider != 'openai' or not json_mode or response_schema.get('strict') is not True:
-            raise QwenAPIError('Strict response_schema requires OpenAI provider and json_mode=True')
+        if not json_mode or response_schema.get('strict') is not True:
+            raise QwenAPIError('Strict response_schema requires json_mode=True')
         from jsonschema import Draft202012Validator
         Draft202012Validator.check_schema(response_schema['schema'])
-        # This relay accepts JSON mode; the full schema is enforced locally.
+        # Both providers use JSON mode; the full schema is enforced locally.
         options['response_format'] = {'type': 'json_object'}
     elif json_mode:
         options['response_format'] = {'type': 'json_object'}
@@ -151,7 +151,7 @@ def api_config_summary() -> dict[str, Any]:
     return {'provider': api_provider(), 'request_options': options,
             **({'thinking_token_floor': thinking_token_floor()} if thinking_enabled() else {}),
             'structured_outputs': structured_outputs,
-            'local_schema_validation': v62_enabled() and api_provider() == 'openai',
+            'local_schema_validation': v62_enabled(),
             'format_attempt_limit': 4,
             'token_parameter': ('max_tokens' if api_provider() == 'qwen' else
                 os.getenv('SEEGROUND_OPENAI_TOKEN_PARAMETER', 'max_completion_tokens').strip()),

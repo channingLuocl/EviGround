@@ -1,4 +1,4 @@
-"""Strict output contracts for v6.2 OpenAI-compatible production stages."""
+"""Strict local output contracts for v6.2 production stages."""
 
 
 def obj(properties):
@@ -105,8 +105,7 @@ VISUAL_REPORT = obj({
 
 
 def schema_kwargs(name, schema):
-    from qwen_api import api_provider
     from v4_policy import v62_enabled
-    if v62_enabled() and api_provider() == 'openai':
+    if v62_enabled():
         return {'response_schema': {'name': name, 'strict': True, 'schema': schema}}
     return {}

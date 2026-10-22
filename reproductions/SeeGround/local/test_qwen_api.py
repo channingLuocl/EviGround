@@ -3,7 +3,8 @@ import unittest
 import requests
 from types import SimpleNamespace
 from unittest.mock import patch
-from qwen_api import chat, QwenAPIError, _redact
+from qwen_api import chat, QwenAPIError, _redact, api_config_summary
+from response_schemas import obj, enum, array, schema_kwargs
 
 
 class QwenAPITests(unittest.TestCase):
@@ -167,6 +168,55 @@ class QwenAPITests(unittest.TestCase):
                           'echo-api-token', 'echo-api-secret', 'echo-password',
                           'echo-proxy-auth', 'echo-subscription-key'):
             self.assertNotIn(sensitive, saved)
+
+    def test_qwen_react_schema_retries_invalid_action_without_inventing_evidence(self):
+        schema = obj({'action': enum('inspect', 'measure', 'finish'), 'reason': {'type': 'string'},
+            'focus_ids': array({'type': 'integer', 'enum': [1, 2]}),
+            'predicted_id': {'type': ['integer', 'null'], 'enum': [1, 2, None]},
+            'evidence': array(obj({'object_ids': array({'type': 'integer'})}))})
+        valid = {'action': 'inspect', 'reason': 'Compare the chairs',
+                 'focus_ids': [1, 2], 'predicted_id': None, 'evidence': []}
+        invalid = [dict(valid, focus_ids=[]), dict(valid, focus_ids=[99]),
+                   dict(valid, action='finish', focus_ids=[], predicted_id=1)]
+        def response(value):
+            return SimpleNamespace(ok=True, status_code=200, text=json.dumps(value), headers={},
+                json=lambda: {'choices': [{'finish_reason': 'stop',
+                    'message': {'content': json.dumps(value)}}]})
+        for bad in invalid:
+            with self.subTest(action=bad), patch.dict('os.environ', {
+                    'SEEGROUND_MODEL': 'qwen3-vl-plus', 'SEEGROUND_V4': '1',
+                    'SEEGROUND_V7': '1', 'SEEGROUND_ENABLE_THINKING': '0',
+                    'SEEGROUND_BASE_URL': 'https://example.invalid/v1',
+                    'SEEGROUND_API_KEY': 'test-only'}), patch('qwen_api.requests.post',
+                    side_effect=[response(bad), response(valid)]) as post:
+                contract = schema_kwargs('r18_react_action', schema)
+                self.assertIn('response_schema', contract)
+                result = chat([{'role': 'user', 'content': 'Compare chair instances'}],
+                              json_mode=True, **contract)
+                self.assertEqual(json.loads(result['_content']), valid)
+                self.assertEqual(post.call_count, 2)
+                self.assertEqual(result['_baseline']['schema_retry'], 1)
+                body = post.call_args.kwargs['json']
+                self.assertEqual(body['response_format'], {'type': 'json_object'})
+                self.assertNotIn('reasoning_effort', body)
+                self.assertIn('previous response failed validation', body['messages'][-1]['content'])
+                self.assertTrue(api_config_summary()['local_schema_validation'])
+
+    def test_qwen_schema_failure_stops_after_four_attempts(self):
+        value = {'action': 'unavailable'}
+        response = SimpleNamespace(ok=True, status_code=200, text=json.dumps(value), headers={},
+            json=lambda: {'choices': [{'finish_reason': 'stop',
+                                      'message': {'content': json.dumps(value)}}]})
+        with patch.dict('os.environ', {'SEEGROUND_MODEL': 'qwen3-vl-plus',
+                'SEEGROUND_ENABLE_THINKING': '0',
+                'SEEGROUND_BASE_URL': 'https://example.invalid/v1',
+                'SEEGROUND_API_KEY': 'test-only'}), \
+                patch('qwen_api.requests.post', return_value=response) as post:
+            with self.assertRaises(QwenAPIError) as raised:
+                chat([], json_mode=True, response_schema={'name': 'r18_react_action',
+                    'strict': True, 'schema': obj({'action': enum('finish')})})
+        self.assertEqual(post.call_count, 4)
+        self.assertEqual(raised.exception.diagnostic['failure_kind'], 'response_schema')
 
 
 if __name__=='__main__':unittest.main()
