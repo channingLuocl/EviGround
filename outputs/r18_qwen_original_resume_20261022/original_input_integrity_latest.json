@@ -1,0 +1,27 @@
+{
+  "checked_at": "2026-10-22T07:25:45.481733+00:00",
+  "git_commit": "4f750d1cf61259a368157173b9bed226d719b6a1",
+  "git_object_format": "sha1",
+  "canonical_git_file_count": 140,
+  "actual_files_checked_against_git": 140,
+  "missing_actual_files": [],
+  "actual_files_differing_from_git": [],
+  "all_committed_inputs_match_actual": true,
+  "source_input_checks": [
+    {
+      "path": "outputs/20261020_r8_object_predictions/predictions.json",
+      "sha256": "34aa94cbc455324fdd28ddfd21a3832bba743eac25c32d58037c9bc460b1da9e",
+      "matches_original_manifest": true
+    },
+    {
+      "path": "outputs/20261020_r8_object_predictions/config.json",
+      "sha256": "de36aaaaea37c20062c3e4f9c9cc9b5fb039a810ddfa644b9a40f124dd6d6dba",
+      "matches_original_manifest": true
+    }
+  ],
+  "source_inputs_match_original_manifest": true,
+  "score_type": "weighted_standardized_3d_rgb_fusion_not_probability",
+  "top_k": 5,
+  "instances": 3413,
+  "inference_files_modified": false
+}
