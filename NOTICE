@@ -1,0 +1,9 @@
+EviGround
+
+The current source tree contains the EviGround grounding workflow. Its development
+workspace previously included SeeGround reproduction code, PointNeXt code and old
+experiments; those implementation trees are removed from this revision.
+
+The existing Apache-2.0 LICENSE is retained. Third-party Python libraries and
+models retain their own licenses. Nr3D/ReferIt3D annotations and external ScanNet
+scene data retain their original terms and attribution requirements.

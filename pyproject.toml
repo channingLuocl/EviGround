@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "EviGround: ReAct-Based Visual-Geometric Reasoning for 3D Visual Grounding"
 requires-python = ">=3.10"
 dependencies = [
-  "numpy", "Pillow", "plyfile", "requests", "jsonschema>=4.18,<5",
+  "numpy", "Pillow", "requests", "jsonschema>=4.18,<5",
   "json-repair", "python-dotenv", "spacy==3.8.16",
 ]
 
@@ -17,9 +17,6 @@ eviground = "eviground.cli.entrypoint:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.package-data]
-eviground = ["_module_layout.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]

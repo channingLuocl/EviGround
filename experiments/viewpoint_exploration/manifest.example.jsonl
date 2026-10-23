@@ -1,2 +1,0 @@
-{"query_id":"nr3d-example-0001","scene_id":"scene0000_00","objects_path":"scene0000_00.json","utterance":"the chair to the right of the table","target_category":"chair","anchor_id":18,"relation":"right","target_id":4}
-{"query_id":"nr3d-example-0002","scene_id":"scene0001_00","objects_path":"scene0001_00.json","utterance":"the chair to the left of the desk","target_category":"chair","anchor_id":9,"relation":"left","allowed_headings_deg":[80,90,100],"target_id":7}

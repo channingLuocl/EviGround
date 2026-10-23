@@ -2,43 +2,52 @@
 
 **ReAct-Based Visual–Geometric Reasoning for 3D Visual Grounding**
 
-通过多类别假设、主动视觉观察和几何测量获取证据，完成三维视觉定位。
-
-基于预测物体类别的 3D 视觉定位。默认使用 **Qwen r18 + Top-5 + 开启思考**；冻结的 Nr3D 完整单轮结果为 **69.66%（5,437 / 7,805）**，不累计历史正确结果。
-
-```text
-src/eviground/   核心代码与命令行
-docs/           使用说明与历史文档
-tests/          离线测试
-data/           查询清单与标签常量
-scripts/        启动和验证脚本
-third_party/    原项目及第三方代码
-outputs/        冻结输入、结果与审计
-```
+EviGround 根据语言描述定位 3D 场景中的物体。输入是点云、实例几何和外部分类器预测；大模型自主选择 `inspect`（观察）、`measure`（测量）和 `finish`（作出选择）。
 
 ## 安装
 
 ```bash
-python3 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 ```
 
-在 `.env` 填入 `EVIGROUND_API_KEY`，并准备场景目录；密钥和本地场景数据不提交到 Git。现有 `SEEGROUND_*` 配置仍可读取，同名配置以 `EVIGROUND_*` 为准。
+在 `.env` 填写自己的模型 API 密钥、模型名称和接口地址。默认使用 OpenAI 兼容协议。
 
 ## 运行
 
 ```bash
-eviground --scene-root /path/to/prepared_scenes \
-  --output outputs/runs/r18_top5 --prepare-only
-
-eviground --scene-root /path/to/prepared_scenes \
-  --output outputs/runs/r18_top5
+eviground \
+  --predictions /absolute/path/to/classifier_predictions.zip \
+  --scene-root /absolute/path/to/prepared_scenes \
+  --category-top-k 5 \
+  --workers 8 --api-concurrency 8 \
+  --output outputs/top5_single_pass
 ```
 
-默认 Top-5、本地并发 8、API 并发 8。同一配置使用同一输出目录续跑，保留已完成的正确、错误和失败结果；修改配置后使用新目录。
+- `--predictions` 必须显式指定，支持已校验的分类导出 ZIP 或目录。
+- `--category-top-k 1` 只使用第一类别；`5` 保留五个候选类别，保留排名和分差，结合视觉与空间证据判断。
+- 默认评估 `data/queries/nr3d_val.json` 中的 7805 条描述。用 `--limit 10 --prepare-only` 检查输入，不调用模型。
+- 同一输出目录、相同代码和配置可继续未完成任务；已完成的正确、错误和 null 都原样保留。新实验必须使用新输出目录。
+- 单轮结果保存在 `results.json`；错误和 null 计入总分母。没有跨运行正确结果合并、累计命中或 GT 类别推理入口。
 
-详见 [运行指南](docs/usage.md)、[代码布局](docs/architecture.md) 和 [冻结结果](outputs/r18_qwen_top5_full7805_freeze_20261023/README.md)。
+## 目录
 
-原始 SeeGround 组件及其说明保留在 `third_party/` 与 `docs/upstream/`；历史冻结记录保留原始名称和哈希。
+```text
+src/eviground/   当前方法、类别适配、渲染与评估
+data/queries/   固定评估描述；答案只供评估进程使用
+docs/           使用说明与方法说明
+tests/unit/     当前流程的离线回归测试
+scripts/        命令启动脚本
+```
+
+详细说明见 [运行指南](docs/usage.md) 和 [方法结构](docs/architecture.md)。外部模型、分类器训练代码和旧实验结果不随本仓库分发。依赖及来源说明见 [NOTICE](NOTICE)；许可证见 [LICENSE](LICENSE)。
+
+## 测试
+
+```bash
+PYTHON_DOTENV_DISABLED=1 PYTHONPATH=src python -m unittest discover -s tests/unit
+```
+
+清理后的版本需要独立运行以报告新指标；既往实验数字不是本版本的重新评测结果。

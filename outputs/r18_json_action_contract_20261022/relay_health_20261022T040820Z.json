@@ -1,8 +1,0 @@
-{
-  "observed_at": "2026-10-22T04:08:14.465775+00:00",
-  "purpose": "Tiny authorized relay health probe; no benchmark query or GT input",
-  "model": "gpt-6.1-sol",
-  "status": 200,
-  "elapsed_s": 5.714,
-  "body_excerpt": "{\"id\":\"resp_0591b51e21a40551016ad98c32047887d292894a4706edcab3\",\"object\":\"chat.completion\",\"created\":1792642100,\"model\":\"gpt-6.1-sol\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":22439,\"completion_tokens\":9,\"total_tokens\":22448},\"service_tier\":\"default\"}"
-}

@@ -1,8 +1,0 @@
-{
-  "checked_at": "2026-10-22T05:30:28.274206+00:00",
-  "scope": "Isolated ReAct, Qwen API and predicted-category grounding tests; not the entire repository suite",
-  "passed": true,
-  "total_tests": 48,
-  "added_check": "Right and signed forward coordinate orders differ correctly, including objects behind the observer origin",
-  "existing_runtimes_modified": false
-}

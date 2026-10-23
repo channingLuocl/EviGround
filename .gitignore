@@ -19,5 +19,5 @@ dist/
 *.egg-info/
 .pytest_cache/
 .coverage
-outputs/runs/
+outputs/
 ._*

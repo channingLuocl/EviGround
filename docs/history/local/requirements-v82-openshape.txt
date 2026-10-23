@@ -1,6 +1,0 @@
--r requirements-v82.txt
-open_clip_torch==2.24.0
-einops>=0.6,<0.9
-torch.redstone==0.0.5
-openshape @ git+https://huggingface.co/OpenShape/openshape-demo-support@70dbc29fa30520cb78b4982de671f90600c08685
-# DGL is installed separately using the wheel matching Python/PyTorch/CUDA.

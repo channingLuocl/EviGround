@@ -1,29 +1,28 @@
-# EviGround 代码布局
+# 方法结构
 
-方法名称为 **EviGround**，论文暂定标题为 *EviGround: ReAct-Based Visual–Geometric Reasoning for 3D Visual Grounding*。Python 包、安装名称和命令入口统一为 `eviground`，配置使用 `EVIGROUND_*`；旧配置通过 `config.py` 兼容读取。
+```text
+原始描述 + 预测类别 Top-1 / Top-5 + 实例点云与几何
+  → 语言解析与目标 / 参照物类别绑定
+  → 分类器覆盖的场景概览
+  → ReAct 自主观察 / 测量 / 比较
+  → 单个实例 ID 或 null
+  → 独立评估进程计算正确率
+```
 
-默认运行入口使用 2026-10-23 冻结的 Qwen r18 代码。目录迁移只调整模块导入、资源路径、子进程入口和源码指纹，不修改候选筛选、提示词、几何计算或模型决策。
+## 类别信息
 
-| 目录 | 职责 |
-| --- | --- |
-| `src/eviground/api/` | API 请求、并发控制和响应结构 |
-| `src/eviground/grounding/` | 候选推理、主动观察和 r18 决策 |
-| `src/eviground/query/` | 查询解析、语义图和改写 |
-| `src/eviground/geometry/` | 位置、距离、尺寸和空间关系 |
-| `src/eviground/rendering/` | 场景绘制、视角和视觉证据 |
-| `src/eviground/categories/` | 预测类别、Top-1/Top-5 输入及匹配 |
-| `src/eviground/evaluation/` | 评估、进度、结果存储和续跑 |
-| `src/eviground/classifiers/` | 分类器及其特征模块 |
-| `src/eviground/cli/` | 命令行入口 |
-| `src/eviground/experiments/` | 分类训练、诊断、缓存与历史实验工具 |
-| `tests/unit/` | 默认离线回归测试 |
-| `data/` | 场景标签常量和官方查询清单 |
-| `third_party/` | 原始 SeeGround 和第三方模型代码 |
-| `docs/` | 当前指南、来源和历史文档 |
-| `outputs/` | 已冻结输入、结果与审计；生成的新结果单独忽略 |
+Top-1 是首选类别，Top-2–5 是互斥的备选假设，不等价于五个真实标签。分类融合分数没有概率含义，不套用旧余弦分数阈值。目标与参照物均在保留的假设中匹配。只有备选类别命中的目标，在仍有工具预算时必须先观察，再允许完成选择。
 
-`outputs/r18_qwen_original_resume_20261022/runtime_original/` 保留原始源码，作为冻结审计的依据。新代码从 `src/eviground/` 导入，不使用冻结目录作为 Python 搜索路径。
+## 证据循环
 
-`docs/module_layout.json` 列出原始 152 个模块与新包路径的对应关系。旧的开发代码及测试以历史实验保留，避免将后来尚未采纳的实验改动混入本次 69.66% 主线。
+`inspect` 支持点云场景视图和独立实例视图；独立视图不共享比例或空间坐标。`measure` 返回尺寸、距离、重叠、支撑间隙以及模型指定观察坐标系下的排序。测量本身不证明类别或参照物绑定正确。`finish` 只能选择候选目标 ID 或 null，并附带原文引用和证据。
 
-冻结结果的源码哈希记录原始布局。新实验在新输出目录生成新的源码指纹，不能把迁移后的代码写入旧冻结批次。
+## 数据边界
+
+`grounding/pipeline.py` 只接收场景目录、描述、类别表和工具预算，不接收评估行或答案。`scene_instances.json` 仅补充未被分类器覆盖的实例几何，这些实例的类别统一为 `object`。`objects_gt.json` 的框仅由评估协调进程用于 IoU，不向推理传递 GT 类别或目标 ID。实例几何与分割仍是输入数据的假设，不宣称该流程评估了实例检测。
+
+## 单轮评估
+
+每条描述只有一个最终结果。`accuracy` 使用固定选中条数作为分母；运行中另给出 `processed_accuracy`，用 `complete` 标明是否全部结束。null 和请求错误不从分母剔除，提供 Easy / Hard 与 View-dependent / View-independent 分组。未完成运行的分组仅覆盖已处理行。
+
+断点恢复只服务于同一目录、相同输入与配置的这一次运行，不依据正确与否挑选结果。每样本最多一次额外瞬时 API 重试；失败的评估结果不会因再次启动而自动重跑。代码、预测文件、场景内容及配置变化会拒绝继续旧目录。
