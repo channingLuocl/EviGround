@@ -2,8 +2,8 @@ import unittest
 
 import numpy as np
 
-from seeground.classifiers.classifier_sampling_r8 import choose, rgb_branch, vote, yaw
-from seeground.experiments.audit_classifier_sampling_r8 import pick, scores
+from eviground.classifiers.classifier_sampling_r8 import choose, rgb_branch, vote, yaw
+from eviground.experiments.audit_classifier_sampling_r8 import pick, scores
 
 
 class SamplingTests(unittest.TestCase):

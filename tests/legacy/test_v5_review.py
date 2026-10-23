@@ -9,28 +9,28 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.grounding.active_diagnostic import active_ground, compute_observation, execute_v4_inspection, measurement_version
-from seeground.geometry.size_semantics import evaluate_size_condition, size_specs
+from eviground.grounding.active_diagnostic import active_ground, compute_observation, execute_v4_inspection, measurement_version
+from eviground.geometry.size_semantics import evaluate_size_condition, size_specs
 import tests.legacy.test_v4 as test_v4
 from tests.legacy.test_v4 import box, measure, parsed
-from seeground.grounding.v4_policy import settings, v5_enabled
-from seeground.rendering.v4_visual import validate_findings
+from eviground.grounding.v4_policy import settings, v5_enabled
+from eviground.rendering.v4_visual import validate_findings
 
 
 class V5ReviewTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V5': '1',
-            'SEEGROUND_API_PROVIDER': 'qwen', 'SEEGROUND_REACT_BACKEND': 'qwen',
-            'SEEGROUND_V5_SCOPE': '1', 'SEEGROUND_V5_MEASUREMENTS': '1', 'SEEGROUND_V5_CALL_ECONOMY': '1'})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V5': '1',
+            'EVIGROUND_API_PROVIDER': 'qwen', 'EVIGROUND_REACT_BACKEND': 'qwen',
+            'EVIGROUND_V5_SCOPE': '1', 'EVIGROUND_V5_MEASUREMENTS': '1', 'EVIGROUND_V5_CALL_ECONOMY': '1'})
         env.start()
         self.addCleanup(env.stop)
 
     def test_ablation_flags_preserve_control_and_existing_v4_switches(self):
-        with patch.dict(os.environ, {'SEEGROUND_V5_SCOPE': '0'}):
+        with patch.dict(os.environ, {'EVIGROUND_V5_SCOPE': '0'}):
             self.assertTrue(v5_enabled())
             self.assertFalse(v5_enabled('scope'))
             self.assertTrue(settings()['v5_measurements'])
-        with patch.dict(os.environ, {'SEEGROUND_V4': '0'}):
+        with patch.dict(os.environ, {'EVIGROUND_V4': '0'}):
             self.assertFalse(v5_enabled('scope'))
 
     def measurement_review(self, candidate_id):
@@ -71,8 +71,8 @@ class V5ReviewTests(unittest.TestCase):
             'images': [], 'internal_steps': []}
         view = {'image': str(out / 'mock.png'), 'focus_ids': [1],
             'visible_instance_pixels': {'1': 100}, 'source': 'assigned points'}
-        with patch('seeground.grounding.active_diagnostic.boxed_view', return_value=view), \
-             patch('seeground.grounding.active_diagnostic.size_candidate_evidence', return_value=([], [], {})):
+        with patch('eviground.grounding.active_diagnostic.boxed_view', return_value=view), \
+             patch('eviground.grounding.active_diagnostic.size_candidate_evidence', return_value=([], [], {})):
             execute_v4_inspection(action, 'tall chair', p, {'candidate_ids': [1]}, [box(1)], [box(1)],
                 np.zeros((1, 3)), np.zeros((1, 3)), np.ones(1), out, 1, calls, result)
         return result
@@ -80,7 +80,7 @@ class V5ReviewTests(unittest.TestCase):
     def test_unknown_completeness_keeps_supported_measurement(self):
         report = {'status': 'unknown', 'reason': 'occluded', 'observations': [
             {'id': 1, 'completeness': 'unknown', 'reason': 'occluded'}], 'metric_choices': []}
-        with tempfile.TemporaryDirectory() as directory, patch('seeground.grounding.active_diagnostic.visual_report', return_value=report):
+        with tempfile.TemporaryDirectory() as directory, patch('eviground.grounding.active_diagnostic.visual_report', return_value=report):
             result = self.inspection(Path(directory), {'dimension': 'size'}, {}, [{'stage': 'mock'}])
         row = result['details']['comparison_metrics'][0]
         self.assertEqual(row['observed_completeness']['status'], 'supported')
@@ -90,7 +90,7 @@ class V5ReviewTests(unittest.TestCase):
     def test_unrelated_invalidation_reuses_view_and_new_camera_calls_again(self):
         report = {'status': 'unknown', 'reason': 'occluded', 'observations': [], 'metric_choices': []}
         p, calls = {}, [{'stage': 'mock'}]
-        with tempfile.TemporaryDirectory() as directory, patch('seeground.grounding.active_diagnostic.visual_report', return_value=report) as visual:
+        with tempfile.TemporaryDirectory() as directory, patch('eviground.grounding.active_diagnostic.visual_report', return_value=report) as visual:
             out = Path(directory)
             self.inspection(out, {'dimension': 'size'}, p, calls)
             p['_v4_invalidated_conditions'] = ['red']
@@ -106,10 +106,10 @@ class V5ReviewTests(unittest.TestCase):
                'observed_completeness': {'status': 'unknown', 'surface_only_risk': True}}
         p['_v5_measurement_observations'] = {'1': {'measurement_version': measurement_version(row),
             'observed_completeness': {'status': 'supported', 'surface_only_risk': True}}}
-        with patch('seeground.grounding.active_diagnostic._target_size_scope', return_value=([1], True, [])), \
-             patch('seeground.grounding.active_diagnostic.size_candidate_evidence', return_value=([], [], {'comparison_pool_ids': [1]})):
+        with patch('eviground.grounding.active_diagnostic._target_size_scope', return_value=([1], True, [])), \
+             patch('eviground.grounding.active_diagnostic.size_candidate_evidence', return_value=([], [], {'comparison_pool_ids': [1]})):
             for height, expected in [(1., 'supported'), (1.2, 'unknown')]:
-                with patch('seeground.grounding.active_diagnostic.point_cloud_measurements', return_value=[{**deepcopy(row), 'height_m': height}]):
+                with patch('eviground.grounding.active_diagnostic.point_cloud_measurements', return_value=[{**deepcopy(row), 'height_m': height}]):
                     result = compute_observation('size', 'tall chair', p, {'candidate_ids': [1]}, [box(1, 'chair')],
                         [box(1, 'chair')], np.zeros((1, 3)), np.ones(1))
                 self.assertEqual(result['comparison_metrics'][0]['observed_completeness']['status'], expected)
@@ -124,9 +124,9 @@ class V5ReviewTests(unittest.TestCase):
         view = {'image': 'mock.png', 'focus_ids': [1, 2, 3], 'source': 'assigned points',
                 'visible_instance_pixels': {str(oid): 100 for oid in (1, 2, 3)}}
         p = {}
-        with patch('seeground.grounding.active_diagnostic.bind_tasks', return_value=[row]), \
-             patch('seeground.grounding.active_diagnostic.boxed_view', return_value=view), \
-             patch('seeground.grounding.active_diagnostic.visual_report', return_value=report):
+        with patch('eviground.grounding.active_diagnostic.bind_tasks', return_value=[row]), \
+             patch('eviground.grounding.active_diagnostic.boxed_view', return_value=view), \
+             patch('eviground.grounding.active_diagnostic.visual_report', return_value=report):
             execute_v4_inspection({'dimension': 'distance', 'focus_ids': [1, 2, 3]}, 'chair near the door', p,
                 {'candidate_ids': [1]}, [box(1, 'chair')], [box(1, 'chair'), box(2, 'door'), box(3, 'door')],
                 np.zeros((1, 3)), np.zeros((1, 3)), np.ones(1), Path('.'), 1, [{'stage': 'mock'}], result)
@@ -171,7 +171,7 @@ class V5ReviewTests(unittest.TestCase):
         relation['details']['relation_tasks'] = [{'candidate_id': 1, 'source_quote': 'near the door', 'status': 'pass'}]
         evidence = helper.operation('size', [2])['candidate_evidence']
         current = {**old, 'scope_status': 'bound', 'candidate_evidence': evidence}
-        with patch('seeground.grounding.active_diagnostic.size_candidate_evidence', return_value=(evidence, [current], {})):
+        with patch('eviground.grounding.active_diagnostic.size_candidate_evidence', return_value=(evidence, [current], {})):
             result = helper.controller([{'action': 'evidence', 'dimension': 'size', 'reason': 'measure'},
                 {'action': 'evidence', 'dimension': 'distance', 'reason': 'bind relation'},
                 {'action': 'stop', 'reason': 'remaining unknown'}], [{'status': 'consistent', 'reason': 'visible'}],
@@ -203,9 +203,9 @@ class V5ReviewTests(unittest.TestCase):
             return {'_content': json.dumps(content), '_finish_reason': 'stop', '_baseline': {}, 'usage': {}}
         operation = test_v4.V4Tests().operation('distance', [])
         operation['details']['relation_tasks'] = deepcopy(relations)
-        with tempfile.TemporaryDirectory() as directory, patch('seeground.grounding.active_diagnostic.chat', side_effect=chat), \
-             patch('seeground.grounding.active_diagnostic.diagnose', side_effect=lambda *a, **k: deepcopy(initial)), \
-             patch('seeground.grounding.active_diagnostic.execute_evidence', return_value=operation):
+        with tempfile.TemporaryDirectory() as directory, patch('eviground.grounding.active_diagnostic.chat', side_effect=chat), \
+             patch('eviground.grounding.active_diagnostic.diagnose', side_effect=lambda *a, **k: deepcopy(initial)), \
+             patch('eviground.grounding.active_diagnostic.execute_evidence', return_value=operation):
             result = active_ground('tall chair', p, objects, objects, objects, xyz,
                 np.full(xyz.shape, 100, dtype=np.uint8), ids, Path(directory), [], {}, 3, True)
         self.assertEqual(result['backtrack_count'], 1)

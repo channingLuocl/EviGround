@@ -1,7 +1,7 @@
 """Entry regressions based on the first real module acceptance traces."""
 import unittest
-from seeground.grounding.diagnostic import attributes_for, diagnose, refresh_condition_records, validate_structure
-from seeground.query.query_rewrite import rewrite_query
+from eviground.grounding.diagnostic import attributes_for, diagnose, refresh_condition_records, validate_structure
+from eviground.query.query_rewrite import rewrite_query
 
 
 def obj(oid, category, z, height=1.):

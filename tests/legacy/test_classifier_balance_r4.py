@@ -7,10 +7,10 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from seeground.experiments.audit_classifier_sweep_r3 import independent_network
-from seeground.experiments.audit_pair_views import z
-from seeground.experiments.audit_classifier_balance_r4 import numpy_candidates,paired_bootstrap
-from seeground.classifiers.classifier_balance_r4 import (build_candidates,choose,class_weights,fit,make_model,
+from eviground.experiments.audit_classifier_sweep_r3 import independent_network
+from eviground.experiments.audit_pair_views import z
+from eviground.experiments.audit_classifier_balance_r4 import numpy_candidates,paired_bootstrap
+from eviground.classifiers.classifier_balance_r4 import (build_candidates,choose,class_weights,fit,make_model,
     sample_indices,training_loss)
 
 

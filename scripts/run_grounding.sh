@@ -2,4 +2,4 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-exec "${PYTHON:-python3}" -m seeground "$@"
+exec "${PYTHON:-python3}" -m eviground "$@"

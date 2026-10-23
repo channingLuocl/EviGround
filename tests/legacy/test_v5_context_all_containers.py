@@ -1,5 +1,5 @@
 """Offline full-container sharing and repeated planner regressions."""
-from seeground.paths import ROOT
+from eviground.paths import ROOT
 from copy import deepcopy
 import importlib.util
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-import seeground.grounding.react_decision as PROPOSED
+import eviground.grounding.react_decision as PROPOSED
 import tests.legacy.test_v5_context_protocol as prior_tests
 from tests.legacy.test_v5_context_protocol import expand_protocol
 
@@ -21,9 +21,9 @@ spec.loader.exec_module(FROZEN)
 
 class ContextAllContainersTests(unittest.TestCase):
     def setUp(self):
-        environment = patch.dict(os.environ, {'SEEGROUND_V5': '1', 'SEEGROUND_V4': '1',
-            'SEEGROUND_CONTEXT_LIMIT': '32768', 'SEEGROUND_REACT_BACKEND': 'qwen',
-            'SEEGROUND_API_PROVIDER': 'qwen'})
+        environment = patch.dict(os.environ, {'EVIGROUND_V5': '1', 'EVIGROUND_V4': '1',
+            'EVIGROUND_CONTEXT_LIMIT': '32768', 'EVIGROUND_REACT_BACKEND': 'qwen',
+            'EVIGROUND_API_PROVIDER': 'qwen'})
         environment.start()
         self.addCleanup(environment.stop)
 
@@ -34,7 +34,7 @@ class ContextAllContainersTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'required planner obligations'):
             FROZEN.planner_state(saved['state'], instruction_bytes=instruction_bytes)
         encoded, audit = PROPOSED.planner_state(saved['state'], instruction_bytes=instruction_bytes)
-        with patch.dict(os.environ, {'SEEGROUND_CONTEXT_LIMIT': '1000000000'}):
+        with patch.dict(os.environ, {'EVIGROUND_CONTEXT_LIMIT': '1000000000'}):
             baseline, _ = FROZEN.planner_state(saved['state'], tighter=audit['tighter'],
                                               instruction_bytes=instruction_bytes)
         self.assertEqual(expand_protocol(encoded), baseline)
@@ -58,7 +58,7 @@ class ContextAllContainersTests(unittest.TestCase):
                 if row == '22872':
                     with self.assertRaisesRegex(ValueError, 'required planner obligations'):
                         PROPOSED.planner_state(saved['state'], instruction_bytes=instruction_bytes)
-                    with patch.dict(os.environ, {'SEEGROUND_CONTEXT_LIMIT': '1000000000'}):
+                    with patch.dict(os.environ, {'EVIGROUND_CONTEXT_LIMIT': '1000000000'}):
                         baseline, _ = FROZEN.planner_state(saved['state'], tighter=True,
                                                           instruction_bytes=instruction_bytes)
                     encoded, _ = PROPOSED.compact_repeated_evidence(baseline)
@@ -67,7 +67,7 @@ class ContextAllContainersTests(unittest.TestCase):
                 else:
                     encoded, audit = PROPOSED.planner_state(saved['state'], instruction_bytes=instruction_bytes)
                     self.assertLessEqual(audit['input_units'], 30720)
-                    with patch.dict(os.environ, {'SEEGROUND_CONTEXT_LIMIT': '1000000000'}):
+                    with patch.dict(os.environ, {'EVIGROUND_CONTEXT_LIMIT': '1000000000'}):
                         baseline, _ = FROZEN.planner_state(saved['state'], tighter=audit['tighter'],
                                                           instruction_bytes=instruction_bytes)
                 self.assertEqual(expand_protocol(encoded), baseline)
@@ -75,7 +75,7 @@ class ContextAllContainersTests(unittest.TestCase):
                 self.assertEqual(encoded['evidence_state']['missing'], baseline['evidence_state']['missing'])
                 self.assertEqual(PROPOSED.evidence_tasks(encoded), PROPOSED.evidence_tasks(baseline))
                 self.assertEqual(expand_protocol(PROPOSED.jev_state(encoded)), PROPOSED.jev_state(baseline))
-                with patch.dict(os.environ, {'SEEGROUND_CONTEXT_LIMIT': '1000000000'}):
+                with patch.dict(os.environ, {'EVIGROUND_CONTEXT_LIMIT': '1000000000'}):
                     second, _ = PROPOSED.planner_state(encoded, tighter=True, instruction_bytes=instruction_bytes)
                 expected = {**baseline, 'history': baseline['history'][-1:]}
                 self.assertEqual(expand_protocol(second), expected)
@@ -163,7 +163,7 @@ class ContextAllContainersTests(unittest.TestCase):
             'deletion_events': [deepcopy(event)] * 3,
             'history': [{'action': {'action': 'evidence', 'dimension': 'position'},
                 'remaining_candidate_ids': [2, 4], 'evidence_state': {'missing': ['unknown counted member 4']}}] * 3}
-        with patch.dict(os.environ, {'SEEGROUND_CONTEXT_LIMIT': '1000000000'}):
+        with patch.dict(os.environ, {'EVIGROUND_CONTEXT_LIMIT': '1000000000'}):
             compact, _ = FROZEN.planner_state(source)
             expected, _ = FROZEN.planner_state(source, tighter=True)
         encoded, _ = PROPOSED.compact_repeated_evidence(compact)

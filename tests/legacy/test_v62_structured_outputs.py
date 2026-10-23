@@ -10,12 +10,12 @@ from unittest.mock import patch
 from jsonschema import Draft202012Validator, ValidationError
 import requests
 
-from seeground.api.qwen_api import QwenAPIError, chat, api_config_summary
-from seeground.grounding.real_scene import parse_query, repair_missing_attributes
-from seeground.api.response_schemas import (APPEARANCE, ATTRIBUTES, CATEGORY_REVIEW, INSTANCE_REVIEW,
+from eviground.api.qwen_api import QwenAPIError, chat, api_config_summary
+from eviground.grounding.real_scene import parse_query, repair_missing_attributes
+from eviground.api.response_schemas import (APPEARANCE, ATTRIBUTES, CATEGORY_REVIEW, INSTANCE_REVIEW,
     RGB_REVIEW, VISUAL_REPORT, obj, parser_schema, planner_schema, schema_kwargs)
-from seeground.grounding.v4_policy import settings, v6_enabled
-from seeground.grounding.v5_runtime import sample_recovery
+from eviground.grounding.v4_policy import settings, v6_enabled
+from eviground.grounding.v5_runtime import sample_recovery
 
 
 def response(content, finish='stop', refusal=None):
@@ -41,12 +41,12 @@ def planner_answer(**values):
 
 class StructuredOutputsTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict('os.environ', {'SEEGROUND_V4': '1', 'SEEGROUND_V6': '0',
-            'SEEGROUND_V62': '1', 'SEEGROUND_API_PROVIDER': 'openai',
-            'SEEGROUND_REACT_BACKEND': 'openai', 'SEEGROUND_MODEL': 'mock',
-            'SEEGROUND_BASE_URL': 'https://relay.invalid/v1', 'SEEGROUND_API_KEY': 'mock-key',
-            'SEEGROUND_OPENAI_TOKEN_PARAMETER': 'max_completion_tokens',
-            'SEEGROUND_OPENAI_TEMPERATURE': '', 'SEEGROUND_SYNTAX_BACKEND': 'none'})
+        env = patch.dict('os.environ', {'EVIGROUND_V4': '1', 'EVIGROUND_V6': '0',
+            'EVIGROUND_V62': '1', 'EVIGROUND_API_PROVIDER': 'openai',
+            'EVIGROUND_REACT_BACKEND': 'openai', 'EVIGROUND_MODEL': 'mock',
+            'EVIGROUND_BASE_URL': 'https://relay.invalid/v1', 'EVIGROUND_API_KEY': 'mock-key',
+            'EVIGROUND_OPENAI_TOKEN_PARAMETER': 'max_completion_tokens',
+            'EVIGROUND_OPENAI_TEMPERATURE': '', 'EVIGROUND_SYNTAX_BACKEND': 'none'})
         env.start()
         self.addCleanup(env.stop)
         token = sample_recovery.set({'used': False, 'attempts': []})
@@ -57,10 +57,10 @@ class StructuredOutputsTests(unittest.TestCase):
         self.assertEqual(settings()['version'], 'relative-size-v6.2')
         self.assertTrue(api_config_summary()['structured_outputs'])
         self.assertEqual(api_config_summary()['request_options']['response_format'], {'type': 'json_schema'})
-        with patch.dict('os.environ', {'SEEGROUND_V62': '0', 'SEEGROUND_V6': '1'}):
+        with patch.dict('os.environ', {'EVIGROUND_V62': '0', 'EVIGROUND_V6': '1'}):
             self.assertEqual(settings()['version'], 'relative-size-v6')
             self.assertEqual(schema_kwargs('parser', parser_schema('diagnostic')), {})
-        with patch.dict('os.environ', {'SEEGROUND_API_PROVIDER': 'qwen'}):
+        with patch.dict('os.environ', {'EVIGROUND_API_PROVIDER': 'qwen'}):
             self.assertEqual(schema_kwargs('parser', parser_schema('diagnostic')), {})
 
     def test_all_contracts_close_objects_and_require_every_field(self):
@@ -82,7 +82,7 @@ class StructuredOutputsTests(unittest.TestCase):
 
     def test_real_parser_sends_strict_schema_and_records_actual_format(self):
         calls = []
-        with patch('seeground.api.qwen_api.requests.post', return_value=response(json.dumps(parser_answer()))) as post:
+        with patch('eviground.api.qwen_api.requests.post', return_value=response(json.dumps(parser_answer()))) as post:
             parsed = parse_query('the chair', mode='active_diagnostic', calls=calls)
         payload = post.call_args.kwargs['json']
         self.assertEqual(payload['response_format']['type'], 'json_schema')
@@ -100,7 +100,7 @@ class StructuredOutputsTests(unittest.TestCase):
         bad_enum = deepcopy(good); bad_enum['Observer']['origin']['kind'] = 'guessed'
         for content in ('not JSON', "'''json\n" + json.dumps(good) + "\n'''",
                         json.dumps(missing), json.dumps(wrong_type), json.dumps(extra), json.dumps(bad_enum)):
-            with self.subTest(content=content), patch('seeground.api.qwen_api.requests.post',
+            with self.subTest(content=content), patch('eviground.api.qwen_api.requests.post',
                     return_value=response(content)) as post:
                 with self.assertRaises(QwenAPIError) as error:
                     chat([], json_mode=True, **schema_kwargs('query_parser', parser_schema('diagnostic')))
@@ -112,7 +112,7 @@ class StructuredOutputsTests(unittest.TestCase):
 
     def test_refusal_and_truncation_fail_before_a_partial_action_can_execute(self):
         for finish, refusal in (('length', None), ('stop', 'cannot answer')):
-            with self.subTest(finish=finish), patch('seeground.api.qwen_api.requests.post', return_value=response(
+            with self.subTest(finish=finish), patch('eviground.api.qwen_api.requests.post', return_value=response(
                     json.dumps(parser_answer()), finish=finish, refusal=refusal)):
                 with self.assertRaises(QwenAPIError) as error:
                     chat([], json_mode=True, **schema_kwargs('query_parser', parser_schema('diagnostic')))
@@ -120,14 +120,14 @@ class StructuredOutputsTests(unittest.TestCase):
 
     def test_unsupported_schema_is_not_silently_downgraded(self):
         rejected = SimpleNamespace(ok=False, status_code=400, text='schema unsupported', headers={})
-        with patch('seeground.api.qwen_api.requests.post', return_value=rejected) as post:
+        with patch('eviground.api.qwen_api.requests.post', return_value=rejected) as post:
             with self.assertRaises(QwenAPIError):
                 chat([], json_mode=True, **schema_kwargs('query_parser', parser_schema('diagnostic')))
         self.assertEqual(post.call_count, 1)
         self.assertEqual(post.call_args.kwargs['json']['response_format']['type'], 'json_schema')
 
     def test_transient_retry_preserves_the_strict_schema(self):
-        with patch('seeground.api.qwen_api.requests.post', side_effect=[requests.Timeout(),
+        with patch('eviground.api.qwen_api.requests.post', side_effect=[requests.Timeout(),
                 response(json.dumps(parser_answer()))]) as post:
             chat([], json_mode=True, **schema_kwargs('query_parser', parser_schema('diagnostic')))
         self.assertEqual(post.call_count, 2)
@@ -139,7 +139,7 @@ class StructuredOutputsTests(unittest.TestCase):
         budget = sample_recovery.get()
         with tempfile.TemporaryDirectory() as td:
             budget.update(api_checkpoint=str(Path(td) / 'api.json'))
-            with patch('seeground.api.qwen_api.requests.post', return_value=response('{"ok":true}')) as post:
+            with patch('eviground.api.qwen_api.requests.post', return_value=response('{"ok":true}')) as post:
                 chat([], json_mode=True, **schema_kwargs('first', obj({'ok': {'type': 'boolean'}})))
                 budget['resuming'] = True
                 chat([], json_mode=True, **schema_kwargs('second', obj({'ok': {'type': 'boolean'}})))
@@ -156,8 +156,8 @@ class StructuredOutputsTests(unittest.TestCase):
 
     def test_null_planner_options_preserve_existing_appearance_defaults(self):
         from tests.legacy.test_active_diagnostic import ActiveDiagnosticTests
-        from seeground.grounding.active_diagnostic import compute_observation
-        from seeground.grounding.diagnostic import validate_structure
+        from eviground.grounding.active_diagnostic import compute_observation
+        from eviground.grounding.diagnostic import validate_structure
         seen = []
         def compute(dimension, *args, **kwargs):
             seen.append(dimension)
@@ -178,18 +178,18 @@ class StructuredOutputsTests(unittest.TestCase):
         parsed['diagnostic_missing'] = ['appearance condition not represented: red']
         calls = []
         answer = {'Attributes': [{'category': 'chair', 'role': 'target', 'phrase': 'red'}]}
-        with patch('seeground.api.qwen_api.requests.post', return_value=response(json.dumps(answer))) as post:
+        with patch('eviground.api.qwen_api.requests.post', return_value=response(json.dumps(answer))) as post:
             result = repair_missing_attributes('the red chair', parsed, calls)
         self.assertEqual(post.call_args.kwargs['json']['response_format']['json_schema']['name'], 'query_attributes')
         self.assertEqual(result['Attributes'][0]['phrase'], 'red')
 
     def test_visual_report_uses_strict_contract_without_certifying_unknown(self):
-        from seeground.rendering.v4_visual import visual_report
+        from eviground.rendering.v4_visual import visual_report
         answer = {key: [] for key in ('observations', 'relations', 'metric_choices', 'contradictions', 'findings')}
         answer.update(status='unknown', reason='Insufficient visible evidence.')
         calls = []
-        with patch('seeground.rendering.v4_visual.image_part', return_value={'type': 'text', 'text': 'image'}), \
-                patch('seeground.api.qwen_api.requests.post', return_value=response(json.dumps(answer))) as post:
+        with patch('eviground.rendering.v4_visual.image_part', return_value={'type': 'text', 'text': 'image'}), \
+                patch('eviground.api.qwen_api.requests.post', return_value=response(json.dumps(answer))) as post:
             result = visual_report('final_prediction_review', 'chair',
                 {'image': 'mock.png', 'focus_ids': [1], 'visible_instance_pixels': {'1': 100}}, {}, calls)
         self.assertEqual(post.call_args.kwargs['json']['response_format']['json_schema']['schema'], VISUAL_REPORT)

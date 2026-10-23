@@ -7,16 +7,16 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.grounding.r18_react import compact_observations, current_views, ground, measure, measured_together
+from eviground.grounding.r18_react import compact_observations, current_views, ground, measure, measured_together
 from tests.legacy.test_r8_grounding import prediction
 
 
 class ReactTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1',
-            'SEEGROUND_API_PROVIDER': 'openai',
-            'SEEGROUND_V7_4': '1', 'SEEGROUND_V9': '1', 'SEEGROUND_V9_SOURCE': 'r8',
-            'SEEGROUND_R8_GROUNDING_REVISION': 'r18'})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V7': '1',
+            'EVIGROUND_API_PROVIDER': 'openai',
+            'EVIGROUND_V7_4': '1', 'EVIGROUND_V9': '1', 'EVIGROUND_V9_SOURCE': 'r8',
+            'EVIGROUND_R8_GROUNDING_REVISION': 'r18'})
         env.start(); self.addCleanup(env.stop)
         self.objects = [prediction(1, ['chair', 'stool'], (0, 0, 1)),
                         prediction(2, ['desk', 'table'], (2, 0, .5))]
@@ -39,12 +39,12 @@ class ReactTests(unittest.TestCase):
         calls = []
         candidate_objects = self.objects[:1] if candidate_objects is None else candidate_objects
         with tempfile.TemporaryDirectory() as directory, \
-                patch('seeground.grounding.v74_grounding.scene_views', return_value=[{'image': 'overview.png'}, {'image': 'top.png'}]), \
-                patch('seeground.grounding.r18_react.image_part', return_value={}), \
-                patch('seeground.grounding.active_diagnostic.render_action', return_value={'image': 'reference.png',
+                patch('eviground.grounding.v74_grounding.scene_views', return_value=[{'image': 'overview.png'}, {'image': 'top.png'}]), \
+                patch('eviground.grounding.r18_react.image_part', return_value={}), \
+                patch('eviground.grounding.active_diagnostic.render_action', return_value={'image': 'reference.png',
                     'tool': 'render', 'focus_ids': [2], 'marked_ids': [1, 2], 'context': 'isolated'},
                     side_effect=render_side_effect) as renderer, \
-                patch('seeground.grounding.r18_react.chat', side_effect=replies) as model:
+                patch('eviground.grounding.r18_react.chat', side_effect=replies) as model:
             result = ground(self.query, self.parsed, self.objects, candidate_objects,
                 np.zeros((2, 3)), np.zeros((2, 3)), np.array([1, 2]), Path(directory),
                 calls, {}, trace, limit)
@@ -341,11 +341,11 @@ class ReactTests(unittest.TestCase):
         self.assertEqual(result['predicted_id'], 1)
 
     def test_scene_inspection_removes_anonymous_shell_without_gt_names(self):
-        from seeground.grounding.active_diagnostic import render_action
+        from eviground.grounding.active_diagnostic import render_action
         objects = self.objects + [{'bbox_id': 3, 'target': 'anonymous',
                                    'bbox_3d': [0, 0, 3, 10, 10, 1]}]
         xyz = np.array([[0., 0., 1.], [2., 0., .5], [0., 0., 3.]])
-        with tempfile.TemporaryDirectory() as directory, patch('seeground.grounding.active_diagnostic.render',
+        with tempfile.TemporaryDirectory() as directory, patch('eviground.grounding.active_diagnostic.render',
                 return_value={'points': 2, 'marked_ids': [1, 2], 'visible_pixels': 2,
                               'visible_instance_pixels': {'1': 1, '2': 1}}) as renderer:
             view = render_action({'focus_ids': [1, 2], 'context': 'scene',
@@ -356,11 +356,11 @@ class ReactTests(unittest.TestCase):
         self.assertEqual(view['hidden_supplemental_instance_ids'], [3])
 
     def test_requested_supplemental_instance_is_visible_in_cutaway(self):
-        from seeground.grounding.active_diagnostic import render_action
+        from eviground.grounding.active_diagnostic import render_action
         objects = self.objects + [{'bbox_id': 3, 'target': 'anonymous',
                                    'bbox_3d': [0, 0, 3, 10, 10, 1]}]
         xyz = np.array([[0., 0., 1.], [2., 0., .5], [0., 0., 3.]])
-        with tempfile.TemporaryDirectory() as directory, patch('seeground.grounding.active_diagnostic.render',
+        with tempfile.TemporaryDirectory() as directory, patch('eviground.grounding.active_diagnostic.render',
                 return_value={'points': 3, 'marked_ids': [1, 3], 'visible_pixels': 3,
                               'visible_instance_pixels': {'1': 1, '3': 2}}) as renderer:
             view = render_action({'focus_ids': [1, 3], 'context': 'scene',

@@ -1,6 +1,6 @@
 import unittest
 
-from seeground.evaluation.metrics import bbox_iou_3d, threshold_accuracy
+from eviground.evaluation.metrics import bbox_iou_3d, threshold_accuracy
 
 
 class MetricTests(unittest.TestCase):

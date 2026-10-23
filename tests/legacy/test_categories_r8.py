@@ -9,11 +9,11 @@ from zipfile import ZipFile
 
 import numpy as np
 
-from seeground.categories.categories_r8 import EXPORT_VERSION, load_export
-from seeground.categories.categories_v9 import (R8_SCORE_TYPE, R8_VERSION, category_fields, gate_categories,
+from eviground.categories.categories_r8 import EXPORT_VERSION, load_export
+from eviground.categories.categories_v9 import (R8_SCORE_TYPE, R8_VERSION, category_fields, gate_categories,
                            load_category_objects, prepare_tables, sha256)
-from seeground.grounding.evidence import match_retrieval_categories
-from seeground.grounding.real_scene import run_query
+from eviground.grounding.evidence import match_retrieval_categories
+from eviground.grounding.real_scene import run_query
 from tests.legacy.test_v7_evidence import obj, parse
 
 
@@ -34,10 +34,10 @@ class R8Tests(unittest.TestCase):
                 'top5': [{'category': n, 'score': s, 'rank': k} for k, (n, s) in
                          enumerate(zip(names, (3.4, 2.6, 1.5, .1, -.2)), 1)]})
         self.write_source()
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1',
-            'SEEGROUND_V7_4': '1', 'SEEGROUND_V9': '1', 'SEEGROUND_V9_SOURCE': 'r8',
-            'SEEGROUND_REACT_BACKEND': 'openai', 'SEEGROUND_API_PROVIDER': 'openai',
-            'SEEGROUND_V9_CATEGORY_ROOT': str(self.tables)})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V7': '1',
+            'EVIGROUND_V7_4': '1', 'EVIGROUND_V9': '1', 'EVIGROUND_V9_SOURCE': 'r8',
+            'EVIGROUND_REACT_BACKEND': 'openai', 'EVIGROUND_API_PROVIDER': 'openai',
+            'EVIGROUND_V9_CATEGORY_ROOT': str(self.tables)})
         env.start(); self.addCleanup(env.stop)
 
     def write_source(self):
@@ -110,11 +110,11 @@ class R8Tests(unittest.TestCase):
             'evidence': [{'source_quote': query, 'object_ids': [1, 2],
                           'observation': 'Chair at base beside desk'}], 'unresolved': []}),
             '_finish_reason': 'stop', '_baseline': {}, 'usage': {}}
-        with patch('seeground.grounding.real_scene.parse_query', return_value=parsed), \
-                patch('seeground.geometry.wall_geometry.attach_wall_geometry', side_effect=lambda objects, *args: objects), \
-                patch('seeground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
-                patch('seeground.grounding.v74_grounding.image_part', return_value={}), \
-                patch('seeground.grounding.v74_grounding.chat', return_value=reply) as model:
+        with patch('eviground.grounding.real_scene.parse_query', return_value=parsed), \
+                patch('eviground.geometry.wall_geometry.attach_wall_geometry', side_effect=lambda objects, *args: objects), \
+                patch('eviground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
+                patch('eviground.grounding.v74_grounding.image_part', return_value={}), \
+                patch('eviground.grounding.v74_grounding.chat', return_value=reply) as model:
             result = run_query(self.scene, query, self.root/'run', mode='active_diagnostic',
                                object_table='v9_top5')
         self.assertEqual(result['predicted_id'], 1)

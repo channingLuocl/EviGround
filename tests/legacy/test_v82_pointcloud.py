@@ -10,9 +10,9 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.categories.category_common_v82 import category_vocabulary, load_cloud, normalized_category
-from seeground.classifiers.pointcloud_classifier_v82 import prepare_points, load_text_features, PROMPT, CLIP_REVISION
-from seeground.experiments.run_categories_v82 import run
+from eviground.categories.category_common_v82 import category_vocabulary, load_cloud, normalized_category
+from eviground.classifiers.pointcloud_classifier_v82 import prepare_points, load_text_features, PROMPT, CLIP_REVISION
+from eviground.experiments.run_categories_v82 import run
 
 
 class V82Tests(unittest.TestCase):
@@ -75,7 +75,7 @@ class V82Tests(unittest.TestCase):
     def test_prediction_evaluation_isolation_and_resume(self):
         with tempfile.TemporaryDirectory() as td, redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
             args = self.fixture(td)
-            with patch('seeground.experiments.run_categories_v82.PointCloudClassifier') as factory:
+            with patch('eviground.experiments.run_categories_v82.PointCloudClassifier') as factory:
                 model = factory.return_value
                 model.metadata = {'test': True}
                 model.predict.side_effect = lambda xyz, rgb, seed: {
@@ -96,7 +96,7 @@ class V82Tests(unittest.TestCase):
             report = json.loads((args.output/'results.json').read_text())['summary']
             self.assertEqual(report['correct'], 1)  # books == book, office chair != chair
             self.assertEqual(report['exact_correct'], 0)
-            with patch('seeground.experiments.run_categories_v82.PointCloudClassifier') as factory:
+            with patch('eviground.experiments.run_categories_v82.PointCloudClassifier') as factory:
                 self.assertEqual(run(args), 0)
                 factory.assert_not_called()
             self.assertEqual(before, {p: p.read_bytes() for p in paths})
@@ -114,7 +114,7 @@ class V82Tests(unittest.TestCase):
     def test_retry_preserves_error_and_does_not_retry_wrong_answers(self):
         with tempfile.TemporaryDirectory() as td, redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
             args = self.fixture(td)
-            with patch('seeground.experiments.run_categories_v82.PointCloudClassifier') as factory:
+            with patch('eviground.experiments.run_categories_v82.PointCloudClassifier') as factory:
                 model = factory.return_value
                 model.metadata = {'test': True}
                 model.predict.side_effect = [ValueError('invalid instance'),
@@ -124,7 +124,7 @@ class V82Tests(unittest.TestCase):
                               if json.loads(p.read_text())['status'] == 'error')
             error_bytes = error_path.read_bytes()
             args.retry_errors = True
-            with patch('seeground.experiments.run_categories_v82.PointCloudClassifier') as factory:
+            with patch('eviground.experiments.run_categories_v82.PointCloudClassifier') as factory:
                 model = factory.return_value
                 model.metadata = {'test': True}
                 model.predict.return_value = {'status': 'completed', 'predicted_object': 'book'}
@@ -143,7 +143,7 @@ class V82Tests(unittest.TestCase):
             args.manifest.unlink()
             args.manifest = None
             args.bbox_id = [1]
-            with patch('seeground.experiments.run_categories_v82.PointCloudClassifier') as factory:
+            with patch('eviground.experiments.run_categories_v82.PointCloudClassifier') as factory:
                 model = factory.return_value
                 model.metadata = {'test': True}
                 model.predict.return_value = {'status': 'completed', 'predicted_object': 'chair'}

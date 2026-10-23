@@ -5,17 +5,17 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.grounding.diagnostic import size_condition_scope, size_conditions, validate_structure
-from seeground.geometry.object_geometry import _oriented_measurements, tabletop_measurement
-from seeground.geometry.size_semantics import evaluate_size_condition
-from seeground.geometry.v4_relations import bind_tasks
+from eviground.grounding.diagnostic import size_condition_scope, size_conditions, validate_structure
+from eviground.geometry.object_geometry import _oriented_measurements, tabletop_measurement
+from eviground.geometry.size_semantics import evaluate_size_condition
+from eviground.geometry.v4_relations import bind_tasks
 
 
 class V5ScopeGeometryTests(unittest.TestCase):
     def setUp(self):
-        self.environment = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V5': '1',
-            'SEEGROUND_V5_SCOPE': '1', 'SEEGROUND_V5_MEASUREMENTS': '1',
-            'SEEGROUND_API_PROVIDER': 'qwen', 'SEEGROUND_REACT_BACKEND': 'qwen'})
+        self.environment = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V5': '1',
+            'EVIGROUND_V5_SCOPE': '1', 'EVIGROUND_V5_MEASUREMENTS': '1',
+            'EVIGROUND_API_PROVIDER': 'qwen', 'EVIGROUND_REACT_BACKEND': 'qwen'})
         self.environment.start()
         self.addCleanup(self.environment.stop)
 
@@ -113,7 +113,7 @@ class V5ScopeGeometryTests(unittest.TestCase):
         pillow = {'bbox_id': 1, 'target': 'pillow', 'bbox_3d': [0, 0, 1.05, .3, .3, .1]}
         beds = [{'bbox_id': oid, 'target': 'bed', 'bbox_3d': [x, 0, .5, 2, 2, 1]}
                 for oid, x in [(2, 0), (3, 5)]]
-        with patch('seeground.grounding.diagnostic._attribute_comparison_pool', return_value=(beds, {'status': 'unknown'})):
+        with patch('eviground.grounding.diagnostic._attribute_comparison_pool', return_value=(beds, {'status': 'unknown'})):
             row = bind_tasks(query, parsed, [pillow] + beds, [pillow])[0]
         geometry = row['geometry_evidence']
         self.assertEqual(geometry['anchor_ids'], [2, 3])

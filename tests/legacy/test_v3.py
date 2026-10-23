@@ -7,11 +7,11 @@ import unittest
 from unittest.mock import patch
 import numpy as np
 
-from seeground.grounding.active_diagnostic import active_ground, singleton_prediction
-from seeground.evaluation.batch_nr3d import summarize
-from seeground.grounding.diagnostic import validate_structure, size_conditions, size_condition_scope, _source_attribute_bindings
-from seeground.query.query_syntax import analyze_query
-from seeground.query.query_rewrite import rewrite_query
+from eviground.grounding.active_diagnostic import active_ground, singleton_prediction
+from eviground.evaluation.batch_nr3d import summarize
+from eviground.grounding.diagnostic import validate_structure, size_conditions, size_condition_scope, _source_attribute_bindings
+from eviground.query.query_syntax import analyze_query
+from eviground.query.query_rewrite import rewrite_query
 
 
 def box(i, category='chair', z=1.):
@@ -26,7 +26,7 @@ def raw(category='chair', word='taller', unhandled=()):
 
 class V3Tests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_SYNTAX_BACKEND': 'spacy'})
+        env = patch.dict(os.environ, {'EVIGROUND_SYNTAX_BACKEND': 'spacy'})
         env.start()
         self.addCleanup(env.stop)
 
@@ -50,7 +50,7 @@ class V3Tests(unittest.TestCase):
             return {'_content': json.dumps(reply), '_finish_reason': 'stop',
                     '_baseline': {'model': 'mock', 'latency_s': 0}, 'usage': {}}
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
-                'SEEGROUND_REACT_BACKEND': 'qwen'}), patch('seeground.grounding.active_diagnostic.chat', side_effect=chat):
+                'EVIGROUND_REACT_BACKEND': 'qwen'}), patch('eviground.grounding.active_diagnostic.chat', side_effect=chat):
             result = active_ground('tall chair', parsed, objects, objects, objects,
                 np.array([[0., 0., 0.], [0., 0., 1.]]), np.zeros((2, 3), dtype=np.uint8),
                 np.array([1, 1]), Path(directory), [], {}, 2, True)
@@ -173,7 +173,7 @@ class V3Tests(unittest.TestCase):
         self.assertEqual([o['bbox_id'] for o in pool], [1, 2])
 
     def test_ablation_and_negation_preserve_unhandled(self):
-        with patch.dict(os.environ, {'SEEGROUND_SYNTAX_BACKEND': 'none'}):
+        with patch.dict(os.environ, {'EVIGROUND_SYNTAX_BACKEND': 'none'}):
             parsed = validate_structure('the taller of the two chairs', raw(unhandled=['of the two']))
         self.assertIn('of the two', parsed['Unhandled'])
         query = 'the taller of the two chairs, not the red one and near the table'

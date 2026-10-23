@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from seeground.classifiers.classifier_forest_r10 import mapped_probability
+from eviground.classifiers.classifier_forest_r10 import mapped_probability
 
 class MappingTests(unittest.TestCase):
  def test_unobserved_training_classes_do_not_shift_vocabulary_indices(self):

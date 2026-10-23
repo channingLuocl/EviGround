@@ -1,6 +1,6 @@
 {
   "modules": 152,
-  "definitions_unchanged_except_imports_and_validation_path": 751,
+  "definitions_unchanged_except_imports_paths_and_project_naming": 751,
   "definitions_requiring_path_entrypoint_review": [
     {
       "file": "batch_nr3d.py",
@@ -258,5 +258,7 @@
       "definition": "input_identity"
     }
   ],
-  "core_module_equivalence": "tests/unit/test_layout.py compares complete core modules, including prompts and constants; excludes only v5_runtime.input_identity and shape_scale.input_config (resource metadata)."
+  "core_module_equivalence": "tests/unit/test_layout.py compares complete core modules, including prompts and constants. Imports, project naming, and configuration-loader calls are normalized. Only v5_runtime.input_identity and shape_scale.input_config (resource metadata) are excluded.",
+  "project": "EviGround",
+  "configuration_compatibility": "tests/unit/test_config.py covers old environment keys, mixed .env files, precedence, r18 defaults, root overrides, and the vendored PointNeXt switch."
 }

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import unittest
 
-from seeground import paths
+from eviground import paths
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -19,6 +19,12 @@ class NormalizeImportsAndPaths(ast.NodeTransformer):
     def visit_ImportFrom(self, node):
         return None
 
+    def visit_Expr(self, node):
+        if (isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
+                and node.value.func.id in ('load_dotenv', 'load_environment')):
+            return None
+        return self.generic_visit(node)
+
     def visit_Assign(self, node):
         if any(isinstance(target, ast.Name) and target.id == 'ROOT'
                for target in node.targets):
@@ -28,6 +34,8 @@ class NormalizeImportsAndPaths(ast.NodeTransformer):
     def visit_Constant(self, node):
         if isinstance(node.value, str):
             node.value = node.value.replace('local/validation', 'data/validation')
+            node.value = node.value.replace('EVIGROUND_', 'SEEGROUND_')
+            node.value = node.value.replace('eviground', 'seeground').replace('EviGround', 'SeeGround')
         return node
 
 
@@ -51,7 +59,7 @@ class LayoutTests(unittest.TestCase):
                 modules = ([node.module] if isinstance(node, ast.ImportFrom) else
                            [alias.name for alias in node.names] if isinstance(node, ast.Import) else [])
                 for module in modules:
-                    if module and (module == 'seeground' or module.startswith('seeground.')):
+                    if module and (module == 'eviground' or module.startswith('eviground.')):
                         target = paths.PACKAGE_ROOT.parent / module.replace('.', '/')
                         with self.subTest(source=source.name, line=node.lineno, module=module):
                             self.assertTrue(target.with_suffix('.py').is_file() or
@@ -87,7 +95,7 @@ class LayoutTests(unittest.TestCase):
         sources = paths.source_files()
         identities = [p.relative_to(paths.PACKAGE_ROOT).as_posix() for p in sources]
         self.assertEqual(len(identities), len(set(identities)))
-        from seeground.classifiers.category_v10.run import code_hashes
+        from eviground.classifiers.category_v10.run import code_hashes
         self.assertEqual(set(code_hashes()), set(identities))
 
 

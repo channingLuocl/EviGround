@@ -1,6 +1,6 @@
 """Room quarantine and training membership checks for the revised protocol."""
 import unittest
-from seeground.experiments.scan_domain_protocol import plan
+from eviground.experiments.scan_domain_protocol import plan
 
 
 def manifest(scenes, rows):

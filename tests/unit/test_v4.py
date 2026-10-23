@@ -8,15 +8,15 @@ import unittest
 from unittest.mock import patch
 import numpy as np
 
-from seeground.grounding.active_diagnostic import active_ground, compute_observation, evidence_request, size_candidate_evidence, execute_evidence
-from seeground.grounding.diagnostic import size_conditions, size_condition_scope, validate_structure, diagnose
-from seeground.geometry.object_geometry import point_cloud_measurements
-from seeground.query.query_syntax import analyze_query
-from seeground.grounding.react_decision import jev_state, text_state
-from seeground.geometry.size_semantics import evaluate_size_condition, size_specs
-from seeground.grounding.v4_policy import evidence_inventory, deletion_events, backtrack_events
-from seeground.geometry.v4_relations import geometric_relation, relation_tasks
-from seeground.rendering.v4_visual import boxed_view, normalize_report
+from eviground.grounding.active_diagnostic import active_ground, compute_observation, evidence_request, size_candidate_evidence, execute_evidence
+from eviground.grounding.diagnostic import size_conditions, size_condition_scope, validate_structure, diagnose
+from eviground.geometry.object_geometry import point_cloud_measurements
+from eviground.query.query_syntax import analyze_query
+from eviground.grounding.react_decision import jev_state, text_state
+from eviground.geometry.size_semantics import evaluate_size_condition, size_specs
+from eviground.grounding.v4_policy import evidence_inventory, deletion_events, backtrack_events
+from eviground.geometry.v4_relations import geometric_relation, relation_tasks
+from eviground.rendering.v4_visual import boxed_view, normalize_report
 
 
 def box(oid, category='box', center=(0, 0, .5), extent=(1, 1, 1)):
@@ -46,9 +46,9 @@ def measure(objects):
 
 class V4Tests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_REACT_BACKEND': 'qwen',
-                         'SEEGROUND_API_PROVIDER': 'qwen', 'SEEGROUND_V5': '0',
-                         'SEEGROUND_SYNTAX_BACKEND': 'spacy', 'SEEGROUND_V4_DYNAMIC_THRESHOLD': '0'})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_REACT_BACKEND': 'qwen',
+                         'EVIGROUND_API_PROVIDER': 'qwen', 'EVIGROUND_V5': '0',
+                         'EVIGROUND_SYNTAX_BACKEND': 'spacy', 'EVIGROUND_V4_DYNAMIC_THRESHOLD': '0'})
         env.start()
         self.addCleanup(env.stop)
 
@@ -263,12 +263,12 @@ class V4Tests(unittest.TestCase):
             visual = messages[0]['content'].startswith('Inspect the original query')
             content = next(report_iter if visual else action_iter)
             return {'_content': json.dumps(content), '_finish_reason': 'stop', '_baseline': {}, 'usage': {}}
-        with tempfile.TemporaryDirectory() as out, patch('seeground.grounding.active_diagnostic.chat', side_effect=mocked_chat), patch(
-                'seeground.grounding.active_diagnostic.diagnose', side_effect=lambda *a, **k: json.loads(json.dumps(initial))):
+        with tempfile.TemporaryDirectory() as out, patch('eviground.grounding.active_diagnostic.chat', side_effect=mocked_chat), patch(
+                'eviground.grounding.active_diagnostic.diagnose', side_effect=lambda *a, **k: json.loads(json.dumps(initial))):
             if operations is None:
                 return active_ground('tall chair', p, objects, objects, objects, xyz,
                     np.full(xyz.shape, 100, dtype=np.uint8), ids, Path(out), [], {}, limit, True)
-            with patch('seeground.grounding.active_diagnostic.execute_evidence', side_effect=operations):
+            with patch('eviground.grounding.active_diagnostic.execute_evidence', side_effect=operations):
                 return active_ground('tall chair', p, objects, objects, objects, xyz,
                     np.full(xyz.shape, 100, dtype=np.uint8), ids, Path(out), [], {}, limit, True)
 
@@ -373,7 +373,7 @@ class V4Tests(unittest.TestCase):
             'metric_choices': [{'source_quote': 'smaller', 'category': 'table', 'word': 'smaller',
                                'metric': 'oriented_footprint_m2', 'reason': 'broad table surface'}]}
         calls = []
-        with tempfile.TemporaryDirectory() as out, patch('seeground.grounding.active_diagnostic.chat', return_value={
+        with tempfile.TemporaryDirectory() as out, patch('eviground.grounding.active_diagnostic.chat', return_value={
             '_content': json.dumps(report), '_finish_reason': 'stop', '_baseline': {}, 'usage': {}}):
             result = execute_evidence({'action': 'evidence', 'dimension': 'size', 'reason': 'measure', 'inspect': True},
                 'the smaller table', p, diagnosis, objects, objects, xyz, np.full(xyz.shape, 100, dtype=np.uint8),
@@ -398,7 +398,7 @@ class V4Tests(unittest.TestCase):
         report = {'status': 'consistent', 'relations': [{'candidate_id': i,
             'source_quote': 'near the door', 'status': state, 'reason': 'visible bound separation'}
             for i, state in ((1, 'pass'), (2, 'fail'))]}
-        with tempfile.TemporaryDirectory() as out, patch('seeground.grounding.active_diagnostic.chat', return_value={
+        with tempfile.TemporaryDirectory() as out, patch('eviground.grounding.active_diagnostic.chat', return_value={
                 '_content': json.dumps(report), '_finish_reason': 'stop', '_baseline': {}, 'usage': {}}):
             result = execute_evidence({'action': 'evidence', 'dimension': 'distance', 'reason': 'bind proximity'},
                 query, p, diagnosis, targets, objects, xyz, np.full(xyz.shape, 100, dtype=np.uint8),

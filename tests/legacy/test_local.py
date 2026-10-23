@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import numpy as np
 from PIL import Image
-import seeground.rendering.run as run
-from seeground.api.qwen_api import QwenAPIError, parse_predicted_id
+import eviground.rendering.run as run
+from eviground.api.qwen_api import QwenAPIError, parse_predicted_id
 
 class LocalChecks(unittest.TestCase):
     def test_depth_keeps_front_object(self):
@@ -33,7 +33,7 @@ class LocalChecks(unittest.TestCase):
     def test_point_disks_clip_to_frame_edges(self):
         with tempfile.TemporaryDirectory() as td:
             xyz=np.array([[0.,0.,0.]])
-            with patch('seeground.rendering.run.project',return_value=(np.array([[0.,0.]]),np.array([1.]))):
+            with patch('eviground.rendering.run.project',return_value=(np.array([[0.,0.]]),np.array([1.]))):
                 meta=run.render(xyz,np.array([[20,30,40]],dtype=np.uint8),Path(td)/'edge.png',
                                 ids=np.array([3]),size=100,point_radius=2)
             self.assertEqual(meta['visible_pixels'],6)
@@ -47,14 +47,14 @@ class LocalChecks(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td);run.demo(p)
             args=SimpleNamespace(image=str(p/'scene.png'),objects=str(p/'objects.json'),query='red chair',dry_run=True)
-            with patch('seeground.rendering.run.chat') as request:
+            with patch('eviground.rendering.run.chat') as request:
                 run.ground(args);request.assert_not_called()
     def test_mock_api_maps_id_to_bbox(self):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td);run.demo(p)
             args=SimpleNamespace(image=str(p/'scene.png'),objects=str(p/'objects.json'),query='laptop',dry_run=False,output=str(p/'result.json'))
             api_data={'choices':[{'message':{'content':'Predicted ID: 2\nExplanation: test fixture'}}], 'usage': {'total_tokens': 3}}
-            with patch.dict('os.environ',{'SEEGROUND_BASE_URL':'https://example.invalid/v1','SEEGROUND_MODEL':'mock-model','SEEGROUND_API_KEY':'test-only'}),patch('seeground.rendering.run.chat',return_value={'_content':'Predicted ID: 2\nExplanation: test fixture','_baseline':{'model':'mock-model','latency_s':0.01},'usage':api_data['usage']}) as request:
+            with patch.dict('os.environ',{'EVIGROUND_BASE_URL':'https://example.invalid/v1','EVIGROUND_MODEL':'mock-model','EVIGROUND_API_KEY':'test-only'}),patch('eviground.rendering.run.chat',return_value={'_content':'Predicted ID: 2\nExplanation: test fixture','_baseline':{'model':'mock-model','latency_s':0.01},'usage':api_data['usage']}) as request:
                 run.ground(args)
                 request.assert_called_once()
             data=json.loads((p/'result.json').read_text())
@@ -73,7 +73,7 @@ class LocalChecks(unittest.TestCase):
                                           'hypotheses':[{'candidate_ids':[1]}]}}
                     args=SimpleNamespace(image=str(p/'scene.png'),objects=str(p/'objects.json'),
                                          query='laptop',dry_run=False,output=str(p/'result.json'),evidence=evidence)
-                    with patch('seeground.rendering.run.chat',return_value={'_content':'Predicted ID: 2',
+                    with patch('eviground.rendering.run.chat',return_value={'_content':'Predicted ID: 2',
                                '_baseline':{'model':'mock','latency_s':.01}}) as request:
                         result=run.ground(args)
                     prompt=request.call_args.args[0][0]['content'][-1]['text']

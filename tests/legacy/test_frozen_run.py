@@ -5,13 +5,13 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from seeground.grounding.real_scene import run_query
-from seeground.api.qwen_api import api_request_slot
-from seeground.experiments.run_size_validation import main, run_case
-from seeground.evaluation.run_storage import ensure_run_writable
-from seeground.evaluation.validation_cache import apply_correct_cache
-from seeground.evaluation.validation_reporting import report
-from seeground.evaluation.validation_reuse import reuse_results
+from eviground.grounding.real_scene import run_query
+from eviground.api.qwen_api import api_request_slot
+from eviground.experiments.run_size_validation import main, run_case
+from eviground.evaluation.run_storage import ensure_run_writable
+from eviground.evaluation.validation_cache import apply_correct_cache
+from eviground.evaluation.validation_reporting import report
+from eviground.evaluation.validation_reuse import reuse_results
 
 
 class FrozenRunTests(unittest.TestCase):
@@ -49,8 +49,8 @@ class FrozenRunTests(unittest.TestCase):
             for flags in ([], ['--prepare-only'], ['--retry-false'], ['--worker']):
                 with self.subTest(flags=flags), patch('sys.argv', [
                     'batch', '--manifest', 'does-not-exist.json', '--output', str(run), *flags]), \
-                        patch('seeground.experiments.run_size_validation.load_correct_cache') as cache, \
-                        patch('seeground.experiments.run_size_validation.subprocess.run') as process, \
+                        patch('eviground.experiments.run_size_validation.load_correct_cache') as cache, \
+                        patch('eviground.experiments.run_size_validation.subprocess.run') as process, \
                         self.assertRaisesRegex(ValueError, 'Frozen run'):
                     main()
                 cache.assert_not_called()
@@ -77,7 +77,7 @@ class FrozenRunTests(unittest.TestCase):
             root = Path(td)
             run, _ = self.fixture(root)
             before = self.contents(run)
-            with patch('seeground.grounding.real_scene.load_objects') as loader, \
+            with patch('eviground.grounding.real_scene.load_objects') as loader, \
                     self.assertRaisesRegex(ValueError, 'Frozen run'):
                 run_query(root / 'missing_scene', 'the chair', run / 'q00010')
             loader.assert_not_called()
@@ -87,7 +87,7 @@ class FrozenRunTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             run, _ = self.fixture(Path(td))
             before = self.contents(run)
-            with patch.dict('os.environ', {'SEEGROUND_API_SLOT_DIR': str(run / '.api_slots')}), \
+            with patch.dict('os.environ', {'EVIGROUND_API_SLOT_DIR': str(run / '.api_slots')}), \
                     self.assertRaisesRegex(ValueError, 'Frozen run'):
                 with api_request_slot():
                     self.fail('A frozen slot directory was accepted')

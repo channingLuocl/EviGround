@@ -9,18 +9,18 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from seeground.grounding.real_scene import structural_objects
-from seeground.experiments.run_size_validation import GT_V71_EQUIVALENT_HASHES, comparable_settings, main, run_case
-from seeground.grounding.v4_policy import settings
+from eviground.grounding.real_scene import structural_objects
+from eviground.experiments.run_size_validation import GT_V71_EQUIVALENT_HASHES, comparable_settings, main, run_case
+from eviground.grounding.v4_policy import settings
 
 
 class V72Tests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1',
-            'SEEGROUND_V7_2': '1', 'SEEGROUND_API_PROVIDER': 'openai',
-            'SEEGROUND_REACT_BACKEND': 'openai', 'SEEGROUND_MODEL': 'offline-mock',
-            'SEEGROUND_BASE_URL': 'https://example.invalid/v1', 'SEEGROUND_API_KEY': 'offline-only',
-            'SEEGROUND_API_SLOT_DIR': '', 'SEEGROUND_SYNTAX_BACKEND': 'none'})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V7': '1',
+            'EVIGROUND_V7_2': '1', 'EVIGROUND_API_PROVIDER': 'openai',
+            'EVIGROUND_REACT_BACKEND': 'openai', 'EVIGROUND_MODEL': 'offline-mock',
+            'EVIGROUND_BASE_URL': 'https://example.invalid/v1', 'EVIGROUND_API_KEY': 'offline-only',
+            'EVIGROUND_API_SLOT_DIR': '', 'EVIGROUND_SYNTAX_BACKEND': 'none'})
         env.start(); self.addCleanup(env.stop)
 
     def fixture(self, root):
@@ -45,8 +45,8 @@ class V72Tests(unittest.TestCase):
             (directory / 'prediction.json').write_text(json.dumps({'query': 'the chair',
                 'mode': 'active_diagnostic', 'object_table': table, 'predicted_id': 13}))
             return SimpleNamespace(returncode=0)
-        with patch('sys.argv', argv), patch('seeground.experiments.run_size_validation.ROOT', root), \
-                patch('seeground.experiments.run_size_validation.subprocess.run', side_effect=worker) as process, \
+        with patch('sys.argv', argv), patch('eviground.experiments.run_size_validation.ROOT', root), \
+                patch('eviground.experiments.run_size_validation.subprocess.run', side_effect=worker) as process, \
                 redirect_stdout(StringIO()), redirect_stderr(StringIO()):
             main()
         return process
@@ -87,7 +87,7 @@ class V72Tests(unittest.TestCase):
             root = Path(td); _, _, row = self.fixture(root)
             directory = root / 'q00010'; directory.mkdir()
             (directory / 'evaluation.json').write_text(json.dumps({**row, 'predicted_id': 13, 'correct': True}))
-            with patch('seeground.experiments.run_size_validation.subprocess.run') as process:
+            with patch('eviground.experiments.run_size_validation.subprocess.run') as process:
                 with self.assertRaisesRegex(ValueError, 'different object-table'):
                     run_case(row, root / 'scenes', root, 3, object_table='pred')
                 process.assert_not_called()
@@ -108,7 +108,7 @@ class V72Tests(unittest.TestCase):
         for flags, table in (([], 'pred'), (['--gt'], 'gt')):
             argv = ['run_size_validation.py', '--worker', '--scene-dir', '/fixture',
                     '--query', 'the chair', '--output', '/output', '--csv-row', '10', *flags]
-            with self.subTest(table=table), patch('sys.argv', argv), patch('seeground.grounding.real_scene.run_query') as query:
+            with self.subTest(table=table), patch('sys.argv', argv), patch('eviground.grounding.real_scene.run_query') as query:
                 main()
                 self.assertEqual(query.call_args.kwargs['object_table'], table)
 

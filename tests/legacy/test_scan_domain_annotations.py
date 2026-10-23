@@ -1,6 +1,6 @@
 import unittest
 
-from seeground.experiments.repair_scan_domain_annotations import unique_groups
+from eviground.experiments.repair_scan_domain_annotations import unique_groups
 
 
 class AnnotationTests(unittest.TestCase):

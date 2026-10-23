@@ -7,7 +7,7 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image
 
-from seeground.grounding.active_diagnostic import (apply_computed_evidence, _check_payload,
+from eviground.grounding.active_diagnostic import (apply_computed_evidence, _check_payload,
                                active_ground, compute_observation,
                                evidence_request, execute_evidence,
                                _appearance_review_requirements,
@@ -15,7 +15,7 @@ from seeground.grounding.active_diagnostic import (apply_computed_evidence, _che
                                size_candidate_evidence,
                                position_candidate_evidence, render_action,
                                _target_size_scope, visual_attributes)
-from seeground.grounding.diagnostic import (diagnose, recover_between_relations, validate_structure,
+from eviground.grounding.diagnostic import (diagnose, recover_between_relations, validate_structure,
                         size_conditions, size_condition_scope)
 
 
@@ -34,7 +34,7 @@ def parsed():
 
 class ActiveDiagnosticTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict('os.environ', {'SEEGROUND_REACT_BACKEND': 'qwen'})
+        env = patch.dict('os.environ', {'EVIGROUND_REACT_BACKEND': 'qwen'})
         env.start()
         self.addCleanup(env.stop)
 
@@ -103,11 +103,11 @@ class ActiveDiagnosticTests(unittest.TestCase):
                     '_baseline': {'model': 'mock', 'latency_s': .01},
                     '_finish_reason': 'stop', 'usage': {}}
         with tempfile.TemporaryDirectory() as directory, patch(
-                'seeground.grounding.active_diagnostic.chat', side_effect=fake_chat), patch(
-                'seeground.grounding.active_diagnostic.render_action', side_effect=render or (lambda action, *args: {
+                'eviground.grounding.active_diagnostic.chat', side_effect=fake_chat), patch(
+                'eviground.grounding.active_diagnostic.render_action', side_effect=render or (lambda action, *args: {
                     'tool': 'render', 'image': 'mock.png', 'focus_ids': action['focus_ids']})), patch(
-                'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'mock image'}), patch(
-                'seeground.grounding.active_diagnostic.compute_observation', wraps=compute or compute_observation):
+                'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'mock image'}), patch(
+                'eviground.grounding.active_diagnostic.compute_observation', wraps=compute or compute_observation):
             trace = {}
             calls = [] if calls is None else calls
             result = active_ground(
@@ -137,7 +137,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
             messages_seen.append(messages)
             return {'_content': json.dumps(next(actions)), '_finish_reason': 'stop',
                     '_baseline': {'model': 'mock', 'latency_s': .01}, 'usage': {}}
-        with tempfile.TemporaryDirectory() as directory, patch('seeground.grounding.active_diagnostic.chat', side_effect=reply):
+        with tempfile.TemporaryDirectory() as directory, patch('eviground.grounding.active_diagnostic.chat', side_effect=reply):
             result = active_ground(query, data, objects, objects, objects,
                 np.zeros((2, 3)), np.zeros((2, 3), dtype=np.uint8), np.array([24, 81]),
                 Path(directory), [], {}, 2, True)
@@ -159,7 +159,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
                 objects = [obj(24, 'box', 0, 0), obj(81, 'box', 2, 0)]
                 response = {'_content': json.dumps({'action': 'stop', 'reason': 'unsupported evidence'}),
                             '_finish_reason': 'stop', '_baseline': {'model': 'mock', 'latency_s': .01}}
-                with tempfile.TemporaryDirectory() as directory, patch('seeground.grounding.active_diagnostic.chat', return_value=response):
+                with tempfile.TemporaryDirectory() as directory, patch('eviground.grounding.active_diagnostic.chat', return_value=response):
                     result = active_ground(query, data, objects, objects, objects,
                         np.zeros((2, 3)), np.zeros((2, 3), dtype=np.uint8), np.array([24, 81]),
                         Path(directory), [], {}, 2, True)
@@ -205,7 +205,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
                     '_baseline':{'model':'mock','latency_s':.01},
                     '_finish_reason':'stop','usage':{}}
         with tempfile.TemporaryDirectory() as directory, patch(
-                'seeground.grounding.active_diagnostic.chat', side_effect=fake_chat):
+                'eviground.grounding.active_diagnostic.chat', side_effect=fake_chat):
             result=active_ground(
                 query, parsed_query, objects, objects, objects,
                 np.array([[0.,0.,0.],[-2.,0.,0.],[2.,0.,0.]]),
@@ -223,8 +223,8 @@ class ActiveDiagnosticTests(unittest.TestCase):
                     'answers': {key: {'type': 'choice', 'choice': choice, 'confidence': 1.,
                         'probabilities': {option: float(option == choice) for option in q['criteria']}}
                         for key, q in questions.items()}}
-        with patch.dict('os.environ', {'SEEGROUND_REACT_BACKEND': 'jev'}), patch(
-                'seeground.grounding.react_decision.decide', side_effect=decision):
+        with patch.dict('os.environ', {'EVIGROUND_REACT_BACKEND': 'jev'}), patch(
+                'eviground.grounding.react_decision.decide', side_effect=decision):
             result, messages = self.run_actions([], limit=2)
         self.assertEqual(messages, [])
         self.assertEqual(result['active_trace']['rejected_actions'], 1)
@@ -259,7 +259,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
             '_finish_reason': 'length', '_baseline': {'model': 'mock', 'latency_s': .01},
             'usage': {'completion_tokens': 900}}
         calls = []
-        with patch('seeground.grounding.active_diagnostic.parse_json_object', wraps=json.loads) as decode:
+        with patch('eviground.grounding.active_diagnostic.parse_json_object', wraps=json.loads) as decode:
             result, messages = self.run_actions([
                 truncated, {'action': 'stop', 'reason': 'no useful evidence'}], calls=calls)
         self.assertEqual(decode.call_count, 1)
@@ -299,7 +299,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
         truncated = {'_content': '{"action":"finish","predicted_id":1',
             '_finish_reason': 'length', '_baseline': {'model': 'mock', 'latency_s': .01},
             'usage': {}}
-        with patch('seeground.grounding.active_diagnostic.parse_json_object') as decode:
+        with patch('eviground.grounding.active_diagnostic.parse_json_object') as decode:
             result, messages = self.run_actions([truncated] * 7, limit=2)
         decode.assert_not_called()
         self.assertFalse(result['accepted'])
@@ -473,10 +473,10 @@ class ActiveDiagnosticTests(unittest.TestCase):
         reply = {'_content': json.dumps({'checks': [
             {'id': index, 'verdict': 'yes', 'reason': 'visible match'} for index in range(1, 7)]}),
             '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
-        with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+        with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                 'tool': 'render', 'image': 'mock.png', 'focus_ids': list(range(1, 7))}), patch(
-                'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
-                'seeground.grounding.active_diagnostic.chat', return_value=reply):
+                'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'eviground.grounding.active_diagnostic.chat', return_value=reply):
             result = execute_evidence(request, 'window', parsed(), diagnosis, objects, objects,
                                       None, None, None, Path('/tmp'), 1, [])
         self.assertEqual(result['coverage']['uninspected_ids'], [7, 8])
@@ -619,10 +619,10 @@ class ActiveDiagnosticTests(unittest.TestCase):
             '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
         action = evidence_request({'action': 'evidence', 'dimension': 'appearance',
                                    'context': 'scene', 'reason': 'inspect'}, [5, 13], objects)
-        with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+        with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                 'tool': 'render', 'image': 'mock.png', 'focus_ids': [5, 13]}), patch(
-                'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
-                'seeground.grounding.active_diagnostic.chat', return_value=response):
+                'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'eviground.grounding.active_diagnostic.chat', return_value=response):
             observation = execute_evidence(action, 'tall skinny shelf', query, diagnosis,
                 objects, objects, xyz, None, ids, Path('/tmp'), 1, [])
         self.assertEqual([c['verdict'] for c in observation['checks']], ['uncertain', 'uncertain'])
@@ -637,10 +637,10 @@ class ActiveDiagnosticTests(unittest.TestCase):
                 {'attribute': 'skinny', 'verdict': 'uncertain', 'visibility': 'occluded', 'reason': 'side obscured'}]},
             {'id': 13, 'verdict': 'yes', 'visibility': 'visible', 'reason': 'shelf visible', 'attribute_checks': [
                 {'attribute': 'skinny', 'verdict': 'yes', 'visibility': 'visible', 'reason': 'narrow upright silhouette'}]}]})
-        with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+        with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                 'tool': 'render', 'image': 'mock2.png', 'focus_ids': [5, 13]}), patch(
-                'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
-                'seeground.grounding.active_diagnostic.chat', return_value=response) as api:
+                'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'eviground.grounding.active_diagnostic.chat', return_value=response) as api:
             second = execute_evidence(action, 'tall skinny shelf', query, after,
                 objects, objects, xyz, None, ids, Path('/tmp'), 2, [])
         payload = json.loads(api.call_args.args[0][1]['content'][1]['text'])
@@ -704,11 +704,11 @@ class ActiveDiagnosticTests(unittest.TestCase):
              'attribute_checks': [{'attribute': 'wooden', 'verdict': 'yes',
                                    'visibility': 'low_detail', 'reason': 'grain too small'}]}]}),
             '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
-        with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+        with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                 'tool': 'render', 'image': 'mock.png', 'focus_ids': [1, 2],
                 'unmarked_focus_ids': [1]}), patch(
-                'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
-                'seeground.grounding.active_diagnostic.chat', return_value=reply):
+                'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'eviground.grounding.active_diagnostic.chat', return_value=reply):
             result = execute_evidence(action, 'wooden cabinet', query, diagnosis,
                 objects, objects, None, None, None, Path('/tmp'), 1, [])
         self.assertEqual(result['coverage']['unknown_ids'], [2, 1])
@@ -732,10 +732,10 @@ class ActiveDiagnosticTests(unittest.TestCase):
         action = evidence_request({'action': 'evidence', 'dimension': 'appearance',
                                    'reason': 'inspect material'}, [1, 2], objects)
         calls = []
-        with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+        with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                 'tool': 'render', 'image': 'mock.png', 'focus_ids': [1, 2],
                 'unmarked_focus_ids': [1, 2]}), patch(
-                'seeground.grounding.active_diagnostic.image_part') as encode, patch('seeground.grounding.active_diagnostic.chat') as api:
+                'eviground.grounding.active_diagnostic.image_part') as encode, patch('eviground.grounding.active_diagnostic.chat') as api:
             result = execute_evidence(action, 'wooden cabinet', query, diagnosis,
                 objects, objects, None, None, None, Path('/tmp'), 1, calls)
         api.assert_not_called()
@@ -773,7 +773,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
                                   'reason': 'grain not clear'}]} for oid in [1, 2]]}),
             '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
         with tempfile.TemporaryDirectory() as directory, patch(
-                'seeground.grounding.active_diagnostic.chat', return_value=reply):
+                'eviground.grounding.active_diagnostic.chat', return_value=reply):
             first = execute_evidence(action, 'wooden cabinet', query, diagnosis,
                 objects, objects, xyz, rgb, ids, Path(directory), 1, [])
             alternate = evidence_request(first['next_evidence'][0], [1, 2], objects)
@@ -796,9 +796,9 @@ class ActiveDiagnosticTests(unittest.TestCase):
             for oid in range(2, 10)]}
         action = evidence_request({'action': 'evidence', 'dimension': 'appearance',
             'focus_ids': [1, 2], 'reason': 'inspect reference'}, [1], objects)
-        with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+        with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                 'tool': 'render', 'image': 'mock.png', 'focus_ids': [1, 2],
-                'unmarked_focus_ids': [1, 2]}), patch('seeground.grounding.active_diagnostic.chat') as api:
+                'unmarked_focus_ids': [1, 2]}), patch('eviground.grounding.active_diagnostic.chat') as api:
             result = execute_evidence(action, 'cabinet by black tv', query, diagnosis,
                 objects[:1], objects, None, None, None, Path('/tmp'), 1, [])
         api.assert_not_called()
@@ -823,10 +823,10 @@ class ActiveDiagnosticTests(unittest.TestCase):
              'reason': 'tv visible', 'attribute_checks': [
                 {'attribute': 'black', 'verdict': 'uncertain', 'reason': 'occluded'}]}]}),
             '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
-        with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+        with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                 'tool': 'render', 'image': 'mock.png', 'focus_ids': [1, 2, 3]}), patch(
-                'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
-                'seeground.grounding.active_diagnostic.chat', return_value=reply):
+                'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'eviground.grounding.active_diagnostic.chat', return_value=reply):
             result = execute_evidence(action, 'cabinet by black tv', query, diagnosis,
                 objects[:2], objects, None, None, None, Path('/tmp'), 1, [])
         self.assertEqual(result['unknown_attributes'], ['black'])
@@ -853,9 +853,9 @@ class ActiveDiagnosticTests(unittest.TestCase):
             return {'_content': json.dumps(next(responses)), '_finish_reason': 'stop',
                     '_baseline': {'model': 'mock', 'latency_s': .01}, 'usage': {}}
         with tempfile.TemporaryDirectory() as directory, patch(
-                'seeground.grounding.active_diagnostic.chat', side_effect=fake_chat), patch(
-                'seeground.grounding.active_diagnostic.diagnose', side_effect=[initial, refreshed]), patch(
-                'seeground.grounding.active_diagnostic.execute_evidence', return_value=observation):
+                'eviground.grounding.active_diagnostic.chat', side_effect=fake_chat), patch(
+                'eviground.grounding.active_diagnostic.diagnose', side_effect=[initial, refreshed]), patch(
+                'eviground.grounding.active_diagnostic.execute_evidence', return_value=observation):
             result = active_ground('window by tv', parsed(), objects, objects + [obj(3, 'tv', 4, 0)],
                 objects, np.zeros((2, 3)), np.zeros((2, 3), dtype=np.uint8), np.array([1, 2]),
                 Path(directory), [], {}, 2, True)
@@ -888,10 +888,10 @@ class ActiveDiagnosticTests(unittest.TestCase):
              'visibility': 'visible', 'reason': 'tv visible', 'attribute_checks': [
                  {'attribute': 'black', 'verdict': 'yes', 'visibility': 'visible', 'reason': 'black body'}]}]}),
             '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
-        with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+        with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                 'tool': 'render', 'image': 'mock.png', 'focus_ids': [1, 2]}), patch(
-                'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
-                'seeground.grounding.active_diagnostic.chat', return_value=reply) as api:
+                'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'eviground.grounding.active_diagnostic.chat', return_value=reply) as api:
             result = execute_evidence(action, 'cabinet by black television', query, diagnosis,
                 objects[:1], objects, None, None, None, Path('/tmp'), 1, [])
         self.assertEqual([item['candidate_id'] for item in result['candidate_evidence']], [1])
@@ -943,10 +943,10 @@ class ActiveDiagnosticTests(unittest.TestCase):
             'attribute_checks': [{'attribute': 'brown', 'verdict': 'yes',
                 'visibility': 'visible', 'reason': 'brown surface'}]}]}),
             '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
-        with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+        with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                 'tool': 'render', 'image': 'mock.png', 'focus_ids': [1]}), patch(
-                'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
-                'seeground.grounding.active_diagnostic.chat', return_value=reply):
+                'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'eviground.grounding.active_diagnostic.chat', return_value=reply):
             result = execute_evidence(action, query_text, query, diagnosis,
                 objects, objects, None, None, None, Path('/tmp'), 1, [])
 
@@ -989,10 +989,10 @@ class ActiveDiagnosticTests(unittest.TestCase):
                         'id': 1, 'category': 'table', 'role': need['role'], 'verdict': 'yes',
                         'visibility': 'visible', 'reason': 'table visible', 'attribute_checks': checks}]}),
                         '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
-                with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+                with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                         'tool': 'render', 'image': 'mock.png', 'focus_ids': [1]}), patch(
-                        'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
-                        'seeground.grounding.active_diagnostic.chat', side_effect=fake_chat):
+                        'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                        'eviground.grounding.active_diagnostic.chat', side_effect=fake_chat):
                     result = execute_evidence(action, 'brown table next to table with rainbow top',
                         query, diagnosis, objects, objects, None, None, None, Path('/tmp'), 1, calls)
                 self.assertEqual([payload['review_requirements'][0]['role'] for payload in payloads],
@@ -1312,7 +1312,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
                             '_baseline': {'model': 'mock', 'latency_s': .01},
                             '_finish_reason': 'stop', 'usage': {}}
 
-                with patch('seeground.grounding.active_diagnostic.chat', side_effect=fake_chat):
+                with patch('eviground.grounding.active_diagnostic.chat', side_effect=fake_chat):
                     trace, calls = {}, []
                     result = active_ground(
                         f'{adjective} cabinet', query, objects, objects, objects,
@@ -1371,7 +1371,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
                     '_baseline': {'model': 'mock', 'latency_s': .01},
                     '_finish_reason': 'stop', 'usage': {}}
         with tempfile.TemporaryDirectory() as directory, patch(
-                'seeground.grounding.active_diagnostic.chat', side_effect=fake_chat):
+                'eviground.grounding.active_diagnostic.chat', side_effect=fake_chat):
             trace, calls = {}, []
             result = active_ground('skinny cabinet', query, objects, objects, objects,
                                    xyz, np.zeros_like(xyz, dtype=np.uint8), ids,
@@ -1418,7 +1418,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
                             '_baseline': {'model': 'mock', 'latency_s': .01},
                             '_finish_reason': 'stop', 'usage': {}}
                 with tempfile.TemporaryDirectory() as directory, patch(
-                        'seeground.grounding.active_diagnostic.chat', side_effect=fake_chat):
+                        'eviground.grounding.active_diagnostic.chat', side_effect=fake_chat):
                     trace, calls = {}, []
                     result = active_ground(text, query, objects, objects, objects,
                                            xyz, np.zeros_like(xyz, dtype=np.uint8), ids,
@@ -1464,11 +1464,11 @@ class ActiveDiagnosticTests(unittest.TestCase):
                     '_finish_reason': 'stop', 'usage': {}}
 
         with tempfile.TemporaryDirectory() as directory, patch(
-                'seeground.grounding.active_diagnostic.chat', side_effect=fake_chat), patch(
-                'seeground.grounding.active_diagnostic.render_action', return_value={
+                'eviground.grounding.active_diagnostic.chat', side_effect=fake_chat), patch(
+                'eviground.grounding.active_diagnostic.render_action', return_value={
                     'tool': 'render', 'image': 'mock.png',
                     'focus_ids': [1 if largest_above else 2]}), patch(
-                'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}):
+                'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}):
             return active_ground(query, parsed_query, objects, objects, objects[:2],
                                  xyz, np.zeros_like(xyz, dtype=np.uint8), ids,
                                  Path(directory), [], {}, limit, True)
@@ -1572,7 +1572,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
                     '_finish_reason': 'stop', 'usage': {}}
 
         with tempfile.TemporaryDirectory() as directory, patch(
-                'seeground.grounding.active_diagnostic.chat', side_effect=fake_chat):
+                'eviground.grounding.active_diagnostic.chat', side_effect=fake_chat):
             result = active_ground(
                 query, parsed_query, objects, objects, objects[:2], xyz,
                 np.zeros_like(xyz, dtype=np.uint8), ids, Path(directory), [], {}, 2, True)
@@ -1681,7 +1681,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
                             '_finish_reason': 'stop', 'usage': {}}
 
                 with tempfile.TemporaryDirectory() as directory, patch(
-                        'seeground.grounding.active_diagnostic.chat', side_effect=fake_chat):
+                        'eviground.grounding.active_diagnostic.chat', side_effect=fake_chat):
                     result = active_ground(
                         query, parsed_query, objects, objects, objects[:3],
                         np.array([[0., 0., 0.], [2., 1., 1.]]),
@@ -1716,10 +1716,10 @@ class ActiveDiagnosticTests(unittest.TestCase):
         reply = {'_content': json.dumps({'checks': [
             {'id': 1, 'verdict': 'yes', 'reason': 'visible match'}]}),
             '_finish_reason': 'stop', '_baseline': {'latency_s': .01}, 'usage': {}}
-        with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+        with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                 'tool': 'render', 'image': 'mock.png', 'focus_ids': [1]}), patch(
-                'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
-                'seeground.grounding.active_diagnostic.chat', return_value=reply) as api:
+                'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'eviground.grounding.active_diagnostic.chat', return_value=reply) as api:
             execute_evidence(request, 'large window by black television', query, diagnosis,
                              objects[:1], objects, None, None, None, Path('/tmp'), 1, [])
         payload = json.loads(api.call_args.args[0][1]['content'][1]['text'])
@@ -1771,7 +1771,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
         ])
         parsed_query = parsed()
         with tempfile.TemporaryDirectory() as directory, patch(
-                'seeground.grounding.active_diagnostic.chat', side_effect=lambda *args, **kwargs: next(responses)):
+                'eviground.grounding.active_diagnostic.chat', side_effect=lambda *args, **kwargs: next(responses)):
             trace, calls = {}, []
             result = active_ground(
                 'window', parsed_query, objects, objects, objects,
@@ -1803,7 +1803,7 @@ class ActiveDiagnosticTests(unittest.TestCase):
             messages_seen.append(messages)
             return next(responses)
         with tempfile.TemporaryDirectory() as directory, patch(
-                'seeground.grounding.active_diagnostic.chat', side_effect=fake_chat):
+                'eviground.grounding.active_diagnostic.chat', side_effect=fake_chat):
             trace, calls = {}, []
             result = active_ground(
                 'window', parsed(), objects, objects, objects,

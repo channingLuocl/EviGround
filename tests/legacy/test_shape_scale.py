@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 import torch
 
-from seeground.geometry.shape_scale import (ScaleHead, bootstrap, choose_weights, combine, geometry_features,
+from eviground.geometry.shape_scale import (ScaleHead, bootstrap, choose_weights, combine, geometry_features,
                          grid, score)
 
 

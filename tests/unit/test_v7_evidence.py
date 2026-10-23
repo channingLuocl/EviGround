@@ -6,15 +6,15 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from seeground.grounding.diagnostic import validate_structure, size_conditions, appearance_attributes_for, diagnose
-from seeground.grounding.evidence import match_retrieval_categories
-from seeground.query.query_graph import exclusion_clauses, polarity
-from seeground.query.query_syntax import analyze_query
-from seeground.geometry.size_semantics import evaluate_size_condition
-from seeground.grounding.active_diagnostic import _appearance_review_requirements, active_ground
-from seeground.grounding.appearance_evidence import normalize_visual_check
-from seeground.grounding.v4_policy import settings, v62_enabled
-from seeground.grounding.v7_evidence import box_rows, relation_preferences, supported_choice
+from eviground.grounding.diagnostic import validate_structure, size_conditions, appearance_attributes_for, diagnose
+from eviground.grounding.evidence import match_retrieval_categories
+from eviground.query.query_graph import exclusion_clauses, polarity
+from eviground.query.query_syntax import analyze_query
+from eviground.geometry.size_semantics import evaluate_size_condition
+from eviground.grounding.active_diagnostic import _appearance_review_requirements, active_ground
+from eviground.grounding.appearance_evidence import normalize_visual_check
+from eviground.grounding.v4_policy import settings, v62_enabled
+from eviground.grounding.v7_evidence import box_rows, relation_preferences, supported_choice
 
 
 def obj(oid, category, xyz=(0, 0, 1), dims=(1, 1, 1)):
@@ -37,17 +37,17 @@ def check(oid, attrs, visibility='visible'):
 
 class V7Tests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1', 'SEEGROUND_V62': '0',
-            'SEEGROUND_V6': '0', 'SEEGROUND_V5': '0', 'SEEGROUND_SYNTAX_BACKEND': 'spacy',
-            'SEEGROUND_V4_FINAL_REVIEW': '0'})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V7': '1', 'EVIGROUND_V62': '0',
+            'EVIGROUND_V6': '0', 'EVIGROUND_V5': '0', 'EVIGROUND_SYNTAX_BACKEND': 'spacy',
+            'EVIGROUND_V4_FINAL_REVIEW': '0'})
         env.start()
         self.addCleanup(env.stop)
 
     def test_version_and_strict_contract_inherited(self):
         self.assertEqual(settings()['version'], 'relative-size-v7.1')
         self.assertTrue(v62_enabled())
-        from seeground.api.response_schemas import schema_kwargs, parser_schema
-        with patch('seeground.api.qwen_api.api_provider', return_value='openai'):
+        from eviground.api.response_schemas import schema_kwargs, parser_schema
+        with patch('eviground.api.qwen_api.api_provider', return_value='openai'):
             self.assertTrue(schema_kwargs('parser', parser_schema('diagnostic'))['response_schema']['strict'])
 
     def test_width_comparatives_use_horizontal_short_extent(self):
@@ -68,7 +68,7 @@ class V7Tests(unittest.TestCase):
         objects = [obj(81, 'blackboard'), obj(23, 'whiteboard')]
         for category in ('chalk board', 'chalkboards', 'blackboard'):
             self.assertEqual([o['bbox_id'] for o in match_retrieval_categories([category], objects)], [81])
-        with patch.dict(os.environ, {'SEEGROUND_V7': '0'}):
+        with patch.dict(os.environ, {'EVIGROUND_V7': '0'}):
             self.assertEqual(match_retrieval_categories(['chalk board'], objects), [])
 
     def test_postnominal_negation_scope_and_actual_visual_contract(self):
@@ -82,7 +82,7 @@ class V7Tests(unittest.TestCase):
         objects = [obj(71, 'table'), obj(82, 'table', dims=(2, 2, 1))]
         req = _appearance_review_requirements(parsed, {'candidate_ids': [71, 82]}, [71, 82], objects)
         self.assertEqual(req[0]['attributes'], ['brown', 'not white'])
-        from seeground.query.query_rewrite import rewrite_query
+        from eviground.query.query_rewrite import rewrite_query
         rewritten = rewrite_query(query, parsed)
         self.assertTrue(any(c.get('polarity') == 'exclude' and c.get('executor') == 'negative_color'
                             for c in rewritten['constraints']))
@@ -152,7 +152,7 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(relation_preferences(query, parsed, windows+monitors, windows, [])[0]['preferred_ids'], [])
 
     def test_corner_and_support_counterexamples(self):
-        from seeground.geometry.v4_relations import geometric_relation
+        from eviground.geometry.v4_relations import geometric_relation
         walls = [obj(4, 'wall', xyz=(0, 3, 1), dims=(.1, 6, 2)),
                  obj(9, 'wall', xyz=(3, 0, 1), dims=(6, .1, 2))]
         task = {'kind': 'corner'}
@@ -185,7 +185,7 @@ class V7Tests(unittest.TestCase):
 
     def test_fitted_corner_rotation_and_finite_extent(self):
         import numpy as np
-        from seeground.grounding.v7_evidence import fitted_corner
+        from eviground.grounding.v7_evidence import fitted_corner
         walls = []
         for oid, normal, tangent in ((16, [1, 0], [0, 1]), (36, [0, 1], [1, 0])):
             walls.append({'bbox_id': oid, 'wall_geometry': {'valid': True,
@@ -219,14 +219,14 @@ class V7Tests(unittest.TestCase):
         self.assertIn('negation/exclusion is unsupported', parsed['diagnostic_missing'])
 
     def test_unbound_scope_measures_full_category_without_certifying(self):
-        from seeground.grounding.active_diagnostic import compute_observation
+        from eviground.grounding.active_diagnostic import compute_observation
         query = 'the smaller window near the monitor'
         parsed = parse(query, 'window', ['smaller'], anchors=['monitor'], relations=[{
             'target_category': 'window', 'anchor_category': 'monitor', 'relation': 'near', 'phrase': 'near the monitor'}])
         objects = [obj(68, 'window', dims=(.2, 1, 2)), obj(27, 'window', dims=(.2, 3, 2)), obj(36, 'monitor')]
         diagnosis = diagnose(parsed, objects, objects[:2], [0, 0, 0], trusted_categories=True, apply_size_constraints=False, query=query)
         diagnosis['size_comparison_pool_ids'] = [68, 27]
-        with patch('seeground.grounding.active_diagnostic.point_cloud_measurements', return_value=[]):
+        with patch('eviground.grounding.active_diagnostic.point_cloud_measurements', return_value=[]):
             details = compute_observation('size', query, parsed, diagnosis, objects[:2], objects)
         self.assertEqual({m['id'] for m in details['comparison_metrics']}, {68, 27})
         self.assertEqual(details['size_decision']['tentative_selected_ids'], [68])
@@ -241,9 +241,9 @@ class V7Tests(unittest.TestCase):
                 '_finish_reason': 'stop', '_baseline': {}, 'usage': {}}
         evidence = {'tool': 'evidence', 'dimension': 'size', 'details': {'candidate_evidence': [], 'size_constraints': []},
                     'candidate_evidence': [], 'checks': [], 'images': [], 'internal_steps': []}
-        with tempfile.TemporaryDirectory() as tmp, patch('seeground.grounding.active_diagnostic.chat', return_value=data), \
-                patch('seeground.grounding.active_diagnostic.execute_evidence', return_value=evidence) as execute, \
-                patch('seeground.grounding.active_diagnostic.react_backend', return_value='openai'):
+        with tempfile.TemporaryDirectory() as tmp, patch('eviground.grounding.active_diagnostic.chat', return_value=data), \
+                patch('eviground.grounding.active_diagnostic.execute_evidence', return_value=evidence) as execute, \
+                patch('eviground.grounding.active_diagnostic.react_backend', return_value='openai'):
             result = active_ground(query, parsed, objects, objects, objects,
                 np.array([[0., 0., 0.], [3., 3., 3.]]), np.zeros((2, 3)), np.array([45, 12]),
                 Path(tmp), [], {}, 1, True)
@@ -259,8 +259,8 @@ class V7Tests(unittest.TestCase):
         objects = [obj(45, 'desk', dims=(1, 1, 1.22)), obj(12, 'desk', dims=(1, 1, 1.19))]
         data = {'_content': json.dumps({'action': 'stop', 'reason': 'insufficient evidence'}),
                 '_finish_reason': 'stop', '_baseline': {}, 'usage': {}}
-        with tempfile.TemporaryDirectory() as tmp, patch('seeground.grounding.active_diagnostic.chat', return_value=data), \
-                patch('seeground.grounding.active_diagnostic.react_backend', return_value='openai'):
+        with tempfile.TemporaryDirectory() as tmp, patch('eviground.grounding.active_diagnostic.chat', return_value=data), \
+                patch('eviground.grounding.active_diagnostic.react_backend', return_value='openai'):
             result = active_ground(query, parsed, objects, objects, objects,
                 np.array([[0., 0., 0.], [3., 3., 3.]]), np.zeros((2, 3)), np.array([45, 12]),
                 Path(tmp), [], {}, 0, True)

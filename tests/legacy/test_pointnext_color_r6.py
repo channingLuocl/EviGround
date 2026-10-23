@@ -5,8 +5,8 @@ import numpy as np
 import torch
 from torch import nn
 
-from seeground.classifiers.pointcloud_classifier_v82 import prepare_points
-from seeground.classifiers.pointnext_color_r6 import ColorPointNext, color_input, configure, pack_points
+from eviground.classifiers.pointcloud_classifier_v82 import prepare_points
+from eviground.classifiers.pointnext_color_r6 import ColorPointNext, color_input, configure, pack_points
 
 
 class Stage(nn.Module):

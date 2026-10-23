@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from zipfile import ZipFile
 
-from seeground.experiments.select_full_validation import select
+from eviground.experiments.select_full_validation import select
 
 
 class FullSelectionTests(unittest.TestCase):

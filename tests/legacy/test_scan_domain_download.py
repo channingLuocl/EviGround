@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-from seeground.experiments.download_scan_domain_holdout import acquire
+from eviground.experiments.download_scan_domain_holdout import acquire
 
 
 class Response(io.BytesIO):

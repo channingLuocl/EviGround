@@ -4,9 +4,9 @@ import os
 import unittest
 from unittest.mock import patch
 
-from seeground.grounding.r8_grounding import generic_target_pool, query_evidence
-from seeground.grounding.r8_precision import precision_evidence
-from seeground.grounding.real_scene import run_query
+from eviground.grounding.r8_grounding import generic_target_pool, query_evidence
+from eviground.grounding.r8_precision import precision_evidence
+from eviground.grounding.real_scene import run_query
 from tests.legacy.test_categories_r8 import R8Tests
 from tests.legacy.test_r8_grounding import prediction
 from tests.legacy.test_v7_evidence import obj, parse
@@ -14,9 +14,9 @@ from tests.legacy.test_v7_evidence import obj, parse
 
 class GenericTargetTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1',
-            'SEEGROUND_V7_4': '1', 'SEEGROUND_V9': '1', 'SEEGROUND_V9_SOURCE': 'r8',
-            'SEEGROUND_R8_GROUNDING_REVISION': 'r12'})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V7': '1',
+            'EVIGROUND_V7_4': '1', 'EVIGROUND_V9': '1', 'EVIGROUND_V9_SOURCE': 'r8',
+            'EVIGROUND_R8_GROUNDING_REVISION': 'r12'})
         env.start(); self.addCleanup(env.stop)
 
     def test_only_nonspecific_target_names_enable_visual_pool(self):
@@ -24,7 +24,7 @@ class GenericTargetTests(unittest.TestCase):
             self.assertTrue(generic_target_pool(names))
         for names in ([], ['chair'], ['object', 'chair'], ['picture frame']):
             self.assertFalse(generic_target_pool(names))
-        with patch.dict(os.environ, {'SEEGROUND_R8_GROUNDING_REVISION': 'r10'}):
+        with patch.dict(os.environ, {'EVIGROUND_R8_GROUNDING_REVISION': 'r10'}):
             self.assertFalse(generic_target_pool(['object']))
 
     def test_generic_payload_keeps_original_ranked_labels(self):
@@ -36,7 +36,7 @@ class GenericTargetTests(unittest.TestCase):
         self.assertEqual([h['category'] for h in compact['objects'][0]['category_hypotheses']],
                          ['chair', 'window'])
         self.assertEqual(objects[0]['category_hypotheses'][1]['rank'], 2)
-        with patch.dict(os.environ, {'SEEGROUND_R8_GROUNDING_REVISION': 'r10'}):
+        with patch.dict(os.environ, {'EVIGROUND_R8_GROUNDING_REVISION': 'r10'}):
             self.assertNotIn('generic_target_visual_pool', query_evidence(parsed, objects, objects))
             compact = precision_evidence('the object on the left', parsed, objects, objects)
             self.assertEqual(len(compact['objects'][0]['category_hypotheses']), 1)
@@ -51,12 +51,12 @@ class GenericTargetTests(unittest.TestCase):
             'evidence': [{'source_quote': query, 'object_ids': [1, 2],
                 'observation': 'Object at base beside desk'}], 'unresolved': [], 'numeric_choice': None}),
             '_finish_reason': 'stop', '_baseline': {}, 'usage': {}}
-        with patch('seeground.grounding.real_scene.parse_query', return_value=parsed), \
-                patch('seeground.geometry.wall_geometry.attach_wall_geometry', side_effect=lambda objects, *args: objects), \
-                patch('seeground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
-                patch('seeground.grounding.r8_grounding.isolated_target_views', return_value=[]), \
-                patch('seeground.grounding.v74_grounding.image_part', return_value={}), \
-                patch('seeground.grounding.v74_grounding.chat', return_value=reply) as model:
+        with patch('eviground.grounding.real_scene.parse_query', return_value=parsed), \
+                patch('eviground.geometry.wall_geometry.attach_wall_geometry', side_effect=lambda objects, *args: objects), \
+                patch('eviground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
+                patch('eviground.grounding.r8_grounding.isolated_target_views', return_value=[]), \
+                patch('eviground.grounding.v74_grounding.image_part', return_value={}), \
+                patch('eviground.grounding.v74_grounding.chat', return_value=reply) as model:
             result = run_query(fixture.scene, query, fixture.root/'run',
                 mode='active_diagnostic', object_table='v9_top5')
         payload = json.loads(model.call_args.args[0][1]['content'][0]['text'])

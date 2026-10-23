@@ -3,7 +3,7 @@ import unittest
 import torch
 from torch.nn import functional as F
 
-from seeground.experiments.support_classifier_r13 import SupportHead, SPECS, training_support, weighted_loss
+from eviground.experiments.support_classifier_r13 import SupportHead, SPECS, training_support, weighted_loss
 
 
 class SupportTests(unittest.TestCase):

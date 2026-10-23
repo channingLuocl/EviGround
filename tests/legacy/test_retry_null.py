@@ -9,16 +9,16 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from seeground.experiments.run_size_validation import main, run_case
+from eviground.experiments.run_size_validation import main, run_case
 
 
 class RetryNullTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V5': '1',
-            'SEEGROUND_V6': '0', 'SEEGROUND_V62': '0', 'SEEGROUND_API_PROVIDER': 'qwen',
-            'SEEGROUND_REACT_BACKEND': 'qwen', 'SEEGROUND_MODEL': 'offline-mock',
-            'SEEGROUND_BASE_URL': 'https://example.invalid/v1', 'SEEGROUND_API_KEY': 'offline-only',
-            'SEEGROUND_API_SLOT_DIR': '', 'SEEGROUND_SYNTAX_BACKEND': 'none'})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V5': '1',
+            'EVIGROUND_V6': '0', 'EVIGROUND_V62': '0', 'EVIGROUND_API_PROVIDER': 'qwen',
+            'EVIGROUND_REACT_BACKEND': 'qwen', 'EVIGROUND_MODEL': 'offline-mock',
+            'EVIGROUND_BASE_URL': 'https://example.invalid/v1', 'EVIGROUND_API_KEY': 'offline-only',
+            'EVIGROUND_API_SLOT_DIR': '', 'EVIGROUND_SYNTAX_BACKEND': 'none'})
         env.start()
         self.addCleanup(env.stop)
 
@@ -60,7 +60,7 @@ class RetryNullTests(unittest.TestCase):
     def test_normal_abstention_gets_new_attempt_and_previous_files_are_preserved(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); original = self.seed(root)
-            with patch('seeground.experiments.run_size_validation.subprocess.run', side_effect=self.worker(13)) as worker:
+            with patch('eviground.experiments.run_size_validation.subprocess.run', side_effect=self.worker(13)) as worker:
                 result = run_case(self.row(), root, root, 3, retry_null=True)
             self.assertEqual(worker.call_count, 1)
             self.assertEqual(result['predicted_id'], 13)
@@ -77,7 +77,7 @@ class RetryNullTests(unittest.TestCase):
             (original / 'prediction.json').unlink()
             (original / 'pending_inference.json').write_text('old exhausted checkpoint')
             (original / 'api_recovery.json').write_text('old exhausted budget')
-            with patch('seeground.experiments.run_size_validation.subprocess.run', side_effect=self.worker(13)):
+            with patch('eviground.experiments.run_size_validation.subprocess.run', side_effect=self.worker(13)):
                 result = run_case(self.row(), root, root, 3, retry_null=True)
             self.assertEqual(result['predicted_id'], 13)
             self.assertEqual((original / 'pending_inference.json').read_text(), 'old exhausted checkpoint')
@@ -86,7 +86,7 @@ class RetryNullTests(unittest.TestCase):
         for oid in (0, 5, 13):
             with self.subTest(oid=oid), tempfile.TemporaryDirectory() as td:
                 root = Path(td); self.seed(root, oid, review_failed=True, error='review failure')
-                with patch('seeground.experiments.run_size_validation.subprocess.run') as worker:
+                with patch('eviground.experiments.run_size_validation.subprocess.run') as worker:
                     result = run_case(self.row(), root, root, 3, retry_null=True)
                 worker.assert_not_called()
                 self.assertEqual(result['predicted_id'], oid)
@@ -94,9 +94,9 @@ class RetryNullTests(unittest.TestCase):
     def test_repeated_null_attempts_are_kept_and_worker_failure_updates_current_result(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); original = self.seed(root)
-            with patch('seeground.experiments.run_size_validation.subprocess.run', side_effect=self.worker(None)):
+            with patch('eviground.experiments.run_size_validation.subprocess.run', side_effect=self.worker(None)):
                 first = run_case(self.row(), root, root, 3, retry_null=True)
-            with patch('seeground.experiments.run_size_validation.subprocess.run', return_value=SimpleNamespace(returncode=1)):
+            with patch('eviground.experiments.run_size_validation.subprocess.run', return_value=SimpleNamespace(returncode=1)):
                 second = run_case(self.row(), root, root, 3, retry_null=True)
             self.assertTrue(second['inference_error'])
             self.assertEqual(json.loads((original / 'null_retries/attempt_001/evaluation.json').read_text()), first)
@@ -116,8 +116,8 @@ class RetryNullTests(unittest.TestCase):
                 '--output', str(root / 'output'), '--gt', '--workers', '1', '--limit', '2']
 
     def call_main(self, root, argv, worker):
-        with patch('sys.argv', argv), patch('seeground.experiments.run_size_validation.ROOT', root), \
-                patch('seeground.experiments.run_size_validation.subprocess.run', side_effect=worker) as mocked_run, \
+        with patch('sys.argv', argv), patch('eviground.experiments.run_size_validation.ROOT', root), \
+                patch('eviground.experiments.run_size_validation.subprocess.run', side_effect=worker) as mocked_run, \
                 redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()):
             main()
         worker_calls = [call.args[0] for call in mocked_run.call_args_list
@@ -155,8 +155,8 @@ class RetryNullTests(unittest.TestCase):
             self.assertFalse((output / 'q00012').exists())
             self.assertEqual(len(list((output / 'null_retry_runs').glob('*/manifest.json'))), 1)
             # A second retry with no nulls sends no worker requests.
-            with patch('seeground.experiments.run_size_validation.subprocess.run') as worker, patch('sys.argv', retry_argv), \
-                    patch('seeground.experiments.run_size_validation.ROOT', root), redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            with patch('eviground.experiments.run_size_validation.subprocess.run') as worker, patch('sys.argv', retry_argv), \
+                    patch('eviground.experiments.run_size_validation.ROOT', root), redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                 main()
             worker.assert_not_called()
 
@@ -290,7 +290,7 @@ class RetryNullTests(unittest.TestCase):
             self.assertEqual([c[c.index('--csv-row') + 1] for c in calls], ['14'])
 
     def test_reuse_rejects_model_and_scene_changes(self):
-        from seeground.experiments.run_size_validation import reuse_results
+        from eviground.experiments.run_size_validation import reuse_results
         import copy
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); argv = self.fixture(root)[:-2]
@@ -299,14 +299,14 @@ class RetryNullTests(unittest.TestCase):
             for field in ('models', 'input_sha256'):
                 changed = copy.deepcopy(previous)
                 if field == 'models':
-                    changed[field]['SEEGROUND_MODEL'] = 'different-model'
+                    changed[field]['EVIGROUND_MODEL'] = 'different-model'
                 else:
                     changed[field]['scene0010_00']['scene.npz'] = 'different-scene'
                 with self.subTest(field=field), self.assertRaisesRegex(ValueError, 'different|mismatch'):
                     reuse_results(root / 'output', root / 'new', previous['selection']['rows'], changed)
 
     def test_progress_includes_cached_results_and_null_in_denominator(self):
-        from seeground.evaluation.batch_progress import BatchProgress
+        from eviground.evaluation.batch_progress import BatchProgress
         stdout, stderr = StringIO(), StringIO()
         progress = BatchProgress(4, stdout=stdout, stderr=stderr,
             initial_results=[{'correct': True}, {'correct': False, 'predicted_id': None}])
@@ -328,7 +328,7 @@ class RetryNullTests(unittest.TestCase):
             def interrupted(futures):
                 yield next(as_completed(futures))
                 raise KeyboardInterrupt
-            with patch('seeground.experiments.run_size_validation.as_completed', side_effect=interrupted):
+            with patch('eviground.experiments.run_size_validation.as_completed', side_effect=interrupted):
                 _, calls = self.call_main(root, argv, slow_worker)
             self.assertGreaterEqual(len(calls), 1)
             self.assertLess(len(calls), 3)

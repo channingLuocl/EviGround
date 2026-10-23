@@ -6,12 +6,12 @@ from pathlib import Path
 from unittest.mock import patch
 import numpy as np
 from PIL import Image
-from seeground.grounding.diagnostic import (recover_between_relations, recover_distance_relations,
+from eviground.grounding.diagnostic import (recover_between_relations, recover_distance_relations,
                         refresh_condition_records, validate_structure, diagnose,
                         viewpoint_evidence)
-from seeground.grounding.evidence import validate_distance_relations
-from seeground.api.qwen_api import QwenAPIError
-from seeground.rendering.rgb_review import load_crops, input_hashes, selective_review
+from eviground.grounding.evidence import validate_distance_relations
+from eviground.api.qwen_api import QwenAPIError
+from eviground.rendering.rgb_review import load_crops, input_hashes, selective_review
 
 
 def obj(oid, category, x, y):
@@ -561,7 +561,7 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(viewpoint_evidence(data, result)['language_reference_frames'], [])
 
     def test_side_direction_survives_rewrite_with_other_relation(self):
-        from seeground.query.query_rewrite import rewrite_query
+        from eviground.query.query_rewrite import rewrite_query
         query = ('Standing in the middle of the room facing the tv, '
                  'the window on the right below the table.')
         objects = self.objects + [{'bbox_id': 4, 'target': 'table',
@@ -803,7 +803,7 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(result['status'], 'missing')
 
     def test_rewritten_distance_uses_binding_metric_alias_and_tolerance(self):
-        from seeground.query.query_rewrite import rewrite_query
+        from eviground.query.query_rewrite import rewrite_query
         targets = [obj(1, 'window', 1.0, 0), obj(2, 'window', 1.015, 0)]
         targets[0]['bbox_3d'][2] = 10.
         anchors = [obj(3, 'tv', 10, 0), obj(4, 'tv', 0, 0)]
@@ -1512,7 +1512,7 @@ class RGBReviewTests(unittest.TestCase):
     def test_no_rgb_causes_no_extra_api_call(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);objects=[obj(1,'window',1,0)]
-            with patch('seeground.rendering.rgb_review.chat') as api:
+            with patch('eviground.rendering.rgb_review.chat') as api:
                 result=selective_review(parsed('window',[]),objects,objects,[0,0,.5],root,[],2)
             api.assert_not_called()
             self.assertEqual(result['status'],'missing')
@@ -1521,7 +1521,7 @@ class RGBReviewTests(unittest.TestCase):
     def test_supplied_rgb_can_support_a_scoped_singleton(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);objects,_=self.fixture(root);calls=[]
-            with patch('seeground.rendering.rgb_review.chat',return_value={
+            with patch('eviground.rendering.rgb_review.chat',return_value={
                     '_content': json.dumps({'id': 1, 'verdict': 'yes',
                                             'category_verdict': 'yes',
                                             'visibility': 'visible', 'reason': 'visible window',
@@ -1543,7 +1543,7 @@ class RGBReviewTests(unittest.TestCase):
                                 '_baseline': {'model': 'mock', 'latency_s': .01},
                                 '_finish_reason': 'stop', 'usage': {}},
                                response(2), response(1,finish='length')):
-                with patch('seeground.rendering.rgb_review.chat',return_value=answer) as api:
+                with patch('eviground.rendering.rgb_review.chat',return_value=answer) as api:
                     result=selective_review(parsed('window',[]),objects,objects[:1],[0,0,.5],root,[],6)
                 self.assertEqual(api.call_count,1)
                 self.assertEqual(result['status'],'missing')
@@ -1561,7 +1561,7 @@ class RGBReviewTests(unittest.TestCase):
                             '_baseline':{'model':'mock','latency_s':.01},
                             '_finish_reason':finish,'usage':{}}
                     calls=[]
-                    with patch('seeground.rendering.rgb_review.chat',return_value=answer) as api:
+                    with patch('eviground.rendering.rgb_review.chat',return_value=answer) as api:
                         result=selective_review(parsed('window',[]),objects,objects[:1],
                                                 [0,0,.5],root,calls,6)
                     self.assertEqual(api.call_count,1)
@@ -1574,7 +1574,7 @@ class RGBReviewTests(unittest.TestCase):
     def test_rgb_api_error_is_recorded_without_retrying_same_need(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);objects,_=self.fixture(root);calls=[]
-            with patch('seeground.rendering.rgb_review.chat',side_effect=QwenAPIError('upstream API error')) as api:
+            with patch('eviground.rendering.rgb_review.chat',side_effect=QwenAPIError('upstream API error')) as api:
                 result=selective_review(parsed('window',[]),objects,objects[:1],
                                         [0,0,.5],root,calls,6)
             self.assertEqual(api.call_count,1)
@@ -1597,7 +1597,7 @@ class RGBReviewTests(unittest.TestCase):
                             'visibility':'visible','reason':'window visible',
                             'attribute_checks':[{'attribute':'black','verdict':verdict,
                                                  'visibility':visibility,'reason':'surface color evidence'}]}
-                    with patch('seeground.rendering.rgb_review.chat',return_value={
+                    with patch('eviground.rendering.rgb_review.chat',return_value={
                             '_content':json.dumps(answer),
                             '_baseline':{'model':'mock','latency_s':.01},
                             '_finish_reason':'stop','usage':{}}) as api:
@@ -1617,7 +1617,7 @@ class RGBReviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);objects,_=self.fixture(root)
             data=parsed('black window',[],attrs=[{'category':'window','phrase':'black'}])
-            with patch('seeground.rendering.rgb_review.chat',return_value=response(1)):
+            with patch('eviground.rendering.rgb_review.chat',return_value=response(1)):
                 result=selective_review(data,objects,objects[:1],[0,0,.5],root,[],2,
                                         trusted_categories=True)
             self.assertEqual(result['status'],'missing')

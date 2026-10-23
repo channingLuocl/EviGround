@@ -2,8 +2,8 @@ import unittest
 
 import numpy as np
 
-from seeground.classifiers.classifier_memory_r7 import choose, embedding, kernel_scores, unit
-from seeground.experiments.audit_classifier_memory_r7 import independent_raw
+from eviground.classifiers.classifier_memory_r7 import choose, embedding, kernel_scores, unit
+from eviground.experiments.audit_classifier_memory_r7 import independent_raw
 import torch
 
 

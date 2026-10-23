@@ -9,10 +9,10 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from seeground.categories.category_common_v82 import category_vocabulary
-from seeground.classifiers.pointcloud_classifier_v82 import PROMPT, prepare_points
-from seeground.experiments.run_categories_v82 import run
-from seeground.classifiers.uni3d_classifier import (TEXT_MODEL, TEXT_REVISION, TEXT_SHA256,
+from eviground.categories.category_common_v82 import category_vocabulary
+from eviground.classifiers.pointcloud_classifier_v82 import PROMPT, prepare_points
+from eviground.experiments.run_categories_v82 import run
+from eviground.classifiers.uni3d_classifier import (TEXT_MODEL, TEXT_REVISION, TEXT_SHA256,
                               load_uni3d_text, point_encoder_state, prepare_uni3d_points)
 
 
@@ -79,7 +79,7 @@ class Uni3DTests(unittest.TestCase):
             classifier.predict.return_value = {'status': 'completed', 'predicted_object': 'book',
                                                'top5': [{'category': 'book'}]}
             factory = Mock(return_value=classifier)
-            with patch('seeground.experiments.run_categories_v82.PointCloudClassifier') as default:
+            with patch('eviground.experiments.run_categories_v82.PointCloudClassifier') as default:
                 self.assertEqual(run(args, classifier_factory=factory,
                                      extra_config={'source_revision': 'test'}), 0)
                 default.assert_not_called()

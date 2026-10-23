@@ -3,10 +3,10 @@ import tempfile
 from pathlib import Path
 import numpy as np
 import torch
-from seeground.experiments.audit_pair_train_test import gate, recount
-from seeground.experiments.run_pair_train_test import choose_validation
-from seeground.geometry.shape_scale import score
-from seeground.experiments.train_pair_views import Gate
+from eviground.experiments.audit_pair_train_test import gate, recount
+from eviground.experiments.run_pair_train_test import choose_validation
+from eviground.geometry.shape_scale import score
+from eviground.experiments.train_pair_views import Gate
 
 
 class ProtocolTests(unittest.TestCase):

@@ -7,8 +7,8 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 import numpy as np
-from seeground.grounding.diagnostic import _between_geometry, diagnose, validate_structure, recover_between_relations
-from seeground.geometry.wall_geometry import attach_wall_geometry, fit_wall, wall_reference_point, main
+from eviground.grounding.diagnostic import _between_geometry, diagnose, validate_structure, recover_between_relations
+from eviground.geometry.wall_geometry import attach_wall_geometry, fit_wall, wall_reference_point, main
 
 
 def box(oid, category, x, y):
@@ -112,7 +112,7 @@ class WallGeometryTests(unittest.TestCase):
             original = path.read_bytes()
             output = io.StringIO()
             with patch('sys.argv', ['wall_geometry', '--scene-dir', str(root), '--run', str(path)]), \
-                 patch('seeground.api.qwen_api.requests.post') as api, redirect_stdout(output):
+                 patch('eviground.api.qwen_api.requests.post') as api, redirect_stdout(output):
                 main()
             result = json.loads(output.getvalue())
             api.assert_not_called()

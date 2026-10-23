@@ -1,6 +1,6 @@
 import unittest
 
-from seeground.grounding.appearance_evidence import (aggregate_visual_checks, attribute_contexts, attribute_units,
+from eviground.grounding.appearance_evidence import (aggregate_visual_checks, attribute_contexts, attribute_units,
                                   normalize_visual_check, required_visual_attributes)
 
 

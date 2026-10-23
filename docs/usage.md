@@ -1,4 +1,4 @@
-# 运行与配置
+# EviGround 运行与配置
 
 ## 安装
 
@@ -11,7 +11,9 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-在 `.env` 中填写 `SEEGROUND_API_KEY`。默认地址、模型与参数沿用已完成的 Qwen Coding Plan 运行；`openai` 是兼容接口名称，实际调用模型为 `qwen3.7-plus`。如使用其他服务地址，应相应修改 `.env`。
+在 `.env` 中填写 `EVIGROUND_API_KEY`。默认地址、模型与参数沿用已完成的 Qwen Coding Plan 运行；`openai` 是兼容接口名称，实际调用模型为 `qwen3.7-plus`。如使用其他服务地址，应相应修改 `.env`。
+
+当前环境变量统一使用 `EVIGROUND_*`。旧 `.env` 或进程环境中的 `SEEGROUND_*` 会在配置加载时兼容映射，新名称优先。仓库外运行普通 wheel 时，可设置 `EVIGROUND_ROOT=/path/to/repository`。
 
 核心定位使用 CPU 场景渲染，不要求安装分类器训练环境。历史分类训练依赖与 GPU 工具见 `docs/history/local/` 和 `third_party/`。
 
@@ -35,18 +37,18 @@ prepared_scenes/
 
 ```bash
 # 检查所有输入、生成清单，不调用大模型
-seeground --scene-root /path/to/prepared_scenes \
+eviground --scene-root /path/to/prepared_scenes \
   --output outputs/runs/r18_top5 --prepare-only
 
 # 完整运行
-seeground --scene-root /path/to/prepared_scenes \
+eviground --scene-root /path/to/prepared_scenes \
   --output outputs/runs/r18_top5
 ```
 
-也可以使用 `python -m seeground` 或 `bash scripts/run_grounding.sh`。本地并发和 API 并发默认均为 8：
+也可以使用 `python -m eviground` 或 `bash scripts/run_grounding.sh`。本地并发和 API 并发默认均为 8：
 
 ```bash
-seeground --scene-root /path/to/prepared_scenes \
+eviground --scene-root /path/to/prepared_scenes \
   --category-top-k 5 --workers 8 --api-concurrency 8 \
   --output outputs/runs/r18_top5
 ```

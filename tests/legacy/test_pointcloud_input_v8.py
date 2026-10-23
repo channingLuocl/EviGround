@@ -10,9 +10,9 @@ from unittest.mock import patch
 
 import numpy as np
 
-import seeground.experiments.predict_pointcloud_v8 as inference
-import seeground.experiments.run_object_classification as batch
-from seeground.api.qwen_api import QwenAPIError
+import eviground.experiments.predict_pointcloud_v8 as inference
+import eviground.experiments.run_object_classification as batch
+from eviground.api.qwen_api import QwenAPIError
 from tests.legacy.test_object_classification_v8 import ENV, fixture, response
 
 
@@ -33,7 +33,7 @@ class PointCloudInputTests(unittest.TestCase):
             import shutil
             shutil.rmtree(root/'scenes')
             (root/'manifest.json').unlink()
-            with patch('seeground.classifiers.object_classifier_v8.chat', return_value=response()) as chat:
+            with patch('eviground.classifiers.object_classifier_v8.chat', return_value=response()) as chat:
                 self.assertEqual(inference.predict(args), 0)
             result = json.loads((args.output/'predictions.json').read_text())
             self.assertEqual(result['results'][0]['predicted_object'], 'chair')
@@ -44,13 +44,13 @@ class PointCloudInputTests(unittest.TestCase):
             for forbidden in ('author-wrong', 'secret-gt', 'secret query'):
                 self.assertNotIn(forbidden, request)
             self.assertNotIn('target', result['results'][0])
-            with patch('seeground.experiments.predict_pointcloud_v8.classify_instance') as classify:
+            with patch('eviground.experiments.predict_pointcloud_v8.classify_instance') as classify:
                 inference.predict(args)
                 classify.assert_not_called()
 
     def test_api_error_is_null_and_retry_archives_it_without_label_fallback(self):
         with tempfile.TemporaryDirectory() as td, patch.dict('os.environ', ENV), \
-                patch('seeground.experiments.predict_pointcloud_v8.classify_instance') as classify, \
+                patch('eviground.experiments.predict_pointcloud_v8.classify_instance') as classify, \
                 redirect_stdout(StringIO()), redirect_stderr(StringIO()):
             args = self.inputs(Path(td))
             classify.side_effect = QwenAPIError('network',diagnostic={'failure_kind':'network'})
@@ -63,13 +63,13 @@ class PointCloudInputTests(unittest.TestCase):
             classify.return_value={'bbox_id':3,'predicted_object':'stool','status':'completed'}
             self.assertEqual(inference.predict(args),0)
             self.assertEqual(len(list(args.output.glob('object_*/attempts/*/prediction.json'))),1)
-            with patch.dict('os.environ',{'SEEGROUND_MODEL':'changed'}), \
+            with patch.dict('os.environ',{'EVIGROUND_MODEL':'changed'}), \
                     self.assertRaisesRegex(ValueError,'changed'):
                 inference.predict(args)
 
     def test_changing_reference_labels_only_changes_scores(self):
         with tempfile.TemporaryDirectory() as td, patch.dict('os.environ', ENV), \
-                patch('seeground.experiments.run_object_classification.classify_instance') as classify, \
+                patch('eviground.experiments.run_object_classification.classify_instance') as classify, \
                 redirect_stdout(StringIO()), redirect_stderr(StringIO()):
             root=Path(td)
             args,_,_=fixture(root)
@@ -97,7 +97,7 @@ class PointCloudInputTests(unittest.TestCase):
 
     def test_invalid_cloud_and_instance_ids_fail_before_requests(self):
         with tempfile.TemporaryDirectory() as td, patch.dict('os.environ', ENV), \
-                patch('seeground.experiments.predict_pointcloud_v8.classify_instance') as classify:
+                patch('eviground.experiments.predict_pointcloud_v8.classify_instance') as classify:
             args=self.inputs(Path(td))
             args.bbox_id=[99]
             with self.assertRaisesRegex(ValueError,'present'):

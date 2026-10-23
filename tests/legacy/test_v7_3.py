@@ -9,16 +9,16 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from seeground.grounding.active_diagnostic import evidence_request
-from seeground.api.response_schemas import planner_schema
-from seeground.experiments.run_size_validation import V73_LEGACY_GT_HASHES, report, reuse_results, run_case
-from seeground.grounding.v4_policy import settings
+from eviground.grounding.active_diagnostic import evidence_request
+from eviground.api.response_schemas import planner_schema
+from eviground.experiments.run_size_validation import V73_LEGACY_GT_HASHES, report, reuse_results, run_case
+from eviground.grounding.v4_policy import settings
 
 
 class V73Tests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1',
-            'SEEGROUND_V7_2': '0', 'SEEGROUND_V7_3': '1'})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V7': '1',
+            'EVIGROUND_V7_2': '0', 'EVIGROUND_V7_3': '1'})
         env.start(); self.addCleanup(env.stop)
         self.objects = [{'bbox_id': i} for i in (0, 1, 3, 4, 12, 13, 24, 25)]
 
@@ -40,7 +40,7 @@ class V73Tests(unittest.TestCase):
                 removed = 'inspect' if action['dimension'] == 'appearance' else 'context'
                 self.assertNotIn(removed, result)
                 self.assertEqual(result['focus_ids'], action['focus_ids'])
-                with patch.dict(os.environ, {'SEEGROUND_V7_3': '0'}):
+                with patch.dict(os.environ, {'EVIGROUND_V7_3': '0'}):
                     with self.assertRaisesRegex(ValueError, 'unsupported evidence parameters'):
                         evidence_request(action, [0, 3, 12], self.objects)
 
@@ -87,7 +87,7 @@ class V73Tests(unittest.TestCase):
         previous = {'selection': {'rows': [row], 'csv_sha256': 'same-csv'},
             'object_table': 'gt', 'v4': {'version': 'relative-size-v7.1', 'v7': True},
             'code_sha256': {**V73_LEGACY_GT_HASHES, 'qwen_api.py': 'same-code'},
-            'models': {'SEEGROUND_MODEL': 'same-model'},
+            'models': {'EVIGROUND_MODEL': 'same-model'},
             'input_sha256': {'scene0010_00': {'scene.npz': 'same-scene'}},
             'query_syntax': {'implementation_version': 'relative-size-v7.1'}, 'api_config': {}}
         (source / 'manifest.json').write_text(json.dumps(previous))
@@ -124,7 +124,7 @@ class V73Tests(unittest.TestCase):
                 root = Path(td); source, row, _, previous, current = self.fixture(root)
                 output = root / 'output'; output.mkdir()
                 if field == 'model':
-                    current['models']['SEEGROUND_MODEL'] = 'changed'
+                    current['models']['EVIGROUND_MODEL'] = 'changed'
                 elif field == 'input':
                     current['input_sha256']['scene0010_00']['scene.npz'] = 'changed'
                 elif field == 'hash':
@@ -142,7 +142,7 @@ class V73Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             row = {'csv_row': 10, 'scene': 'scene0010_00', 'query': 'the chair', 'target_id': 13}
-            with patch('seeground.experiments.run_size_validation.subprocess.run', side_effect=OSError('offline failure')):
+            with patch('eviground.experiments.run_size_validation.subprocess.run', side_effect=OSError('offline failure')):
                 result = run_case(row, root, root, 3)
             self.assertTrue(result['inference_error'])
             self.assertEqual(result['implementation_version'], 'relative-size-v7.3')

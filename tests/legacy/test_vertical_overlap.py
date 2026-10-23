@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.grounding.active_diagnostic import (active_ground, apply_computed_evidence,
+from eviground.grounding.active_diagnostic import (active_ground, apply_computed_evidence,
                                execute_evidence)
-from seeground.grounding.diagnostic import diagnose, validate_structure
+from eviground.grounding.diagnostic import diagnose, validate_structure
 
 
 def object_box(oid, category, z, height=1., x=0.):
@@ -77,7 +77,7 @@ class VerticalOverlapTests(unittest.TestCase):
         result = diagnose(parsed, objects, objects[:1], [0, 0, 1],
                           trusted_categories=True)
         with tempfile.TemporaryDirectory() as directory:
-            with patch('seeground.grounding.active_diagnostic.chat') as chat:
+            with patch('eviground.grounding.active_diagnostic.chat') as chat:
                 observation = execute_evidence(
                     {'dimension': 'position', 'reason': 'verify vertical condition'},
                     query, parsed, result, objects[:1], objects,
@@ -103,8 +103,8 @@ class VerticalOverlapTests(unittest.TestCase):
                       '_baseline': {'model': 'mock', 'latency_s': 0}, 'usage': {}}
                      for action in actions]
         with tempfile.TemporaryDirectory() as directory, patch.dict(
-                'os.environ', {'SEEGROUND_REACT_BACKEND': 'qwen'}), patch(
-                'seeground.grounding.active_diagnostic.chat', side_effect=responses):
+                'os.environ', {'EVIGROUND_REACT_BACKEND': 'qwen'}), patch(
+                'eviground.grounding.active_diagnostic.chat', side_effect=responses):
             trace = {}
             result = active_ground(
                 query, parsed, objects, objects, objects[:1],

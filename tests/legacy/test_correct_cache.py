@@ -9,17 +9,17 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from seeground.experiments.run_size_validation import (apply_correct_cache, correct_cache_path,
+from eviground.experiments.run_size_validation import (apply_correct_cache, correct_cache_path,
     load_correct_cache, main, remember_correct_result, run_case)
 
 
 class CorrectCacheTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1',
-            'SEEGROUND_V7_2': '0', 'SEEGROUND_V7_3': '1', 'SEEGROUND_SYNTAX_BACKEND': 'none',
-            'SEEGROUND_API_PROVIDER': 'openai', 'SEEGROUND_REACT_BACKEND': 'openai',
-            'SEEGROUND_MODEL': 'offline', 'SEEGROUND_BASE_URL': 'https://example.invalid/v1',
-            'SEEGROUND_API_KEY': 'offline', 'SEEGROUND_API_SLOT_DIR': ''})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V7': '1',
+            'EVIGROUND_V7_2': '0', 'EVIGROUND_V7_3': '1', 'EVIGROUND_SYNTAX_BACKEND': 'none',
+            'EVIGROUND_API_PROVIDER': 'openai', 'EVIGROUND_REACT_BACKEND': 'openai',
+            'EVIGROUND_MODEL': 'offline', 'EVIGROUND_BASE_URL': 'https://example.invalid/v1',
+            'EVIGROUND_API_KEY': 'offline', 'EVIGROUND_API_SLOT_DIR': ''})
         env.start(); self.addCleanup(env.stop)
 
     def row(self, index=10):
@@ -56,7 +56,7 @@ class CorrectCacheTests(unittest.TestCase):
             self.assertEqual(saved['predicted_id'], 0)
             self.assertEqual(saved['implementation_version'], 'old')
             self.assertEqual((old / 'q00010/evaluation.json').read_bytes(), original)
-            with patch('seeground.experiments.run_size_validation.subprocess.run') as process:
+            with patch('eviground.experiments.run_size_validation.subprocess.run') as process:
                 run_case(self.row(), root, output, 3, retry_false=True)
                 run_case(self.row(), root, output, 3, retry_errors=True)
             process.assert_not_called()
@@ -141,8 +141,8 @@ class CorrectCacheTests(unittest.TestCase):
                     'implementation_version': 'relative-size-v7.3'}))
                 return SimpleNamespace(returncode=0)
             def call(flags):
-                with patch('sys.argv', argv + flags), patch('seeground.experiments.run_size_validation.ROOT', root), \
-                        patch('seeground.experiments.run_size_validation.subprocess.run', side_effect=worker) as process, \
+                with patch('sys.argv', argv + flags), patch('eviground.experiments.run_size_validation.ROOT', root), \
+                        patch('eviground.experiments.run_size_validation.subprocess.run', side_effect=worker) as process, \
                         redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                     main()
                 return process.call_count

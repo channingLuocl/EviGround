@@ -10,10 +10,10 @@ import numpy as np
 import torch
 from torch import nn
 
-from seeground.classifiers.pointcloud_classifier_v82 import prepare_points
-from seeground.classifiers.uni3d_classifier import prepare_uni3d_points
-from seeground.experiments.train_uni3d_scannet import Uni3DEncoder, configure_tail, to_uni3d_frame
-import seeground.experiments.train_pointbert_scannet as training
+from eviground.classifiers.pointcloud_classifier_v82 import prepare_points
+from eviground.classifiers.uni3d_classifier import prepare_uni3d_points
+from eviground.experiments.train_uni3d_scannet import Uni3DEncoder, configure_tail, to_uni3d_frame
+import eviground.experiments.train_pointbert_scannet as training
 
 
 class Uni3DTrainingTests(unittest.TestCase):

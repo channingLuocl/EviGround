@@ -3,7 +3,7 @@ import unittest
 
 import numpy as np
 
-from seeground.geometry.object_geometry import point_cloud_measurements, SIZE_GEOMETRY_POLICY
+from eviground.geometry.object_geometry import point_cloud_measurements, SIZE_GEOMETRY_POLICY
 
 
 def obj(oid=1, category='bookshelf'):

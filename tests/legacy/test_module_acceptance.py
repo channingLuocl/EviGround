@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from seeground.experiments.run_module_acceptance import (
+from eviground.experiments.run_module_acceptance import (
     MODULES, bind_output, case_modules, execution_audit, parsed_dimensions,
     final_audit_missing, preflight, report,
 )
@@ -74,9 +74,9 @@ class ModuleAcceptanceTests(unittest.TestCase):
             manifest = {'csv_sha256': 'expected', 'rows': [{'module': 'size',
                 'csv_row': 1, 'scene': scene.name, 'query': 'small table', 'target_id': 2,
                 'stimulus_candidate_ids': [2]}]}
-            with patch('seeground.experiments.run_module_acceptance.ROOT', root), \
-                    patch('seeground.experiments.run_module_acceptance._settings', return_value=('https://example.test', 'model', 'secret')), \
-                    patch('seeground.experiments.run_module_acceptance.validate_react_config', return_value='qwen'):
+            with patch('eviground.experiments.run_module_acceptance.ROOT', root), \
+                    patch('eviground.experiments.run_module_acceptance._settings', return_value=('https://example.test', 'model', 'secret')), \
+                    patch('eviground.experiments.run_module_acceptance.validate_react_config', return_value='qwen'):
                 settings = preflight(manifest, root / 'scenes', 5)
             self.assertIsNone(settings['input_sha256'][scene.name]['scene_instances.json'])
             self.assertNotIn('secret', json.dumps(settings))

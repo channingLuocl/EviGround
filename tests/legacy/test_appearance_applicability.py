@@ -5,10 +5,10 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.grounding.active_diagnostic import _check_payload, evidence_request, execute_evidence
-from seeground.grounding.appearance_evidence import aggregate_visual_checks, normalize_visual_check, required_visual_attributes
-from seeground.grounding.diagnostic import diagnose
-from seeground.rendering.rgb_review import review_need
+from eviground.grounding.active_diagnostic import _check_payload, evidence_request, execute_evidence
+from eviground.grounding.appearance_evidence import aggregate_visual_checks, normalize_visual_check, required_visual_attributes
+from eviground.grounding.diagnostic import diagnose
+from eviground.rendering.rgb_review import review_need
 
 
 def attribute(name, verdict='yes', reason='visible surface evidence'):
@@ -87,8 +87,8 @@ class AppearanceApplicabilityTests(unittest.TestCase):
         raw.update(id=83, verdict='no', reason='The white table has legs underneath.')
         response = {'_content': json.dumps(raw), '_finish_reason': 'stop',
                     '_baseline': {'latency_s': .01}}
-        with patch('seeground.rendering.rgb_review.chat', return_value=response), patch(
-                'seeground.rendering.rgb_review.image_part', return_value={'type': 'text', 'text': 'image'}):
+        with patch('eviground.rendering.rgb_review.chat', return_value=response), patch(
+                'eviground.rendering.rgb_review.image_part', return_value={'type': 'text', 'text': 'image'}):
             result = review_need(need, crops, [])
         self.assertEqual(result['category_verdict'], 'uncertain')
         self.assertEqual(result['verdict'], 'uncertain')
@@ -379,10 +379,10 @@ class AppearanceApplicabilityTests(unittest.TestCase):
         action = evidence_request({'action': 'evidence', 'dimension': 'appearance', 'reason': 'inspect'}, [1], objects)
         response = {'_content': json.dumps({'checks': [{'id': 1, **visual([attribute(name) for name in expected])}]}),
                     '_finish_reason': 'stop', '_baseline': {'latency_s': .01}}
-        with patch('seeground.grounding.active_diagnostic.render_action', return_value={
+        with patch('eviground.grounding.active_diagnostic.render_action', return_value={
                 'image': 'mock.png', 'focus_ids': [1], 'context': 'isolated'}), patch(
-                'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
-                'seeground.grounding.active_diagnostic.chat', return_value=response) as api:
+                'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}), patch(
+                'eviground.grounding.active_diagnostic.chat', return_value=response) as api:
             execute_evidence(action, 'white stripes on top with nothing underneath', parsed, diagnosis,
                              objects, objects, np.zeros((1, 3)), None, np.array([1]), Path('/tmp'), 1, [])
         payload = json.loads(api.call_args.args[0][1]['content'][1]['text'])
@@ -398,8 +398,8 @@ class AppearanceApplicabilityTests(unittest.TestCase):
             response = {'_content': json.dumps({'id': 1, **visual([
                 attribute('tall', verdict), attribute('white')])}),
                 '_finish_reason': 'stop', '_baseline': {'latency_s': .01}}
-            with patch('seeground.rendering.rgb_review.chat', return_value=response), patch(
-                    'seeground.rendering.rgb_review.image_part', return_value={'type': 'text', 'text': 'image'}):
+            with patch('eviground.rendering.rgb_review.chat', return_value=response), patch(
+                    'eviground.rendering.rgb_review.image_part', return_value={'type': 'text', 'text': 'image'}):
                 result = review_need(need, crops, [])
             self.assertEqual(result['verdict'], 'uncertain')
             self.assertEqual([item['verdict'] for item in result['attribute_checks']], ['uncertain', 'yes'])

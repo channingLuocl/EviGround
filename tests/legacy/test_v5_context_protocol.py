@@ -1,5 +1,5 @@
 """Offline lossless evidence encoding and fixed-budget real-state regressions."""
-from seeground.paths import ROOT
+from eviground.paths import ROOT
 from copy import deepcopy
 import importlib.util
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from seeground.grounding.react_decision import compact_repeated_evidence
+from eviground.grounding.react_decision import compact_repeated_evidence
 
 def expand_protocol(result):
     definitions = result.get('shared_evidence', {})
@@ -29,7 +29,7 @@ def expand_protocol(result):
 DELIVERY = ROOT / 'local_outputs/v5_context_protocol_fixtures'
 
 
-import seeground.grounding.react_decision as PROPOSED
+import eviground.grounding.react_decision as PROPOSED
 
 def load_frozen_baseline():
     path = DELIVERY / 'react_decision_frozen_r3.py'
@@ -46,9 +46,9 @@ BASELINE = load_frozen_baseline()
 
 class ContextProtocolTests(unittest.TestCase):
     def setUp(self):
-        environment = patch.dict(os.environ, {'SEEGROUND_V5': '1', 'SEEGROUND_V4': '1',
-            'SEEGROUND_CONTEXT_LIMIT': '32768', 'SEEGROUND_REACT_BACKEND': 'qwen',
-            'SEEGROUND_API_PROVIDER': 'qwen'})
+        environment = patch.dict(os.environ, {'EVIGROUND_V5': '1', 'EVIGROUND_V4': '1',
+            'EVIGROUND_CONTEXT_LIMIT': '32768', 'EVIGROUND_REACT_BACKEND': 'qwen',
+            'EVIGROUND_API_PROVIDER': 'qwen'})
         environment.start()
         self.addCleanup(environment.stop)
 
@@ -159,7 +159,7 @@ class ContextProtocolTests(unittest.TestCase):
                 except ValueError as exc:
                     self.assertEqual(str(exc), 'required planner obligations exceed configured text context budget')
                     continue
-                with patch.dict(os.environ, {'SEEGROUND_CONTEXT_LIMIT': '1000000000'}):
+                with patch.dict(os.environ, {'EVIGROUND_CONTEXT_LIMIT': '1000000000'}):
                     original, _ = BASELINE.planner_state(source, tighter=audit['tighter'],
                                                         instruction_bytes=instruction_bytes)
                 self.assertEqual(expand_protocol(compact), original)
@@ -182,7 +182,7 @@ class ContextProtocolTests(unittest.TestCase):
                 payload_bytes = len(json.dumps(compact, ensure_ascii=False, separators=(',', ':')).encode())
                 self.assertEqual(audit['input_units'], payload_bytes + instruction_bytes + 64)
                 self.assertLessEqual(audit['input_units'], 30720)
-                with patch.dict(os.environ, {'SEEGROUND_CONTEXT_LIMIT': '1000000000'}):
+                with patch.dict(os.environ, {'EVIGROUND_CONTEXT_LIMIT': '1000000000'}):
                     original, _ = BASELINE.planner_state(saved['state'], tighter=audit['tighter'],
                                                         instruction_bytes=instruction_bytes)
                 self.assertEqual(expand_protocol(compact), original)

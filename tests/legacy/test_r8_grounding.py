@@ -8,13 +8,13 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.categories.categories_v9 import R8_SCORE_TYPE
-from seeground.grounding.r8_grounding import camera_eye, isolated_target_views, query_evidence, target_head_hint
-from seeground.grounding.evidence import visual_fallback_candidates
-from seeground.rendering.run import project
+from eviground.categories.categories_v9 import R8_SCORE_TYPE
+from eviground.grounding.r8_grounding import camera_eye, isolated_target_views, query_evidence, target_head_hint
+from eviground.grounding.evidence import visual_fallback_candidates
+from eviground.rendering.run import project
 from tests.legacy.test_v7_evidence import obj
-from seeground.grounding.v4_policy import settings
-from seeground.grounding.v74_grounding import ground_scene, scene_views
+from eviground.grounding.v4_policy import settings
+from eviground.grounding.v74_grounding import ground_scene, scene_views
 
 
 def prediction(oid, names, xyz=(0, 0, 0)):
@@ -26,14 +26,14 @@ def prediction(oid, names, xyz=(0, 0, 0)):
 
 class R8GroundingTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1',
-            'SEEGROUND_V7_4': '1', 'SEEGROUND_V9': '1', 'SEEGROUND_V9_SOURCE': 'r8',
-            'SEEGROUND_R8_GROUNDING_REVISION': 'r2'})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V7': '1',
+            'EVIGROUND_V7_4': '1', 'EVIGROUND_V9': '1', 'EVIGROUND_V9_SOURCE': 'r8',
+            'EVIGROUND_R8_GROUNDING_REVISION': 'r2'})
         env.start(); self.addCleanup(env.stop)
 
     def test_opt_in_version_keeps_r1_available(self):
         self.assertEqual(settings()['version'], 'predicted-category-grounding-v9-r8-r2')
-        with patch.dict(os.environ, {'SEEGROUND_R8_GROUNDING_REVISION': 'r1'}):
+        with patch.dict(os.environ, {'EVIGROUND_R8_GROUNDING_REVISION': 'r1'}):
             self.assertEqual(settings()['version'], 'predicted-category-grounding-v9-r8-r1')
 
     def test_target_head_hint_uses_quoted_noun_and_preserves_later_requested_target(self):
@@ -56,10 +56,10 @@ class R8GroundingTests(unittest.TestCase):
             trace = {'steps': [], 'backtracks': [], 'internal_usage': {'render': 0, 'visual_check': 0}}
             calls = []
             with tempfile.TemporaryDirectory() as directory, \
-                    patch('seeground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
-                    patch('seeground.grounding.r8_grounding.isolated_target_views', return_value=[]), \
-                    patch('seeground.grounding.v74_grounding.image_part', return_value={}), \
-                    patch('seeground.grounding.v74_grounding.chat', side_effect=[answer(1), answer(2)]) as model:
+                    patch('eviground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
+                    patch('eviground.grounding.r8_grounding.isolated_target_views', return_value=[]), \
+                    patch('eviground.grounding.v74_grounding.image_part', return_value={}), \
+                    patch('eviground.grounding.v74_grounding.chat', side_effect=[answer(1), answer(2)]) as model:
                 result = ground_scene(query, {'Target': ['chair'], '_v4_budget': {}}, candidates,
                     candidates, np.zeros((2, 3)), np.zeros((2, 3)), np.array([1, 2]),
                     Path(directory), calls, {}, trace, excluded_ids=excluded)
@@ -108,7 +108,7 @@ class R8GroundingTests(unittest.TestCase):
             self.assertNotIn(99, kwargs['ids'])
             self.assertIn(1, kwargs['ids'])  # predicted wall is an eligible chair
             return {'marked_ids': [1, 2]}
-        with tempfile.TemporaryDirectory() as directory, patch('seeground.grounding.v74_grounding.render', side_effect=rendered):
+        with tempfile.TemporaryDirectory() as directory, patch('eviground.grounding.v74_grounding.render', side_effect=rendered):
             views = scene_views({'Anchor': ['desk']}, objects, objects[:1], points,
                                 np.zeros((3, 3)), np.array([1, 2, 99]), Path(directory))
         self.assertEqual(views[0]['hidden_supplemental_instance_ids'], [99])

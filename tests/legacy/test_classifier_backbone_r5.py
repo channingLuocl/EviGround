@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from seeground.classifiers.classifier_backbone_r5 import augment, configure, head_for, selector
+from eviground.classifiers.classifier_backbone_r5 import augment, configure, head_for, selector
 
 
 class BackboneTests(unittest.TestCase):

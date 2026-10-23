@@ -1,5 +1,5 @@
 """Lossless controller summaries and batch recovery; no live requests."""
-from seeground.paths import ROOT
+from eviground.paths import ROOT
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 import json
@@ -9,16 +9,16 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from seeground.grounding.react_decision import planner_state
-from seeground.experiments.run_size_validation import main, run_case
+from eviground.grounding.react_decision import planner_state
+from eviground.experiments.run_size_validation import main, run_case
 
 
 class V5RuntimeBatchTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V5': '1', 'SEEGROUND_V4': '1',
-            'SEEGROUND_REACT_BACKEND': 'qwen', 'SEEGROUND_API_PROVIDER': 'qwen',
-            'SEEGROUND_CONTEXT_LIMIT': '32768', 'SEEGROUND_MODEL': 'offline-mock',
-            'SEEGROUND_BASE_URL': 'https://example.invalid/v1', 'SEEGROUND_API_KEY': 'offline-only'})
+        env = patch.dict(os.environ, {'EVIGROUND_V5': '1', 'EVIGROUND_V4': '1',
+            'EVIGROUND_REACT_BACKEND': 'qwen', 'EVIGROUND_API_PROVIDER': 'qwen',
+            'EVIGROUND_CONTEXT_LIMIT': '32768', 'EVIGROUND_MODEL': 'offline-mock',
+            'EVIGROUND_BASE_URL': 'https://example.invalid/v1', 'EVIGROUND_API_KEY': 'offline-only'})
         env.start()
         self.addCleanup(env.stop)
 
@@ -58,13 +58,13 @@ class V5RuntimeBatchTests(unittest.TestCase):
         self.assertEqual(second['deletion_events'], first['deletion_events'])
 
     def test_checkpoint_code_identity_ignores_macos_metadata_and_test_files(self):
-        from seeground.grounding.v5_runtime import input_identity
+        from eviground.grounding.v5_runtime import input_identity
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source, metadata, test = (root / name for name in ('logic.py', '._logic.py', 'test_logic.py'))
             for path in (source, metadata, test):
                 path.write_text('initial')
-            with patch('seeground.grounding.v5_runtime.Path.glob', return_value=[source, metadata, test]):
+            with patch('eviground.grounding.v5_runtime.Path.glob', return_value=[source, metadata, test]):
                 before = input_identity('query', [], {})
                 metadata.write_bytes(b'\x00\xff resource metadata')
                 test.write_text('new test')
@@ -73,7 +73,7 @@ class V5RuntimeBatchTests(unittest.TestCase):
                 self.assertNotEqual(input_identity('query', [], {}), before)
 
     def test_full_saved_controller_states_fit_without_losing_conditions(self):
-        from seeground.grounding.active_diagnostic import DIMENSIONS, EVIDENCE_CAPABILITIES, INSTRUCTIONS, evidence_state
+        from eviground.grounding.active_diagnostic import DIMENSIONS, EVIDENCE_CAPABILITIES, INSTRUCTIONS, evidence_state
         root = ROOT / 'local_outputs/v5_development_68_r2'
         if not (root / 'manifest.json').exists():
             self.skipTest('saved controller fixture unavailable')
@@ -117,7 +117,7 @@ class V5RuntimeBatchTests(unittest.TestCase):
             def failed_worker(*args, **kwargs):
                 self.assertTrue((directory / 'prediction.json').exists())
                 return Mock(returncode=9)
-            with patch('seeground.experiments.run_size_validation.subprocess.run', side_effect=failed_worker):
+            with patch('eviground.experiments.run_size_validation.subprocess.run', side_effect=failed_worker):
                 result = run_case(self.row(), root, root, 3, retry_errors=True)
             self.assertTrue(result['inference_error'])
             self.assertEqual(result['predicted_id'], 1)
@@ -131,16 +131,16 @@ class V5RuntimeBatchTests(unittest.TestCase):
             directory = root / 'q00010'
             directory.mkdir()
             (directory / 'run.json').write_text('{')
-            with patch('seeground.experiments.run_size_validation.subprocess.run', return_value=Mock(returncode=1)):
+            with patch('eviground.experiments.run_size_validation.subprocess.run', return_value=Mock(returncode=1)):
                 result = run_case(self.row(), root, root, 3)
             self.assertTrue(result['inference_error'])
             self.assertEqual(json.loads((directory / 'evaluation.json').read_text()), result)
 
     def test_malformed_parser_response_is_not_repaired_with_an_extra_api_call(self):
-        from seeground.grounding.real_scene import parse_query
-        from seeground.api.qwen_api import QwenAPIError
+        from eviground.grounding.real_scene import parse_query
+        from eviground.api.qwen_api import QwenAPIError
         calls = []
-        with patch('seeground.grounding.real_scene.chat', return_value={'_content': '{broken', '_finish_reason': 'stop',
+        with patch('eviground.grounding.real_scene.chat', return_value={'_content': '{broken', '_finish_reason': 'stop',
                 '_baseline': {'latency_s': .01}, 'usage': {}}) as request:
             with self.assertRaises(QwenAPIError):
                 parse_query('the chair', mode='active_diagnostic', calls=calls)
@@ -166,8 +166,8 @@ class V5RuntimeBatchTests(unittest.TestCase):
             stdout, stderr = StringIO(), StringIO()
             argv = ['run_size_validation.py', '--manifest', str(manifest), '--scene-root', str(root / 'scenes'),
                     '--output', str(root / 'results'), '--gt', '--workers', '10']
-            with patch('sys.argv', argv), patch('seeground.experiments.run_size_validation.ROOT', root), \
-                    patch('seeground.experiments.run_size_validation.subprocess.run', side_effect=completed_worker), \
+            with patch('sys.argv', argv), patch('eviground.experiments.run_size_validation.ROOT', root), \
+                    patch('eviground.experiments.run_size_validation.subprocess.run', side_effect=completed_worker), \
                     redirect_stdout(stdout), redirect_stderr(stderr):
                 main()
             self.assertEqual([json.loads(line) for line in stdout.getvalue().splitlines()],

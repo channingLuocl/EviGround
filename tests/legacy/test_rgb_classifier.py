@@ -1,7 +1,7 @@
 """Checks of measured-color rendering, occlusion, invariance and fallback."""
 import unittest
 import numpy as np
-from seeground.classifiers.rgb_classifier import rasterize, render_views, fuse
+from eviground.classifiers.rgb_classifier import rasterize, render_views, fuse
 
 
 class RGBTests(unittest.TestCase):

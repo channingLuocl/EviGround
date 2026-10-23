@@ -7,7 +7,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
-from seeground.experiments.paired_nr3d import select_plan, check_plan, run_paired, compare_pairs
+from eviground.experiments.paired_nr3d import select_plan, check_plan, run_paired, compare_pairs
 
 
 class PairedTests(unittest.TestCase):
@@ -57,7 +57,7 @@ class PairedTests(unittest.TestCase):
             root=Path(td);data,olt=self.inputs(root);plan=select_plan(data,olt,2,2,2026,['scene0011_00'])
             self.prepare(root,plan)
             (root/'local_outputs'/plan['scenes'][-1]['scene']/'scene.npz').unlink()
-            with patch('seeground.experiments.paired_nr3d.ROOT',root),patch('seeground.evaluation.batch_nr3d.run_query') as api:
+            with patch('eviground.experiments.paired_nr3d.ROOT',root),patch('eviground.evaluation.batch_nr3d.run_query') as api:
                 with self.assertRaisesRegex(ValueError,'尚未调用 API'):
                     run_paired(plan,data,root/'experiment')
                 api.assert_not_called()
@@ -91,8 +91,8 @@ class PairedTests(unittest.TestCase):
                 pred=1 if kwargs['mode']=='baseline' else 2
                 (out/'prediction.json').write_text(json.dumps({'query':query,'object_table':'gt',
                     'predicted_id':pred,'bbox_3d':[pred,0,0,1,1,1],'response':'mock','model':'mock'}))
-            with patch('seeground.experiments.paired_nr3d.ROOT',root),patch('seeground.evaluation.batch_nr3d.ROOT',root), \
-                 patch('seeground.evaluation.batch_nr3d.run_query',side_effect=mock_run),redirect_stdout(io.StringIO()):
+            with patch('eviground.experiments.paired_nr3d.ROOT',root),patch('eviground.evaluation.batch_nr3d.ROOT',root), \
+                 patch('eviground.evaluation.batch_nr3d.run_query',side_effect=mock_run),redirect_stdout(io.StringIO()):
                 summary=run_paired(plan,data,output)
                 self.assertEqual(len(calls),8)
                 self.assertEqual({(s,q) for s,q,m in calls if m=='baseline'},

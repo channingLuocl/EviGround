@@ -7,10 +7,10 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from seeground.classifiers.classifier_sweep_r3 import (Classifier, analytic_predict, choose, fast_metric,
+from eviground.classifiers.classifier_sweep_r3 import (Classifier, analytic_predict, choose, fast_metric,
     fit_analytic, fit_network, loss_function, mix_features)
-from seeground.experiments.audit_pair_train_test import recount
-from seeground.experiments.audit_classifier_sweep_r3 import independent_network
+from eviground.experiments.audit_pair_train_test import recount
+from eviground.experiments.audit_classifier_sweep_r3 import independent_network
 
 
 class SweepTests(unittest.TestCase):

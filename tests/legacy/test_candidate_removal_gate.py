@@ -1,7 +1,7 @@
 import unittest
 
-from seeground.grounding.active_diagnostic import apply_computed_evidence
-from seeground.grounding.diagnostic import candidate_removal_gate, diagnose, validate_structure
+from eviground.grounding.active_diagnostic import apply_computed_evidence
+from eviground.grounding.diagnostic import candidate_removal_gate, diagnose, validate_structure
 
 
 class CandidateRemovalGateTests(unittest.TestCase):

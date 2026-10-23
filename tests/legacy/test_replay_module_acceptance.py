@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.experiments.replay_module_acceptance import replay_batch, replay_case, replay_inference, replay_saved_parse
+from eviground.experiments.replay_module_acceptance import replay_batch, replay_case, replay_inference, replay_saved_parse
 
 
 def saved_parse(raw, finish='stop', extra_calls=()):

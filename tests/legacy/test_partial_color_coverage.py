@@ -1,7 +1,7 @@
 import unittest
 
-from seeground.grounding.active_diagnostic import _check_payload
-from seeground.grounding.appearance_evidence import aggregate_visual_checks, normalize_visual_check
+from eviground.grounding.active_diagnostic import _check_payload
+from eviground.grounding.appearance_evidence import aggregate_visual_checks, normalize_visual_check
 
 
 LIVE_REASON = (

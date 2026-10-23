@@ -3,22 +3,22 @@ import unittest
 import requests
 from types import SimpleNamespace
 from unittest.mock import patch
-from seeground.api.qwen_api import chat, QwenAPIError, _redact, api_config_summary
-from seeground.api.response_schemas import obj, enum, array, schema_kwargs
+from eviground.api.qwen_api import chat, QwenAPIError, _redact, api_config_summary
+from eviground.api.response_schemas import obj, enum, array, schema_kwargs
 
 
 class QwenAPITests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict('os.environ', {'SEEGROUND_API_PROVIDER': 'qwen', 'SEEGROUND_V5': '0'})
+        env = patch.dict('os.environ', {'EVIGROUND_API_PROVIDER': 'qwen', 'EVIGROUND_V5': '0'})
         env.start()
         self.addCleanup(env.stop)
 
     def test_request_and_finish_reason(self):
         response=SimpleNamespace(ok=True,json=lambda:{'choices':[{'finish_reason':'length',
                                   'message':{'content':'Predicted ID: 1'}}],'usage':{'total_tokens':12}})
-        with patch.dict('os.environ',{'SEEGROUND_MODEL':'mock','SEEGROUND_BASE_URL':'https://example.invalid/v1',
-                                    'SEEGROUND_API_KEY':'test-only'}), \
-             patch('seeground.api.qwen_api.requests.post',return_value=response) as post:
+        with patch.dict('os.environ',{'EVIGROUND_MODEL':'mock','EVIGROUND_BASE_URL':'https://example.invalid/v1',
+                                    'EVIGROUND_API_KEY':'test-only'}), \
+             patch('eviground.api.qwen_api.requests.post',return_value=response) as post:
             result=chat([{'role':'user','content':'test'}],max_tokens=768)
         self.assertEqual(post.call_args.args[0],'https://example.invalid/v1/chat/completions')
         self.assertEqual(post.call_args.kwargs['json']['max_tokens'],768)
@@ -30,18 +30,18 @@ class QwenAPITests(unittest.TestCase):
     def test_json_mode_sets_response_format_and_disables_thinking(self):
         response=SimpleNamespace(ok=True,json=lambda:{'choices':[{'finish_reason':'stop',
                                   'message':{'content':'{"Target":[]}'}}]})
-        with patch.dict('os.environ',{'SEEGROUND_MODEL':'qwen3-vl-flash','SEEGROUND_BASE_URL':'https://example.invalid/v1',
-                                    'SEEGROUND_API_KEY':'test-only'}), \
-             patch('seeground.api.qwen_api.requests.post',return_value=response) as post:
+        with patch.dict('os.environ',{'EVIGROUND_MODEL':'qwen3-vl-flash','EVIGROUND_BASE_URL':'https://example.invalid/v1',
+                                    'EVIGROUND_API_KEY':'test-only'}), \
+             patch('eviground.api.qwen_api.requests.post',return_value=response) as post:
             chat([{'role':'user','content':'Return JSON'}],json_mode=True)
         body=post.call_args.kwargs['json']
         self.assertEqual(body['response_format'],{'type':'json_object'})
         self.assertIs(body['enable_thinking'],False)
 
     def test_bad_response_is_value_error(self):
-        with patch.dict('os.environ',{'SEEGROUND_MODEL':'mock','SEEGROUND_BASE_URL':'https://example.invalid/v1',
-                                    'SEEGROUND_API_KEY':'test-only'}), \
-             patch('seeground.api.qwen_api.requests.post',return_value=SimpleNamespace(ok=True,json=lambda:{})):
+        with patch.dict('os.environ',{'EVIGROUND_MODEL':'mock','EVIGROUND_BASE_URL':'https://example.invalid/v1',
+                                    'EVIGROUND_API_KEY':'test-only'}), \
+             patch('eviground.api.qwen_api.requests.post',return_value=SimpleNamespace(ok=True,json=lambda:{})):
             with self.assertRaises(QwenAPIError):
                 chat([])
 
@@ -56,10 +56,10 @@ class QwenAPITests(unittest.TestCase):
             {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,QUJDRA=='}},
             {'type': 'text', 'text': 'inspect'},
         ]}]
-        with patch.dict('os.environ', {'SEEGROUND_MODEL': 'qwen-test',
-                                       'SEEGROUND_BASE_URL': 'https://example.invalid/v1',
-                                       'SEEGROUND_API_KEY': 'secret-api-key'}), \
-             patch('seeground.api.qwen_api.requests.post', return_value=response) as post:
+        with patch.dict('os.environ', {'EVIGROUND_MODEL': 'qwen-test',
+                                       'EVIGROUND_BASE_URL': 'https://example.invalid/v1',
+                                       'EVIGROUND_API_KEY': 'secret-api-key'}), \
+             patch('eviground.api.qwen_api.requests.post', return_value=response) as post:
             with self.assertRaises(QwenAPIError) as raised:
                 chat(messages, json_mode=True)
         self.assertEqual(post.call_count, 1)
@@ -87,8 +87,8 @@ class QwenAPITests(unittest.TestCase):
         ]
         for response, error, kind in cases:
             with self.subTest(kind=kind), patch.dict('os.environ', {
-                    'SEEGROUND_MODEL': 'mock', 'SEEGROUND_BASE_URL': 'https://example.invalid/v1',
-                    'SEEGROUND_API_KEY': 'test-only'}), patch('seeground.api.qwen_api.requests.post',
+                    'EVIGROUND_MODEL': 'mock', 'EVIGROUND_BASE_URL': 'https://example.invalid/v1',
+                    'EVIGROUND_API_KEY': 'test-only'}), patch('eviground.api.qwen_api.requests.post',
                     return_value=response, side_effect=error) as post:
                 with self.assertRaises(QwenAPIError) as raised:
                     chat([])
@@ -100,10 +100,10 @@ class QwenAPITests(unittest.TestCase):
               'access_token':'secret-token', 'b64_json':'QUJDRA==',
               'request_id':'body-400'}
         response=SimpleNamespace(ok=False,status_code=400,text=json.dumps(body),headers={},json=lambda:body)
-        with patch.dict('os.environ',{'SEEGROUND_MODEL':'mock',
-                'SEEGROUND_BASE_URL':'https://example.invalid/v1',
-                'SEEGROUND_API_KEY':'secret-api-key'}), \
-             patch('seeground.api.qwen_api.requests.post',return_value=response):
+        with patch.dict('os.environ',{'EVIGROUND_MODEL':'mock',
+                'EVIGROUND_BASE_URL':'https://example.invalid/v1',
+                'EVIGROUND_API_KEY':'secret-api-key'}), \
+             patch('eviground.api.qwen_api.requests.post',return_value=response):
             with self.assertRaises(QwenAPIError) as error:
                 chat([])
         diagnostic=error.exception.diagnostic
@@ -122,10 +122,10 @@ class QwenAPITests(unittest.TestCase):
         }}
         response = SimpleNamespace(ok=False, status_code=400, text=json.dumps(body),
                                    headers={}, json=lambda: body)
-        with patch.dict('os.environ', {'SEEGROUND_MODEL': 'mock',
-                'SEEGROUND_BASE_URL': 'https://example.invalid/v1',
-                'SEEGROUND_API_KEY': 'test-only'}), \
-             patch('seeground.api.qwen_api.requests.post', return_value=response) as post:
+        with patch.dict('os.environ', {'EVIGROUND_MODEL': 'mock',
+                'EVIGROUND_BASE_URL': 'https://example.invalid/v1',
+                'EVIGROUND_API_KEY': 'test-only'}), \
+             patch('eviground.api.qwen_api.requests.post', return_value=response) as post:
             with self.assertRaises(QwenAPIError) as raised:
                 chat([])
         self.assertEqual(post.call_count, 1)
@@ -184,10 +184,10 @@ class QwenAPITests(unittest.TestCase):
                     'message': {'content': json.dumps(value)}}]})
         for bad in invalid:
             with self.subTest(action=bad), patch.dict('os.environ', {
-                    'SEEGROUND_MODEL': 'qwen3-vl-plus', 'SEEGROUND_V4': '1',
-                    'SEEGROUND_V7': '1', 'SEEGROUND_ENABLE_THINKING': '0',
-                    'SEEGROUND_BASE_URL': 'https://example.invalid/v1',
-                    'SEEGROUND_API_KEY': 'test-only'}), patch('seeground.api.qwen_api.requests.post',
+                    'EVIGROUND_MODEL': 'qwen3-vl-plus', 'EVIGROUND_V4': '1',
+                    'EVIGROUND_V7': '1', 'EVIGROUND_ENABLE_THINKING': '0',
+                    'EVIGROUND_BASE_URL': 'https://example.invalid/v1',
+                    'EVIGROUND_API_KEY': 'test-only'}), patch('eviground.api.qwen_api.requests.post',
                     side_effect=[response(bad), response(valid)]) as post:
                 contract = schema_kwargs('r18_react_action', schema)
                 self.assertIn('response_schema', contract)
@@ -207,11 +207,11 @@ class QwenAPITests(unittest.TestCase):
         response = SimpleNamespace(ok=True, status_code=200, text=json.dumps(value), headers={},
             json=lambda: {'choices': [{'finish_reason': 'stop',
                                       'message': {'content': json.dumps(value)}}]})
-        with patch.dict('os.environ', {'SEEGROUND_MODEL': 'qwen3-vl-plus',
-                'SEEGROUND_ENABLE_THINKING': '0',
-                'SEEGROUND_BASE_URL': 'https://example.invalid/v1',
-                'SEEGROUND_API_KEY': 'test-only'}), \
-                patch('seeground.api.qwen_api.requests.post', return_value=response) as post:
+        with patch.dict('os.environ', {'EVIGROUND_MODEL': 'qwen3-vl-plus',
+                'EVIGROUND_ENABLE_THINKING': '0',
+                'EVIGROUND_BASE_URL': 'https://example.invalid/v1',
+                'EVIGROUND_API_KEY': 'test-only'}), \
+                patch('eviground.api.qwen_api.requests.post', return_value=response) as post:
             with self.assertRaises(QwenAPIError) as raised:
                 chat([], json_mode=True, response_schema={'name': 'r18_react_action',
                     'strict': True, 'schema': obj({'action': enum('finish')})})

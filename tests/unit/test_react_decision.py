@@ -3,9 +3,9 @@ import json
 import unittest
 from unittest.mock import patch
 
-from seeground.grounding.active_diagnostic import EVIDENCE_CAPABILITIES, evidence_request
-from seeground.api.decision_api import DecisionAPIError
-from seeground.grounding.react_decision import evidence_tasks, jev_action, jev_state, react_backend, text_state
+from eviground.grounding.active_diagnostic import EVIDENCE_CAPABILITIES, evidence_request
+from eviground.api.decision_api import DecisionAPIError
+from eviground.grounding.react_decision import evidence_tasks, jev_action, jev_state, react_backend, text_state
 
 
 def state():
@@ -62,15 +62,15 @@ def joint_size_state(audit_repetitions=1):
 
 class ReactDecisionTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict('os.environ', {'SEEGROUND_V5': '0', 'SEEGROUND_API_PROVIDER': 'qwen',
-                                      'SEEGROUND_REACT_BACKEND': 'jev'})
+        env = patch.dict('os.environ', {'EVIGROUND_V5': '0', 'EVIGROUND_API_PROVIDER': 'qwen',
+                                      'EVIGROUND_REACT_BACKEND': 'jev'})
         env.start()
         self.addCleanup(env.stop)
 
     def test_default_backend_is_jev_and_invalid_backend_fails(self):
         with patch.dict('os.environ', {}, clear=True):
             self.assertEqual(react_backend(), 'jev')
-        with patch.dict('os.environ', {'SEEGROUND_REACT_BACKEND': 'invalid'}):
+        with patch.dict('os.environ', {'EVIGROUND_REACT_BACKEND': 'invalid'}):
             with self.assertRaises(ValueError):
                 react_backend()
 
@@ -126,7 +126,7 @@ class ReactDecisionTests(unittest.TestCase):
             return answer(questions, 'stop')
 
         call = {'step': 1}
-        with patch('seeground.grounding.react_decision.decide', side_effect=mock):
+        with patch('eviground.grounding.react_decision.decide', side_effect=mock):
             result = jev_action(current, 'rules', call, [call])
         self.assertEqual(json.loads(result['_content'])['action'], 'stop')
         self.assertEqual(current, original)
@@ -181,7 +181,7 @@ class ReactDecisionTests(unittest.TestCase):
             self.assertEqual(questions['next_task']['criteria'][suggested_key], suggestion)
             return answer(questions, suggested_key)
         call = {'step': 1}
-        with patch('seeground.grounding.react_decision.decide', side_effect=mock):
+        with patch('eviground.grounding.react_decision.decide', side_effect=mock):
             result = jev_action(current, 'rules', call, [call])
         action = json.loads(result['_content'])
         self.assertEqual(action, suggestion)
@@ -231,7 +231,7 @@ class ReactDecisionTests(unittest.TestCase):
             self.assertEqual(current['remaining_candidate_ids'], list(range(1, 9)))
             return answer(questions, 'size')
         call = {'step': 1};calls = [call]
-        with patch('seeground.grounding.react_decision.decide', side_effect=mock):
+        with patch('eviground.grounding.react_decision.decide', side_effect=mock):
             result = jev_action(state(), 'rules', call, calls)
         action = json.loads(result['_content'])
         self.assertEqual(action['dimension'], 'size')
@@ -247,7 +247,7 @@ class ReactDecisionTests(unittest.TestCase):
                 return answer(questions, '8')
             return answer(questions, 'finish')
         call = {'step': 1};calls = [call]
-        with patch('seeground.grounding.react_decision.decide', side_effect=mock):
+        with patch('eviground.grounding.react_decision.decide', side_effect=mock):
             result = jev_action(current, 'rules', call, calls)
         self.assertEqual(json.loads(result['_content'])['predicted_id'], 8)
         self.assertEqual(len(calls), 2)
@@ -261,7 +261,7 @@ class ReactDecisionTests(unittest.TestCase):
 
     def test_invalid_jev_response_is_recorded_without_qwen_fallback(self):
         call = {'step': 1}
-        with patch('seeground.grounding.react_decision.decide', side_effect=DecisionAPIError('bad choice', {'answers': {}})):
+        with patch('eviground.grounding.react_decision.decide', side_effect=DecisionAPIError('bad choice', {'answers': {}})):
             with self.assertRaisesRegex(ValueError, 'bad choice'):
                 jev_action(state(), 'rules', call, [call])
         self.assertEqual(call['error_response'], {'answers': {}})

@@ -1,4 +1,4 @@
-# 文档
+# EviGround 文档
 
 - [运行与配置](usage.md)：安装、准备数据、Top-5 运行和续跑。
 - [代码布局](architecture.md)：模块职责和旧目录迁移关系。

@@ -1,6 +1,6 @@
 import unittest
 
-from seeground.grounding.diagnostic import diagnose, validate_structure
+from eviground.grounding.diagnostic import diagnose, validate_structure
 
 
 def parsed_query(query, phrase, scope):
@@ -33,7 +33,7 @@ class DirectionScopeTests(unittest.TestCase):
         }
 
     def test_complete_group_facing_side_does_not_bind_peer_as_anchor(self):
-        from seeground.query.query_rewrite import rewrite_query
+        from eviground.query.query_rewrite import rewrite_query
         query = "Standing in the middle of the room facing both doors, it's the door on the right"
         data = validate_structure(query, self.group_side_query())
         relation = data['Relations'][0]

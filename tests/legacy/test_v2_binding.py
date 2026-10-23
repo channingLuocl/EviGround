@@ -1,10 +1,10 @@
 """Offline regressions for the audited role/scope and recall failures."""
 import unittest
 
-from seeground.grounding.diagnostic import (_source_attribute_bindings, attributes_for,
+from eviground.grounding.diagnostic import (_source_attribute_bindings, attributes_for,
                         candidate_removal_gate, diagnose, size_condition_scope,
                         size_conditions, validate_structure)
-from seeground.query.query_rewrite import rewrite_query
+from eviground.query.query_rewrite import rewrite_query
 
 
 def raw(target, anchors=(), attributes=(), relations=(), observer=None):

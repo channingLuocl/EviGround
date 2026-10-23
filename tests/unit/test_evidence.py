@@ -1,8 +1,8 @@
 import unittest
-from seeground.grounding.evidence import (canonical_category, match_categories, distance_evidence,
+from eviground.grounding.evidence import (canonical_category, match_categories, distance_evidence,
                       match_retrieval_categories, distance_rankings, propose_category_checks,
                       distance_pair_metrics, retrieval_category, ALIASES)
-from seeground.grounding.evidence import validate_distance_relations
+from eviground.grounding.evidence import validate_distance_relations
 
 
 class EvidenceTests(unittest.TestCase):

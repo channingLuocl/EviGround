@@ -1,9 +1,9 @@
 """Quoted noun phrases cannot transfer reference properties to a target."""
 import unittest
 
-from seeground.grounding.diagnostic import (_source_attribute_bindings, attributes_for, diagnose,
+from eviground.grounding.diagnostic import (_source_attribute_bindings, attributes_for, diagnose,
                         validate_structure)
-from seeground.query.query_rewrite import rewrite_query
+from eviground.query.query_rewrite import rewrite_query
 
 
 def parsed(attrs, unhandled=()):

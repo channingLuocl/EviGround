@@ -2,7 +2,7 @@ import copy
 import unittest
 import numpy as np
 
-from seeground.geometry.object_geometry import (build_geometry, box_measurements, describe_role,
+from eviground.geometry.object_geometry import (build_geometry, box_measurements, describe_role,
                              point_cloud_measurements)
 
 

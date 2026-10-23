@@ -9,13 +9,13 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.grounding.active_diagnostic import (active_ground, apply_computed_evidence,
+from eviground.grounding.active_diagnostic import (active_ground, apply_computed_evidence,
                                apply_size_observation, compute_observation)
-from seeground.grounding.diagnostic import diagnose, validate_structure
-from seeground.geometry.object_geometry import point_cloud_measurements
-from seeground.query.query_rewrite import rewrite_query
-from seeground.experiments.replay_module_acceptance import replay_inference
-from seeground.geometry.size_semantics import evaluate_size_condition, size_specs
+from eviground.grounding.diagnostic import diagnose, validate_structure
+from eviground.geometry.object_geometry import point_cloud_measurements
+from eviground.query.query_rewrite import rewrite_query
+from eviground.experiments.replay_module_acceptance import replay_inference
+from eviground.geometry.size_semantics import evaluate_size_condition, size_specs
 
 
 QUERY = 'The chair nearest the taller table.'
@@ -54,8 +54,8 @@ def active(objects, xyz, ids, parsed, actions, limit):
                 '_finish_reason': 'stop', 'usage': {}}
 
     with tempfile.TemporaryDirectory() as directory, \
-            patch.dict('os.environ', {'SEEGROUND_REACT_BACKEND': 'qwen'}), \
-            patch('seeground.grounding.active_diagnostic.chat', side_effect=mock_chat):
+            patch.dict('os.environ', {'EVIGROUND_REACT_BACKEND': 'qwen'}), \
+            patch('eviground.grounding.active_diagnostic.chat', side_effect=mock_chat):
         return active_ground(QUERY, parsed, objects, objects, objects[:2], xyz,
             np.zeros_like(xyz, dtype=np.uint8), ids, Path(directory), [], {}, limit, True)
 

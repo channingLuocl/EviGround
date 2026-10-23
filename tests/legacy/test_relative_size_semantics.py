@@ -1,7 +1,7 @@
 import unittest
 
-from seeground.query.query_rewrite import full_category_size_comparison, rewrite_query
-from seeground.geometry.size_semantics import evaluate_size_condition, relative_height_between, size_specs
+from eviground.query.query_rewrite import full_category_size_comparison, rewrite_query
+from eviground.geometry.size_semantics import evaluate_size_condition, relative_height_between, size_specs
 
 
 def row(oid, volume=1., footprint=1., height=1., **extra):
@@ -180,9 +180,9 @@ class RelativeSizeSemanticsTests(unittest.TestCase):
         import copy
         import itertools
         import numpy as np
-        from seeground.grounding.active_diagnostic import apply_size_observation, compute_observation
-        from seeground.grounding.diagnostic import diagnose, validate_structure
-        from seeground.geometry.object_geometry import point_cloud_measurements
+        from eviground.grounding.active_diagnostic import apply_size_observation, compute_observation
+        from eviground.grounding.diagnostic import diagnose, validate_structure
+        from eviground.geometry.object_geometry import point_cloud_measurements
 
         query = 'The short bookshelf in between the two tall bookshelves'
         objects = [{'bbox_id': oid, 'target': 'bookshelf',

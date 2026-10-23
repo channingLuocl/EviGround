@@ -8,11 +8,11 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.grounding.active_diagnostic import (active_ground, apply_size_observation,
+from eviground.grounding.active_diagnostic import (active_ground, apply_size_observation,
                                compute_observation)
-from seeground.grounding.diagnostic import diagnose, validate_structure, size_conditions, size_condition_scope
-from seeground.geometry.object_geometry import point_cloud_measurements
-from seeground.query.query_rewrite import rewrite_query
+from eviground.grounding.diagnostic import diagnose, validate_structure, size_conditions, size_condition_scope
+from eviground.geometry.object_geometry import point_cloud_measurements
+from eviground.query.query_rewrite import rewrite_query
 
 
 def bookshelf(oid, x, height, category='bookshelf', z=None):
@@ -133,8 +133,8 @@ class RelativeSizeIntegrationTests(unittest.TestCase):
                     return {'_content': json.dumps(next(actions)), '_baseline': {'latency_s': .01},
                             '_finish_reason': 'stop', 'usage': {}}
                 with tempfile.TemporaryDirectory() as directory, \
-                        patch.dict('os.environ', {'SEEGROUND_REACT_BACKEND': 'qwen'}), \
-                        patch('seeground.grounding.active_diagnostic.chat', side_effect=chat):
+                        patch.dict('os.environ', {'EVIGROUND_REACT_BACKEND': 'qwen'}), \
+                        patch('eviground.grounding.active_diagnostic.chat', side_effect=chat):
                     result = active_ground(query, parsed, objects, objects, objects[:2], xyz,
                         np.zeros_like(xyz, dtype=np.uint8), ids, Path(directory), [], {}, limit, True)
                 self.assertFalse(result['accepted'])

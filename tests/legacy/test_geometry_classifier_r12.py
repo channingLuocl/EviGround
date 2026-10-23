@@ -4,8 +4,8 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from seeground.experiments.audit_classifier_geometry_r12 import independent_head
-from seeground.classifiers.geometry_classifier_r12 import GeometryHead, SPECS, class_weights
+from eviground.experiments.audit_classifier_geometry_r12 import independent_head
+from eviground.classifiers.geometry_classifier_r12 import GeometryHead, SPECS, class_weights
 
 
 class GeometryTests(unittest.TestCase):

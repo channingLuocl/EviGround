@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 import numpy as np
-from seeground.categories.category_review import check_categories
+from eviground.categories.category_review import check_categories
 
 
 def reply(content, finish='stop'):
@@ -17,7 +17,7 @@ class CategoryReviewTests(unittest.TestCase):
             obj={'bbox_id':43,'target':'wrong-label','bbox_3d':[0,0,0,1,1,1]}
             xyz=np.random.default_rng(2).uniform(-.5,.5,(100,3))
             calls=[]
-            with patch('seeground.categories.category_review.chat',return_value=answer) as api:
+            with patch('eviground.categories.category_review.chat',return_value=answer) as api:
                 result=check_categories(['trash can'],[obj],xyz,np.full((100,3),100,dtype=np.uint8),
                                         np.full(100,43),Path(td),calls)
             prompt=api.call_args.args[0][0]['content'][1]['text']
@@ -39,7 +39,7 @@ class CategoryReviewTests(unittest.TestCase):
             self.assertIn('error',result['checks'][0])
 
     def test_missing_points_and_multiple_categories_make_no_request(self):
-        with tempfile.TemporaryDirectory() as td, patch('seeground.categories.category_review.chat') as api:
+        with tempfile.TemporaryDirectory() as td, patch('eviground.categories.category_review.chat') as api:
             args=([{'bbox_id':43,'target':'wrong-label'}],np.empty((0,3)),
                   np.empty((0,3),dtype=np.uint8),np.array([],dtype=int),Path(td),[])
             result=check_categories(['trash can'],*args)

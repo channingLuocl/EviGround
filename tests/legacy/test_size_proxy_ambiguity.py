@@ -6,9 +6,9 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.grounding.active_diagnostic import active_ground, compute_observation, size_candidate_evidence
-from seeground.grounding.diagnostic import diagnose, validate_structure
-from seeground.geometry.object_geometry import point_cloud_measurements
+from eviground.grounding.active_diagnostic import active_ground, compute_observation, size_candidate_evidence
+from eviground.grounding.diagnostic import diagnose, validate_structure
+from eviground.geometry.object_geometry import point_cloud_measurements
 
 
 class SizeProxyAmbiguityTests(unittest.TestCase):
@@ -63,8 +63,8 @@ class SizeProxyAmbiguityTests(unittest.TestCase):
             return {'_content': json.dumps(next(actions)), '_baseline': {'latency_s': .01},
                     '_finish_reason': 'stop', 'usage': {}}
         with tempfile.TemporaryDirectory() as directory, \
-                patch.dict('os.environ', {'SEEGROUND_REACT_BACKEND': 'qwen'}), \
-                patch('seeground.grounding.active_diagnostic.chat', side_effect=chat):
+                patch.dict('os.environ', {'EVIGROUND_REACT_BACKEND': 'qwen'}), \
+                patch('eviground.grounding.active_diagnostic.chat', side_effect=chat):
             result = active_ground(self.query, self.parsed, self.objects, self.objects,
                 self.objects, self.xyz, np.zeros_like(self.xyz, dtype=np.uint8), self.ids,
                 Path(directory), [], {}, 2, True)

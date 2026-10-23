@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from seeground.classifiers.mask3d_matching import associate, unique_predictions
+from eviground.classifiers.mask3d_matching import associate, unique_predictions
 
 
 class MatchingTest(unittest.TestCase):

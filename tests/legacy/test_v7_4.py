@@ -8,16 +8,16 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.grounding.active_diagnostic import active_ground
+from eviground.grounding.active_diagnostic import active_ground
 from tests.legacy.test_v7_evidence import obj, parse
-from seeground.grounding.v4_policy import settings, v73_enabled
-from seeground.grounding.v74_grounding import ground_scene, needs_scene_reasoning, validate_decision
+from eviground.grounding.v4_policy import settings, v73_enabled
+from eviground.grounding.v74_grounding import ground_scene, needs_scene_reasoning, validate_decision
 
 
 class V74Tests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1',
-            'SEEGROUND_V7_4': '1', 'SEEGROUND_V7_3': '0', 'SEEGROUND_REACT_BACKEND': 'openai'})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V7': '1',
+            'EVIGROUND_V7_4': '1', 'EVIGROUND_V7_3': '0', 'EVIGROUND_REACT_BACKEND': 'openai'})
         env.start(); self.addCleanup(env.stop)
         self.query = 'The box at the bottom of the stack'
         self.objects = [obj(3, 'box', xyz=(0, 0, 3)), obj(0, 'box', xyz=(0, 0, 1)),
@@ -52,10 +52,10 @@ class V74Tests(unittest.TestCase):
     def test_unsupported_stack_keeps_multimodal_choice_instead_of_empty_rule_support(self):
         calls, trace = [], {}
         with tempfile.TemporaryDirectory() as directory, \
-                patch('seeground.grounding.v74_grounding.scene_views', return_value=self.views), \
-                patch('seeground.grounding.v74_grounding.image_part', return_value={'type': 'text', 'text': 'test image'}), \
-                patch('seeground.grounding.v74_grounding.chat', side_effect=self.answer) as model, \
-                patch('seeground.grounding.active_diagnostic.chat', side_effect=AssertionError('unsupported symbolic loop')):
+                patch('eviground.grounding.v74_grounding.scene_views', return_value=self.views), \
+                patch('eviground.grounding.v74_grounding.image_part', return_value={'type': 'text', 'text': 'test image'}), \
+                patch('eviground.grounding.v74_grounding.chat', side_effect=self.answer) as model, \
+                patch('eviground.grounding.active_diagnostic.chat', side_effect=AssertionError('unsupported symbolic loop')):
             result = active_ground(self.query, self.parsed, self.objects, self.objects,
                 self.objects[:3], self.cloud, np.zeros((2, 3), dtype=np.uint8), np.array([0, 3]),
                 Path(directory), calls, trace, 3, True)
@@ -78,15 +78,15 @@ class V74Tests(unittest.TestCase):
         self.assertFalse(needs_scene_reasoning({'candidate_ids': [0, 3], 'missing': [
             'category/appearance evidence is uncertain or unreviewed']}))
         trace = {'steps': [], 'internal_usage': {'render': 0, 'visual_check': 0}, 'backtracks': []}
-        with patch('seeground.grounding.v74_grounding.scene_views', return_value=self.views), \
-                patch('seeground.grounding.v74_grounding.image_part', return_value={}), \
-                patch('seeground.grounding.v74_grounding.chat', side_effect=self.answer) as model:
+        with patch('eviground.grounding.v74_grounding.scene_views', return_value=self.views), \
+                patch('eviground.grounding.v74_grounding.image_part', return_value={}), \
+                patch('eviground.grounding.v74_grounding.chat', side_effect=self.answer) as model:
             result = ground_scene(self.query, self.parsed, self.objects, self.objects[:3],
                 self.cloud, self.cloud, np.array([0, 3]), Path('.'), [],
                 {'candidate_ids': [], 'missing': []}, trace, excluded_ids=[0])
         self.assertIsNone(result['predicted_id'])
         self.assertNotIn(0, model.call_args.kwargs['response_schema']['schema']['properties']['predicted_id']['enum'])
-        with patch('seeground.grounding.v74_grounding.chat') as model:
+        with patch('eviground.grounding.v74_grounding.chat') as model:
             self.assertIsNone(ground_scene(self.query, self.parsed, self.objects, self.objects[:3],
                 self.cloud, self.cloud, np.array([0, 3]), Path('.'), [], {}, trace, excluded_ids=[0, 3, 12]))
             model.assert_not_called()
@@ -99,10 +99,10 @@ class V74Tests(unittest.TestCase):
         stopped = {'_content': json.dumps({'action': 'stop', 'reason': 'No symbolic discriminator'}),
                    '_finish_reason': 'stop', '_baseline': {}}
         with tempfile.TemporaryDirectory() as directory, \
-                patch('seeground.grounding.active_diagnostic.chat', return_value=stopped) as planner, \
-                patch('seeground.grounding.v74_grounding.scene_views', return_value=self.views), \
-                patch('seeground.grounding.v74_grounding.image_part', return_value={}), \
-                patch('seeground.grounding.v74_grounding.chat', side_effect=self.answer) as model:
+                patch('eviground.grounding.active_diagnostic.chat', return_value=stopped) as planner, \
+                patch('eviground.grounding.v74_grounding.scene_views', return_value=self.views), \
+                patch('eviground.grounding.v74_grounding.image_part', return_value={}), \
+                patch('eviground.grounding.v74_grounding.chat', side_effect=self.answer) as model:
             result = active_ground(query, parsed, self.objects, self.objects, self.objects[:3],
                 self.cloud, self.cloud, np.array([0, 3]), Path(directory), [], {}, 3, True)
         self.assertEqual(result['predicted_id'], 0)
@@ -110,12 +110,12 @@ class V74Tests(unittest.TestCase):
         self.assertEqual(model.call_count, 1)
 
     def test_local_render_keeps_named_reference_and_all_targets(self):
-        from seeground.grounding.v74_grounding import scene_views
+        from eviground.grounding.v74_grounding import scene_views
         parsed = {'Anchor': ['table']}
         points = np.array([o['bbox_3d'][:3] for o in self.objects])
         def rendered(xyz, rgb, path, **kwargs):
             return {'marked_ids': [int(i) for i in kwargs['ids'] if i >= 0]}
-        with tempfile.TemporaryDirectory() as directory, patch('seeground.grounding.v74_grounding.render', side_effect=rendered):
+        with tempfile.TemporaryDirectory() as directory, patch('eviground.grounding.v74_grounding.render', side_effect=rendered):
             views = scene_views(parsed, self.objects, self.objects[:3], points, np.zeros((4, 3)),
                                 np.array([3, 0, 12, 18]), Path(directory))
         self.assertEqual(set(views[1]['marked_ids']), {0, 3, 12, 18})

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from seeground.experiments.run_size_validation import evaluate, report, run_case, verify_source
+from eviground.experiments.run_size_validation import evaluate, report, run_case, verify_source
 
 
 class SizeValidationTests(unittest.TestCase):
@@ -17,7 +17,7 @@ class SizeValidationTests(unittest.TestCase):
     def test_worker_gets_no_answer_and_failed_process_is_persisted_and_retryable(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            with patch('seeground.experiments.run_size_validation.subprocess.run', return_value=Mock(returncode=1)) as proc:
+            with patch('eviground.experiments.run_size_validation.subprocess.run', return_value=Mock(returncode=1)) as proc:
                 first = run_case(self.row(), root, root, 3)
                 command = proc.call_args.args[0]
                 self.assertNotIn('--target-id', command)

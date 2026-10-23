@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from seeground.classifiers.clip_tail_r11 import ClipTail, objective, prefix_tokens
+from eviground.classifiers.clip_tail_r11 import ClipTail, objective, prefix_tokens
 
 
 class Block(nn.Module):

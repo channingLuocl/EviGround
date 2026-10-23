@@ -8,10 +8,10 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.grounding.r8_precision import frame_coordinates, precision_evidence
+from eviground.grounding.r8_precision import frame_coordinates, precision_evidence
 from tests.legacy.test_r8_grounding import prediction
-from seeground.grounding.v74_grounding import ground_scene
-from seeground.grounding.v4_policy import settings
+from eviground.grounding.v74_grounding import ground_scene
+from eviground.grounding.v4_policy import settings
 
 
 class PrecisionTests(unittest.TestCase):
@@ -52,14 +52,14 @@ class PrecisionTests(unittest.TestCase):
         answer = {'_content': json.dumps({'predicted_id': 1, 'reason': 'Visible chair.',
             'evidence': [{'source_quote': query, 'object_ids': [1], 'observation': 'Chair shape.'}],
             'unresolved': []}), '_finish_reason': 'stop', '_baseline': {}}
-        env = {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1', 'SEEGROUND_V7_4': '1',
-            'SEEGROUND_V9': '1', 'SEEGROUND_V9_SOURCE': 'r8', 'SEEGROUND_R8_GROUNDING_REVISION': 'r3'}
+        env = {'EVIGROUND_V4': '1', 'EVIGROUND_V7': '1', 'EVIGROUND_V7_4': '1',
+            'EVIGROUND_V9': '1', 'EVIGROUND_V9_SOURCE': 'r8', 'EVIGROUND_R8_GROUNDING_REVISION': 'r3'}
         trace = {'steps': [], 'backtracks': [], 'internal_usage': {'render': 0, 'visual_check': 0}}
         with patch.dict(os.environ, env), tempfile.TemporaryDirectory() as directory, \
-                patch('seeground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
-                patch('seeground.grounding.r8_grounding.isolated_target_views', return_value=[]), \
-                patch('seeground.grounding.v74_grounding.image_part', return_value={}), \
-                patch('seeground.grounding.v74_grounding.chat', return_value=answer) as model:
+                patch('eviground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
+                patch('eviground.grounding.r8_grounding.isolated_target_views', return_value=[]), \
+                patch('eviground.grounding.v74_grounding.image_part', return_value={}), \
+                patch('eviground.grounding.v74_grounding.chat', return_value=answer) as model:
             result = ground_scene(query, {'Target': ['chair'], '_v4_budget': {}}, [target], [target],
                 np.zeros((1, 3)), np.zeros((1, 3)), np.array([1]), Path(directory), [], {}, trace)
             self.assertEqual(settings()['version'], 'predicted-category-grounding-v9-r8-r3')

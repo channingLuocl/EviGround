@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 import numpy as np
-from seeground.grounding.real_scene import run_query, parse_query
-from seeground.api.qwen_api import QwenAPIError
+from eviground.grounding.real_scene import run_query, parse_query
+from eviground.api.qwen_api import QwenAPIError
 
 
 def reply(content, finish='stop'):
@@ -15,7 +15,7 @@ def reply(content, finish='stop'):
 
 class RealSceneTests(unittest.TestCase):
     def setUp(self):
-        env=patch.dict('os.environ',{'SEEGROUND_REACT_BACKEND':'qwen', 'SEEGROUND_API_PROVIDER':'qwen', 'SEEGROUND_V5':'0'})
+        env=patch.dict('os.environ',{'EVIGROUND_REACT_BACKEND':'qwen', 'EVIGROUND_API_PROVIDER':'qwen', 'EVIGROUND_V5':'0'})
         env.start()
         self.addCleanup(env.stop)
 
@@ -23,14 +23,14 @@ class RealSceneTests(unittest.TestCase):
         answer={'Target':['cabinet'],'Anchor':[],'Relations':[],
                 'Observer':{},'Attributes':[],'Unhandled':[]}
         calls=[]
-        with patch('seeground.grounding.real_scene.chat',side_effect=[reply(json.dumps(answer)),
+        with patch('eviground.grounding.real_scene.chat',side_effect=[reply(json.dumps(answer)),
                 reply(json.dumps({'Attributes':[{'category':'cabinet','phrase':'skinny'}]}))]) as api:
             result=parse_query('Choose the skinny cabinet.',mode='active_diagnostic',calls=calls)
         self.assertEqual(api.call_count,2)
         self.assertEqual(result['Attributes'],[{'category':'cabinet','phrase':'skinny'}])
         self.assertNotIn('appearance condition not represented: skinny',result['diagnostic_missing'])
         self.assertEqual(calls[1]['stage'],'parse_query_attribute_repair')
-        from seeground.grounding.diagnostic import diagnose
+        from eviground.grounding.diagnostic import diagnose
         objects=[{'bbox_id':1,'target':'cabinet','bbox_3d':[0,0,.5,.4,.4,1.]}]
         diagnosis=diagnose(result,objects,objects,[0,0,.5],trusted_categories=True)
         self.assertEqual(diagnosis['visual_needs'][0]['id'],1)
@@ -39,7 +39,7 @@ class RealSceneTests(unittest.TestCase):
     def test_truncated_parse_adds_missing_condition_record(self):
         answer={'Target':['cabinet'],'Anchor':[],'Relations':[],
                 'Observer':{},'Attributes':[],'Unhandled':[]}
-        with patch('seeground.grounding.real_scene.chat',return_value=reply(json.dumps(answer),finish='length')):
+        with patch('eviground.grounding.real_scene.chat',return_value=reply(json.dumps(answer),finish='length')):
             result=parse_query('cabinet',mode='diagnostic')
         self.assertIn('query parser response truncated',result['diagnostic_missing'])
         self.assertTrue(any(item.get('reason') == 'query parser response truncated' and
@@ -50,7 +50,7 @@ class RealSceneTests(unittest.TestCase):
         answer={'Target':['cabinet'],'Anchor':[],'Relations':[],
                 'Observer':{},'Attributes':[{'category':'skinny','phrase':'skinny'}],
                 'Unhandled':[]}
-        with patch('seeground.grounding.real_scene.chat',side_effect=[
+        with patch('eviground.grounding.real_scene.chat',side_effect=[
                 reply(json.dumps(answer)),
                 reply(json.dumps({'Attributes':[{'category':'cabinet','phrase':'skinny'}]}))]) as api:
             result=parse_query('Choose the skinny cabinet.',mode='active_diagnostic')
@@ -64,7 +64,7 @@ class RealSceneTests(unittest.TestCase):
                 'Observer':{},'Attributes':[{'category':'skinny',
                                              'phrase':'skinny cabinet'}],
                 'Unhandled':[]}
-        with patch('seeground.grounding.real_scene.chat',side_effect=[
+        with patch('eviground.grounding.real_scene.chat',side_effect=[
                 reply(json.dumps(answer)),
                 reply(json.dumps({'Attributes':[{'category':'cabinet','phrase':'skinny cabinet'}]}))]) as api:
             result=parse_query('Choose the skinny cabinet.',mode='active_diagnostic')
@@ -79,7 +79,7 @@ class RealSceneTests(unittest.TestCase):
         for correction in ({'Attributes':[{'category':'chair','phrase':'skinny'}]},
                            {'Attributes':[{'category':'cabinet','phrase':'red'}]},
                            {'Attributes':[]}):
-            with self.subTest(correction=correction), patch('seeground.grounding.real_scene.chat',side_effect=[
+            with self.subTest(correction=correction), patch('eviground.grounding.real_scene.chat',side_effect=[
                     reply(json.dumps(answer)),reply(json.dumps(correction))]) as api:
                 result=parse_query('skinny cabinet',mode='active_diagnostic')
             self.assertEqual(api.call_count,2)
@@ -89,7 +89,7 @@ class RealSceneTests(unittest.TestCase):
     def test_active_parser_does_not_retry_complete_attributes(self):
         answer={'Target':['cabinet'],'Anchor':[],'Relations':[],
                 'Observer':{},'Attributes':[{'category':'cabinet','phrase':'skinny'}],'Unhandled':[]}
-        with patch('seeground.grounding.real_scene.chat',return_value=reply(json.dumps(answer))) as api:
+        with patch('eviground.grounding.real_scene.chat',return_value=reply(json.dumps(answer))) as api:
             parse_query('skinny cabinet',mode='active_diagnostic')
         self.assertEqual(api.call_count,1)
 
@@ -97,7 +97,7 @@ class RealSceneTests(unittest.TestCase):
         text = 'choose the tall skinny shelf'
         answer = {'Target':['shelf'], 'Anchor':[], 'Relations':[], 'Observer':{},
                   'Attributes':[], 'Unhandled':[text]}
-        with patch('seeground.grounding.real_scene.chat', side_effect=[reply(json.dumps(answer)),
+        with patch('eviground.grounding.real_scene.chat', side_effect=[reply(json.dumps(answer)),
                 reply(json.dumps({'Attributes':[{'category':'shelf','phrase':'tall skinny'}]}))]):
             result = parse_query(text, mode='active_diagnostic')
         self.assertEqual(result['Unhandled'], [])
@@ -108,7 +108,7 @@ class RealSceneTests(unittest.TestCase):
             {'target_category':'cabinet','anchor_category':'stove',
              'relation':'other','phrase':'beside the stove'}],
             'Observer':{},'Attributes':[],'Unhandled':[]}
-        with patch('seeground.grounding.real_scene.chat',side_effect=[reply(json.dumps(answer)),
+        with patch('eviground.grounding.real_scene.chat',side_effect=[reply(json.dumps(answer)),
                 reply(json.dumps({'Attributes':[{'category':'cabinet','phrase':'skinny'}]}))]):
             result=parse_query('skinny cabinet beside the stove',mode='active_diagnostic')
         self.assertIn('unsupported relation: beside the stove',result['diagnostic_missing'])
@@ -122,7 +122,7 @@ class RealSceneTests(unittest.TestCase):
         answer = {'Target': ['cart'], 'Anchor': [], 'Relations': [],
                   'Observer': {'origin': {'kind': 'unspecified'}, 'facing': {}},
                   'Attributes': [{'category': 'blue', 'phrase': 'blue'}], 'Unhandled': []}
-        with patch('seeground.grounding.real_scene.chat', side_effect=[reply(json.dumps(answer)),
+        with patch('eviground.grounding.real_scene.chat', side_effect=[reply(json.dumps(answer)),
                 reply(json.dumps({'Attributes': [{'category': 'cart', 'phrase': 'blue'}]}))]):
             result = parse_query('choose the blue cart.', mode='active_diagnostic')
         self.assertEqual(result['diagnostic_missing'], [])
@@ -135,7 +135,7 @@ class RealSceneTests(unittest.TestCase):
                                  'relation': 'above', 'phrase': 'above the red shelf'}],
                   'Observer': {}, 'Unhandled': [],
                   'Attributes': [{'category': 'cabinet', 'role': 'target', 'phrase': 'red'}]}
-        with patch('seeground.grounding.real_scene.chat', side_effect=[reply(json.dumps(answer)),
+        with patch('eviground.grounding.real_scene.chat', side_effect=[reply(json.dumps(answer)),
                 reply(json.dumps({'Attributes': [{'category': 'shelf', 'role': 'reference',
                                                    'phrase': 'red'}]}))]) as api:
             result = parse_query('the red cabinet above the red shelf', mode='active_diagnostic')
@@ -149,7 +149,7 @@ class RealSceneTests(unittest.TestCase):
         answer = {'Target': ['cabinet'], 'Anchor': [], 'Relations': [],
                   'Observer': {'origin': {'kind': 'unspecified'}, 'facing': {}},
                   'Attributes': [{'category': 'smaller', 'phrase': 'smaller'}], 'Unhandled': [query]}
-        with patch('seeground.grounding.real_scene.chat', side_effect=[reply(json.dumps(answer)),
+        with patch('eviground.grounding.real_scene.chat', side_effect=[reply(json.dumps(answer)),
                 reply(json.dumps({'Attributes': [{'category': 'cabinet', 'phrase': 'smaller'}]}))]) as api:
             result = parse_query(query, mode='active_diagnostic')
         self.assertEqual(result['Unhandled'], [])
@@ -164,7 +164,7 @@ class RealSceneTests(unittest.TestCase):
         query='This trash can is next to a large black television.'
         answer={'Target':['trash can'],'Anchor':['tv'],'Relations':[],
                 'Observer':{},'Attributes':[],'Unhandled':[]}
-        with patch('seeground.grounding.real_scene.chat',return_value=reply(json.dumps(answer))) as api:
+        with patch('eviground.grounding.real_scene.chat',return_value=reply(json.dumps(answer))) as api:
             parse_query(query,mode='diagnostic')
         messages=api.call_args.args[0]
         self.assertEqual(messages[0]['role'],'system')
@@ -196,8 +196,8 @@ class RealSceneTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'active'
             (root/'objects_gt.json').write_text((root/'objects.json').read_text())
-            with patch('seeground.grounding.real_scene.chat',return_value=reply(json.dumps(parsed))), \
-                 patch('seeground.grounding.active_diagnostic.chat',side_effect=[
+            with patch('eviground.grounding.real_scene.chat',return_value=reply(json.dumps(parsed))), \
+                 patch('eviground.grounding.active_diagnostic.chat',side_effect=[
                      reply(json.dumps({'action':'evidence','dimension':'appearance',
                                        'context':'isolated','reason':'check quoted appearance'})),
                      reply(json.dumps({'checks':[{'id':1,'verdict':'yes','visibility':'visible',
@@ -252,11 +252,11 @@ class RealSceneTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'jev_active'
             (root/'objects_gt.json').write_text((root/'objects.json').read_text())
-            with patch.dict('os.environ',{'SEEGROUND_REACT_BACKEND':'jev',
-                                         'SEEGROUND_JEV_MODEL':'jev-fixture','TYPESAFE_API_KEY':'test-only'}), \
-                 patch('seeground.grounding.real_scene.chat',return_value=reply(json.dumps(parsed))) as parser, \
-                 patch('seeground.api.decision_api.requests.post',side_effect=jev_reply) as jev, \
-                 patch('seeground.grounding.active_diagnostic.chat',return_value=reply(json.dumps({'checks':[
+            with patch.dict('os.environ',{'EVIGROUND_REACT_BACKEND':'jev',
+                                         'EVIGROUND_JEV_MODEL':'jev-fixture','TYPESAFE_API_KEY':'test-only'}), \
+                 patch('eviground.grounding.real_scene.chat',return_value=reply(json.dumps(parsed))) as parser, \
+                 patch('eviground.api.decision_api.requests.post',side_effect=jev_reply) as jev, \
+                 patch('eviground.grounding.active_diagnostic.chat',return_value=reply(json.dumps({'checks':[
                      {'id':1,'verdict':'yes','visibility':'visible','reason':'visible cooler', 'attribute_checks':[{'attribute':'white','verdict':'yes','visibility':'visible','reason':'white body visible'}]}]}))) as visual:
                 result=run_query(root,'white water cooler',out,mode='active_diagnostic',
                                  object_table='gt',review_limit=2)
@@ -286,9 +286,9 @@ class RealSceneTests(unittest.TestCase):
     def test_missing_jev_configuration_fails_before_any_model_call(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'missing_jev'
-            with patch.dict('os.environ',{'SEEGROUND_REACT_BACKEND':'jev','TYPESAFE_API_KEY':''}), \
-                 patch('seeground.grounding.real_scene.chat') as parser,patch('seeground.grounding.active_diagnostic.chat') as visual, \
-                 patch('seeground.api.decision_api.requests.post') as jev:
+            with patch.dict('os.environ',{'EVIGROUND_REACT_BACKEND':'jev','TYPESAFE_API_KEY':''}), \
+                 patch('eviground.grounding.real_scene.chat') as parser,patch('eviground.grounding.active_diagnostic.chat') as visual, \
+                 patch('eviground.api.decision_api.requests.post') as jev:
                 with self.assertRaisesRegex(ValueError,'TYPESAFE_API_KEY'):
                     run_query(root,'water cooler',out,mode='active_diagnostic')
             parser.assert_not_called();visual.assert_not_called();jev.assert_not_called()
@@ -308,7 +308,7 @@ class RealSceneTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); self.scene(root); out = root / 'http400'
-            with patch('seeground.grounding.real_scene.chat', side_effect=QwenAPIError(
+            with patch('eviground.grounding.real_scene.chat', side_effect=QwenAPIError(
                     'Qwen API 返回 HTTP 400', diagnostic=diagnostic)):
                 with self.assertRaises(QwenAPIError):
                     run_query(root, 'water cooler', out, mode='geometry')
@@ -332,8 +332,8 @@ class RealSceneTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'visual400'
             (root/'objects_gt.json').write_text((root/'objects.json').read_text())
-            with patch('seeground.grounding.real_scene.chat',return_value=reply(json.dumps(parsed))), \
-                 patch('seeground.grounding.active_diagnostic.chat',side_effect=[
+            with patch('eviground.grounding.real_scene.chat',return_value=reply(json.dumps(parsed))), \
+                 patch('eviground.grounding.active_diagnostic.chat',side_effect=[
                     reply(json.dumps({'action':'evidence','dimension':'appearance',
                                       'reason':'check white surface'})),
                     QwenAPIError('Qwen API 返回 HTTP 400',diagnostic=diagnostic),
@@ -356,9 +356,9 @@ class RealSceneTests(unittest.TestCase):
                       'model': 'mock', 'request_summary': {'contains_images': False}}
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); self.scene(root); out = root / 'partial400'
-            with patch.dict('os.environ', {'SEEGROUND_API_KEY': 'configured-secret'}), \
-                 patch('seeground.grounding.real_scene.chat', return_value=reply(json.dumps(parsed))), \
-                 patch('seeground.grounding.active_diagnostic.chat', side_effect=QwenAPIError(
+            with patch.dict('os.environ', {'EVIGROUND_API_KEY': 'configured-secret'}), \
+                 patch('eviground.grounding.real_scene.chat', return_value=reply(json.dumps(parsed))), \
+                 patch('eviground.grounding.active_diagnostic.chat', side_effect=QwenAPIError(
                      'HTTP 400 Bearer configured-secret', diagnostic=diagnostic)):
                 with self.assertRaises(QwenAPIError):
                     run_query(root, 'water cooler', out, mode='active_diagnostic')
@@ -371,8 +371,8 @@ class RealSceneTests(unittest.TestCase):
     def test_geometry_does_not_replace_missing_anchor_with_target(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'experiment'
-            with patch('seeground.grounding.real_scene.chat',return_value=reply('{"Target":["water cooler"],"Anchor":["blackboard"]}')), \
-                 patch('seeground.rendering.run.chat',return_value=reply('Predicted ID: 1', 'length')) as ground:
+            with patch('eviground.grounding.real_scene.chat',return_value=reply('{"Target":["water cooler"],"Anchor":["blackboard"]}')), \
+                 patch('eviground.rendering.run.chat',return_value=reply('Predicted ID: 1', 'length')) as ground:
                 result=run_query(root,'cooler by blackboard',out,mode='geometry')
             record=json.loads((out/'run.json').read_text())
             self.assertEqual(record['anchor_ids'],[])
@@ -398,8 +398,8 @@ class RealSceneTests(unittest.TestCase):
                               'phrase':'between the stove and the wall'}],
                 'Observer':{},'Attributes':[],'Unhandled':[]
             }))
-            with patch('seeground.grounding.real_scene.chat',return_value=answer), \
-                 patch('seeground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
+            with patch('eviground.grounding.real_scene.chat',return_value=answer), \
+                 patch('eviground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
                 run_query(root,'the water cooler between the stove and the wall',out,mode='diagnostic')
             record=json.loads((out/'run.json').read_text())
             diagnosis=record['diagnosis']
@@ -421,8 +421,8 @@ class RealSceneTests(unittest.TestCase):
                               'scope':'relative_anchor', 'phrase':'near the wall'}],
                 'Observer':{},'Attributes':[],'Unhandled':[]
             }))
-            with patch('seeground.grounding.real_scene.chat',return_value=answer), \
-                 patch('seeground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
+            with patch('eviground.grounding.real_scene.chat',return_value=answer), \
+                 patch('eviground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
                 run_query(root,'the water cooler near the wall',out,mode='diagnostic',review_limit=3)
             record=json.loads((out/'run.json').read_text())
             self.assertEqual(record['category_anchor_ids'],[3])
@@ -431,9 +431,9 @@ class RealSceneTests(unittest.TestCase):
     def test_visual_review_recovers_mislabeled_instance_without_gt(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'experiment'
-            with patch('seeground.grounding.real_scene.chat',return_value=reply('{"Target":["trash can"],"Anchor":["television"]}')), \
-                 patch('seeground.rendering.visual_review.chat',return_value=reply('{"TargetIDs":[1],"AnchorIDs":[2],"UnknownIDs":[],"Observations":[]}')) as review, \
-                 patch('seeground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
+            with patch('eviground.grounding.real_scene.chat',return_value=reply('{"Target":["trash can"],"Anchor":["television"]}')), \
+                 patch('eviground.rendering.visual_review.chat',return_value=reply('{"TargetIDs":[1],"AnchorIDs":[2],"UnknownIDs":[],"Observations":[]}')) as review, \
+                 patch('eviground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
                 result=run_query(root,'trash can by television',out,mode='visual_review')
             record=json.loads((out/'run.json').read_text())
             self.assertEqual(record['category_target_ids'],[])
@@ -447,7 +447,7 @@ class RealSceneTests(unittest.TestCase):
     def test_parse_failure_keeps_call_record(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'experiment'
-            with patch('seeground.grounding.real_scene.chat',return_value=reply('bad json')) as api:
+            with patch('eviground.grounding.real_scene.chat',return_value=reply('bad json')) as api:
                 with self.assertRaises(ValueError):
                     run_query(root,'test',out,mode='geometry')
             record=json.loads((out/'run.json').read_text())
@@ -465,8 +465,8 @@ class RealSceneTests(unittest.TestCase):
                'Attributes':[{'category':'water cooler','phrase':'large'}]}
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'experiment'
-            with patch('seeground.grounding.real_scene.chat',side_effect=[reply(malformed),reply(json.dumps(fixed))]) as api, \
-                 patch('seeground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
+            with patch('eviground.grounding.real_scene.chat',side_effect=[reply(malformed),reply(json.dumps(fixed))]) as api, \
+                 patch('eviground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
                 result=run_query(root,'large water cooler',out,mode='diagnostic')
             record=json.loads((out/'run.json').read_text())
             self.assertEqual(result['api_calls'],3)
@@ -479,14 +479,14 @@ class RealSceneTests(unittest.TestCase):
             self.assertTrue(all(c.kwargs['json_mode'] for c in api.call_args_list))
 
     def test_truncated_invalid_json_is_not_repaired(self):
-        with patch('seeground.grounding.real_scene.chat',return_value=reply('{"Target":', 'length')) as api:
+        with patch('eviground.grounding.real_scene.chat',return_value=reply('{"Target":', 'length')) as api:
             with self.assertRaises(QwenAPIError):
                 parse_query('water cooler',mode='diagnostic')
         self.assertEqual(api.call_count,1)
 
     def test_truncated_repair_is_rejected(self):
         calls=[]
-        with patch('seeground.grounding.real_scene.chat',side_effect=[reply('bad json'),reply('{"Target":[],"Anchor":[]}', 'length')]) as api:
+        with patch('eviground.grounding.real_scene.chat',side_effect=[reply('bad json'),reply('{"Target":[],"Anchor":[]}', 'length')]) as api:
             with self.assertRaisesRegex(QwenAPIError,'JSON repair did not complete normally'):
                 parse_query('water cooler',mode='diagnostic',calls=calls)
         self.assertEqual(api.call_count,2)
@@ -496,7 +496,7 @@ class RealSceneTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root);out=root/'experiment'
             answer=reply('{"Observer":{},"Attributes":[],"Unhandled":[]}')
-            with patch('seeground.grounding.real_scene.chat',return_value=answer) as api:
+            with patch('eviground.grounding.real_scene.chat',return_value=answer) as api:
                 with self.assertRaisesRegex(ValueError,'Target must be an array/string'):
                     run_query(root,'window',out,mode='diagnostic')
             record=json.loads((out/'run.json').read_text())
@@ -511,7 +511,7 @@ class RealSceneTests(unittest.TestCase):
                 'Attributes':[], 'Unhandled':['The window nearest the front doors.'],
                 'Relations':[{'target_category':'window','anchor_category':'front doors',
                               'relation':'nearest','scope':'','phrase':'nearest the front doors'}]}
-        with patch('seeground.grounding.real_scene.chat',return_value=reply(json.dumps(answer))):
+        with patch('eviground.grounding.real_scene.chat',return_value=reply(json.dumps(answer))):
             with self.assertRaisesRegex(ValueError,'Target must be an array/string'):
                 parse_query('The window nearest the front doors.',mode='diagnostic')
 
@@ -519,10 +519,10 @@ class RealSceneTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root)
             parsed=reply('{"Target":["trash can"],"Anchor":["tv"],"Relations":[]}')
-            with patch('seeground.grounding.real_scene.chat',return_value=parsed), \
-                 patch('seeground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
+            with patch('eviground.grounding.real_scene.chat',return_value=parsed), \
+                 patch('eviground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
                 run_query(root,'trash can by tv',root/'ranked',mode='ranked_geometry')
-                with patch('seeground.categories.category_review.chat',return_value=reply('{"id":1,"verdict":"no","reason":"unclear container"}')):
+                with patch('eviground.categories.category_review.chat',return_value=reply('{"id":1,"verdict":"no","reason":"unclear container"}')):
                     result=run_query(root,'trash can by tv',root/'checked',mode='category_review',review_limit=1)
             first=json.loads((root/'ranked/run.json').read_text())
             second=json.loads((root/'checked/run.json').read_text())
@@ -542,9 +542,9 @@ class RealSceneTests(unittest.TestCase):
                          'Relations':[{'target_category':'water cooler','anchor_category':'tv',
                                        'relation':'near','phrase':'by tv'}],
                          'Observer':{},'Attributes':[],'Unhandled':[]}))
-            with patch('seeground.grounding.real_scene.chat',return_value=parsed), \
-                 patch('seeground.rendering.rgb_review.chat') as review, \
-                 patch('seeground.rendering.run.chat',return_value=reply('Predicted ID: 1')) as ground:
+            with patch('eviground.grounding.real_scene.chat',return_value=parsed), \
+                 patch('eviground.rendering.rgb_review.chat') as review, \
+                 patch('eviground.rendering.run.chat',return_value=reply('Predicted ID: 1')) as ground:
                 result=run_query(root,'water cooler by tv',root/'diagnostic',mode='diagnostic',review_limit=1)
             review.assert_not_called()
             self.assertEqual(result['predicted_id'],1)
@@ -567,9 +567,9 @@ class RealSceneTests(unittest.TestCase):
                 {'id':1,'image':'crop.png','binding':'projected_instance','source_frame':'001.jpg'}]}))
             parsed=reply(json.dumps({'Target':['water cooler'],'Anchor':[],'Relations':[],
                                     'Observer':{},'Attributes':[],'Unhandled':[]}))
-            with patch('seeground.grounding.real_scene.chat',return_value=parsed), \
-                 patch('seeground.rendering.rgb_review.chat',return_value=reply('{"id":1,"verdict":"yes","reason":"visible"}')), \
-                 patch('seeground.rendering.run.chat',return_value=reply('Predicted ID: 2')):
+            with patch('eviground.grounding.real_scene.chat',return_value=parsed), \
+                 patch('eviground.rendering.rgb_review.chat',return_value=reply('{"id":1,"verdict":"yes","reason":"visible"}')), \
+                 patch('eviground.rendering.run.chat',return_value=reply('Predicted ID: 2')):
                 result=run_query(root,'water cooler',root/'diagnostic',mode='diagnostic',review_limit=1)
             self.assertEqual(result['diagnosis']['status'],'resolved')
             self.assertEqual(result['decision_status'],'conflict')
@@ -582,8 +582,8 @@ class RealSceneTests(unittest.TestCase):
             # No anchor: the old diagnostic proposal mean used to shift this camera.
             parsed=reply(json.dumps({'Target':['water cooler'],'Anchor':[],'Relations':[],
                                     'Observer':{},'Attributes':[],'Unhandled':[]}))
-            with patch('seeground.grounding.real_scene.chat',return_value=parsed), \
-                 patch('seeground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
+            with patch('eviground.grounding.real_scene.chat',return_value=parsed), \
+                 patch('eviground.rendering.run.chat',return_value=reply('Predicted ID: 1')):
                 run_query(root,'water cooler',root/'ranked',mode='ranked_geometry')
                 run_query(root,'water cooler',root/'diagnostic',mode='diagnostic',review_limit=2)
             first=json.loads((root/'ranked/run.json').read_text())
@@ -603,9 +603,9 @@ class RealSceneTests(unittest.TestCase):
                          'Relations':[{'target_category':'trash can','anchor_category':'tv',
                                        'relation':'nearest','phrase':'nearest tv'}],
                          'Observer':{},'Attributes':[],'Unhandled':[]}))
-            with patch('seeground.grounding.real_scene.chat',return_value=answer), \
-                 patch('seeground.rendering.rgb_review.chat') as review, \
-                 patch('seeground.rendering.run.chat',return_value=reply('Predicted ID: 1')) as ground:
+            with patch('eviground.grounding.real_scene.chat',return_value=answer), \
+                 patch('eviground.rendering.rgb_review.chat') as review, \
+                 patch('eviground.rendering.run.chat',return_value=reply('Predicted ID: 1')) as ground:
                 pred=run_query(root,'trash can nearest tv',root/'pred',mode='diagnostic',object_table='pred',review_limit=1)
                 result=run_query(root,'trash can nearest tv',root/'gt',mode='diagnostic',object_table='gt',review_limit=1)
             review.assert_not_called()
@@ -628,7 +628,7 @@ class RealSceneTests(unittest.TestCase):
     def test_invalid_or_missing_table_fails_without_api_fallback(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.scene(root)
-            with patch('seeground.grounding.real_scene.chat') as api:
+            with patch('eviground.grounding.real_scene.chat') as api:
                 with self.assertRaises(ValueError):run_query(root,'query',root/'a',object_table='other')
                 with self.assertRaises(FileNotFoundError):run_query(root,'query',root/'b',object_table='gt')
             api.assert_not_called()

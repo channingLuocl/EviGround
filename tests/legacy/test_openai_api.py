@@ -9,21 +9,21 @@ from unittest.mock import patch
 import requests
 from PIL import Image
 
-from seeground.api.qwen_api import QwenAPIError, _settings, chat, image_part, _redact
-from seeground.grounding.react_decision import validate_react_config
-from seeground.grounding.real_scene import parse_query, run_query
+from eviground.api.qwen_api import QwenAPIError, _settings, chat, image_part, _redact
+from eviground.grounding.react_decision import validate_react_config
+from eviground.grounding.real_scene import parse_query, run_query
 import tests.legacy.test_real_scene as test_real_scene
 
 
 class OpenAIAPITests(unittest.TestCase):
     def setUp(self):
         env = patch.dict('os.environ', {
-            'SEEGROUND_V5': '0', 'SEEGROUND_API_PROVIDER': 'openai', 'SEEGROUND_REACT_BACKEND': 'openai',
-            'SEEGROUND_BASE_URL': 'http://relay.invalid:3000/v1',
-            'SEEGROUND_ALLOW_HTTP': '1', 'SEEGROUND_MODEL': 'gpt-6.1-sol',
-            'SEEGROUND_API_KEY': 'mock-relay-key',
-            'SEEGROUND_OPENAI_TOKEN_PARAMETER': 'max_completion_tokens',
-            'SEEGROUND_OPENAI_TEMPERATURE': '',
+            'EVIGROUND_V5': '0', 'EVIGROUND_API_PROVIDER': 'openai', 'EVIGROUND_REACT_BACKEND': 'openai',
+            'EVIGROUND_BASE_URL': 'http://relay.invalid:3000/v1',
+            'EVIGROUND_ALLOW_HTTP': '1', 'EVIGROUND_MODEL': 'gpt-6.1-sol',
+            'EVIGROUND_API_KEY': 'mock-relay-key',
+            'EVIGROUND_OPENAI_TOKEN_PARAMETER': 'max_completion_tokens',
+            'EVIGROUND_OPENAI_TEMPERATURE': '',
         })
         env.start()
         self.addCleanup(env.stop)
@@ -34,7 +34,7 @@ class OpenAIAPITests(unittest.TestCase):
                                       'finish_reason': 'stop'}]})
 
     def test_gpt_text_json_uses_completion_limit_without_qwen_parameters(self):
-        with patch('seeground.api.qwen_api.requests.post', return_value=self.success()) as post:
+        with patch('eviground.api.qwen_api.requests.post', return_value=self.success()) as post:
             result = chat([{'role': 'user', 'content': 'Return JSON {"ok":true}'}],
                           max_tokens=900, json_mode=True)
         payload = post.call_args.kwargs['json']
@@ -52,46 +52,46 @@ class OpenAIAPITests(unittest.TestCase):
             path = Path(td) / 'probe.png'; Image.new('RGB', (8, 8), 'red').save(path)
             messages = [{'role': 'user', 'content': [image_part(path),
                          {'type': 'text', 'text': 'Describe the color in JSON.'}]}]
-            with patch('seeground.api.qwen_api.requests.post', return_value=self.success()) as post:
+            with patch('eviground.api.qwen_api.requests.post', return_value=self.success()) as post:
                 result = chat(messages, json_mode=True)
         self.assertEqual(post.call_args.kwargs['json']['messages'], messages)
         self.assertTrue(result['_baseline']['request_summary']['contains_images'])
         self.assertNotIn('base64', json.dumps(result['_baseline']))
 
     def test_explicit_legacy_token_parameter_and_temperature_do_not_auto_retry(self):
-        with patch.dict('os.environ', {'SEEGROUND_OPENAI_TOKEN_PARAMETER': 'max_tokens',
-                                       'SEEGROUND_OPENAI_TEMPERATURE': '0.2'}), \
-             patch('seeground.api.qwen_api.requests.post', return_value=self.success()) as post:
+        with patch.dict('os.environ', {'EVIGROUND_OPENAI_TOKEN_PARAMETER': 'max_tokens',
+                                       'EVIGROUND_OPENAI_TEMPERATURE': '0.2'}), \
+             patch('eviground.api.qwen_api.requests.post', return_value=self.success()) as post:
             chat([], max_tokens=768)
         self.assertEqual(post.call_count, 1)
         self.assertEqual(post.call_args.kwargs['json']['max_tokens'], 768)
         self.assertEqual(post.call_args.kwargs['json']['temperature'], .2)
 
     def test_invalid_parameter_configuration_fails_before_network(self):
-        for variable, value in (('SEEGROUND_OPENAI_TOKEN_PARAMETER', 'invented'),
-                                ('SEEGROUND_OPENAI_TEMPERATURE', 'nan'),
-                                ('SEEGROUND_OPENAI_TEMPERATURE', 'invalid')):
+        for variable, value in (('EVIGROUND_OPENAI_TOKEN_PARAMETER', 'invented'),
+                                ('EVIGROUND_OPENAI_TEMPERATURE', 'nan'),
+                                ('EVIGROUND_OPENAI_TEMPERATURE', 'invalid')):
             with self.subTest(variable=variable, value=value), \
-                 patch.dict('os.environ', {variable: value}), patch('seeground.api.qwen_api.requests.post') as post:
+                 patch.dict('os.environ', {variable: value}), patch('eviground.api.qwen_api.requests.post') as post:
                 with self.assertRaises(QwenAPIError):
                     chat([])
                 post.assert_not_called()
 
     def test_http_requires_explicit_configuration_and_webpage_is_rejected(self):
-        with patch.dict('os.environ', {'SEEGROUND_ALLOW_HTTP': ''}):
+        with patch.dict('os.environ', {'EVIGROUND_ALLOW_HTTP': ''}):
             with self.assertRaisesRegex(QwenAPIError, 'ALLOW_HTTP'):
                 _settings()
         for address in ('http://relay.invalid:3000/pricing',
                         'https://user:password@relay.invalid/v1',
                         'https://relay.invalid/v1?api_key=secret'):
-            with self.subTest(address=address), patch.dict('os.environ', {'SEEGROUND_BASE_URL': address}):
+            with self.subTest(address=address), patch.dict('os.environ', {'EVIGROUND_BASE_URL': address}):
                 with self.assertRaises(QwenAPIError):
                     _settings()
 
     def test_qwen_compatible_mode_base_and_parameters_are_preserved(self):
-        with patch.dict('os.environ', {'SEEGROUND_API_PROVIDER': 'qwen',
-                'SEEGROUND_BASE_URL': 'https://dashscope.invalid/compatible-mode/v1'}), \
-             patch('seeground.api.qwen_api.requests.post', return_value=self.success()) as post:
+        with patch.dict('os.environ', {'EVIGROUND_API_PROVIDER': 'qwen',
+                'EVIGROUND_BASE_URL': 'https://dashscope.invalid/compatible-mode/v1'}), \
+             patch('eviground.api.qwen_api.requests.post', return_value=self.success()) as post:
             chat([], max_tokens=600, json_mode=True)
         self.assertEqual(post.call_args.args[0],
                          'https://dashscope.invalid/compatible-mode/v1/chat/completions')
@@ -108,12 +108,12 @@ class OpenAIAPITests(unittest.TestCase):
             json=lambda: {'choices': [{'message': {'content': json.dumps(parsed)},
                                       'finish_reason': 'stop'}]})
         calls = []
-        with patch('seeground.api.qwen_api.requests.post', return_value=response):
+        with patch('eviground.api.qwen_api.requests.post', return_value=response):
             parse_query('the shelf', mode='active_diagnostic', calls=calls)
         self.assertEqual(calls[0]['max_completion_tokens'], 1600)
         self.assertEqual(calls[0]['request_summary']['provider'], 'openai')
         self.assertNotIn('enable_thinking', calls[0])
-        with patch.dict('os.environ', {'SEEGROUND_REACT_BACKEND': 'qwen'}):
+        with patch.dict('os.environ', {'EVIGROUND_REACT_BACKEND': 'qwen'}):
             with self.assertRaisesRegex(ValueError, 'match'):
                 validate_react_config()
 
@@ -127,7 +127,7 @@ class OpenAIAPITests(unittest.TestCase):
                     headers={'x-request-id': 'json-test-id'},
                     json=lambda: {'choices': [{'message': {'content': content},
                                               'finish_reason': 'stop'}]})
-                with patch('seeground.api.qwen_api.requests.post', return_value=response) as post:
+                with patch('eviground.api.qwen_api.requests.post', return_value=response) as post:
                     with self.assertRaises(QwenAPIError):
                         run_query(root, 'shelf', out, mode='active_diagnostic')
                 self.assertEqual(post.call_count, 1)
@@ -150,7 +150,7 @@ class OpenAIAPITests(unittest.TestCase):
                     headers={'x-request-id': 'relay-test-id'}, json=lambda: {})
                 if code == 'parse':
                     response.ok = True
-                with patch('seeground.api.qwen_api.requests.post', return_value=response,
+                with patch('eviground.api.qwen_api.requests.post', return_value=response,
                            side_effect=requests.Timeout() if code == 'timeout' else None) as post:
                     with self.assertRaises(QwenAPIError):
                         run_query(root, 'water cooler', out, mode='active_diagnostic')

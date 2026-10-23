@@ -4,11 +4,11 @@ import os
 import unittest
 from unittest.mock import patch
 
-from seeground.grounding.diagnostic import diagnose, size_condition_scope, size_conditions, validate_structure
-from seeground.query.query_graph import local_graph
-from seeground.grounding.react_decision import planner_state
-from seeground.grounding.v4_policy import settings
-from seeground.geometry.v4_relations import bind_tasks
+from eviground.grounding.diagnostic import diagnose, size_condition_scope, size_conditions, validate_structure
+from eviground.query.query_graph import local_graph
+from eviground.grounding.react_decision import planner_state
+from eviground.grounding.v4_policy import settings
+from eviground.geometry.v4_relations import bind_tasks
 
 
 def parsed(query, attributes=(), relations=(), unhandled=()):
@@ -27,14 +27,14 @@ def obj(oid, category, x):
 
 class V6QueryGraphTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V5': '1',
-            'SEEGROUND_V6': '1', 'SEEGROUND_SYNTAX_BACKEND': 'spacy'})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V5': '1',
+            'EVIGROUND_V6': '1', 'EVIGROUND_SYNTAX_BACKEND': 'spacy'})
         env.start()
         self.addCleanup(env.stop)
 
     def test_opt_in_and_v5_baseline(self):
         self.assertEqual(settings()['version'], 'relative-size-v6')
-        with patch.dict(os.environ, {'SEEGROUND_V6': '0'}):
+        with patch.dict(os.environ, {'EVIGROUND_V6': '0'}):
             self.assertEqual(settings()['version'], 'relative-size-v5')
 
     def test_negative_relation_keeps_positive_size_and_reference_description(self):
@@ -66,7 +66,7 @@ class V6QueryGraphTests(unittest.TestCase):
 
     def test_repeated_quote_and_disabled_syntax_keep_unknown(self):
         for query in ('the white chair near the white table', 'the chair not near the table'):
-            with patch.dict(os.environ, {'SEEGROUND_SYNTAX_BACKEND': 'none'}):
+            with patch.dict(os.environ, {'EVIGROUND_SYNTAX_BACKEND': 'none'}):
                 p = parsed(query, [{'category': 'chair', 'phrase': 'white'}], [near('near the table')])
             if 'not' in query:
                 self.assertEqual(p['Relations'], [])

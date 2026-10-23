@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from seeground.experiments.probe_chat_api import probe
-from seeground.api.qwen_api import QwenAPIError
+from eviground.experiments.probe_chat_api import probe
+from eviground.api.qwen_api import QwenAPIError
 
 
 def response(kind):
@@ -18,7 +18,7 @@ class ProbeTests(unittest.TestCase):
     def test_text_and_image_probe_records_two_json_calls_without_prediction(self):
         with tempfile.TemporaryDirectory() as td:
             out = Path(td) / 'probe'
-            with patch('seeground.experiments.probe_chat_api.chat', side_effect=[response('text'), response('image')]) as api:
+            with patch('eviground.experiments.probe_chat_api.chat', side_effect=[response('text'), response('image')]) as api:
                 record = probe(out)
             self.assertEqual(api.call_count, 2)
             self.assertEqual(record['status'], 'passed')
@@ -31,7 +31,7 @@ class ProbeTests(unittest.TestCase):
                       'response_body': 'invalid image', 'request_id': 'image-400'}
         with tempfile.TemporaryDirectory() as td:
             out = Path(td) / 'probe'
-            with patch('seeground.experiments.probe_chat_api.chat', side_effect=[response('text'),
+            with patch('eviground.experiments.probe_chat_api.chat', side_effect=[response('text'),
                        QwenAPIError('HTTP 400', diagnostic=diagnostic)]) as api:
                 with self.assertRaises(QwenAPIError):
                     probe(out)
@@ -46,7 +46,7 @@ class ProbeTests(unittest.TestCase):
         bad = response('text'); bad['_content'] = 'invalid JSON'
         with tempfile.TemporaryDirectory() as td:
             out = Path(td) / 'probe'
-            with patch('seeground.experiments.probe_chat_api.chat', return_value=bad) as api:
+            with patch('eviground.experiments.probe_chat_api.chat', return_value=bad) as api:
                 with self.assertRaises(QwenAPIError):
                     probe(out)
             self.assertEqual(api.call_count, 1)

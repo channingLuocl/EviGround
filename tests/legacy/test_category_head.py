@@ -1,6 +1,6 @@
 import unittest
 
-from seeground.grounding.evidence import match_categories, match_retrieval_categories
+from eviground.grounding.evidence import match_categories, match_retrieval_categories
 
 
 class CategoryHeadTests(unittest.TestCase):

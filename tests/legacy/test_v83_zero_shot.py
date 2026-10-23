@@ -10,9 +10,9 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.categories.category_common_v82 import ROOT, file_hash
-from seeground.classifiers.pointcloud_zero_shot_v83 import LOCAL_WEIGHT, fuse_zero_shot
-from seeground.experiments.run_categories_v83 import run
+from eviground.categories.category_common_v82 import ROOT, file_hash
+from eviground.classifiers.pointcloud_zero_shot_v83 import LOCAL_WEIGHT, fuse_zero_shot
+from eviground.experiments.run_categories_v83 import run
 
 
 def features(global_vector, locals):
@@ -61,11 +61,11 @@ class ZeroShotTests(unittest.TestCase):
     def test_sampling_changes_do_not_change_patch_geometry(self):
         # Exercise the actual paired extractor with only its CUDA encoder replaced.
         import torch
-        from seeground.classifiers.pointcloud_classifier_v83 import FrozenFeatures
+        from eviground.classifiers.pointcloud_classifier_v83 import FrozenFeatures
         base = argparse.Namespace(torch=torch, metadata={'test': True},
             encoder=lambda x: x.mean(1).repeat(1, 128))
         xyz = np.random.RandomState(18).normal(size=(300, 3))
-        with patch('seeground.classifiers.pointcloud_classifier_v83.PointCloudClassifier', return_value=base), \
+        with patch('eviground.classifiers.pointcloud_classifier_v83.PointCloudClassifier', return_value=base), \
              patch.object(torch.Tensor, 'cuda', lambda self: self):
             extractor = FrozenFeatures('unused', 'unused')
             first = extractor.extract(xyz, 42)
@@ -84,9 +84,9 @@ class ZeroShotTests(unittest.TestCase):
                 bbox_id=[0], seed=42, limit=0, head_checkpoint=None, checkpoint=checkpoint,
                 text_features=ROOT/'weights/v82_clip_text_features.npz', output=root/'run',
                 prepare_only=False, retry_errors=False, allow_development_evaluation=False)
-            with patch('seeground.experiments.run_categories_v83.POINTNEXT_SHA256', file_hash(checkpoint)), \
-                 patch('seeground.experiments.run_categories_v83.load_head', side_effect=AssertionError('must not load supervised head')), \
-                 patch('seeground.experiments.run_categories_v83.ZeroShotClassifierV83') as factory:
+            with patch('eviground.experiments.run_categories_v83.POINTNEXT_SHA256', file_hash(checkpoint)), \
+                 patch('eviground.experiments.run_categories_v83.load_head', side_effect=AssertionError('must not load supervised head')), \
+                 patch('eviground.experiments.run_categories_v83.ZeroShotClassifierV83') as factory:
                 factory.return_value.metadata = {'learning_regime': 'training_free'}
                 factory.return_value.predict.return_value = {'status': 'completed', 'predicted_object': 'chair',
                     'top5': [{'category': 'chair'}], 'scores': [0.]*197}

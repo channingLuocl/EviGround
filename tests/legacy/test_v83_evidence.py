@@ -11,14 +11,14 @@ from unittest.mock import patch
 import numpy as np
 import torch
 
-from seeground.categories.category_common_v82 import ROOT, file_hash
-from seeground.classifiers.evidence_data_v83 import (VERSION, check_disjoint, crop_view, load_part_masks,
+from eviground.categories.category_common_v82 import ROOT, file_hash
+from eviground.classifiers.evidence_data_v83 import (VERSION, check_disjoint, crop_view, load_part_masks,
                                local_patches, state_targets)
-from seeground.classifiers.evidence_head_v83 import EvidenceHead, training_loss
-from seeground.classifiers.pointcloud_classifier_v82 import CLIP_REVISION, prepare_points
-from seeground.classifiers.pointcloud_classifier_v83 import FrozenFeatures, load_head
-from seeground.experiments.run_categories_v83 import run
-from seeground.experiments.train_categories_v83 import cache_features, make_manifest, train
+from eviground.classifiers.evidence_head_v83 import EvidenceHead, training_loss
+from eviground.classifiers.pointcloud_classifier_v82 import CLIP_REVISION, prepare_points
+from eviground.classifiers.pointcloud_classifier_v83 import FrozenFeatures, load_head
+from eviground.experiments.run_categories_v83 import run
+from eviground.experiments.train_categories_v83 import cache_features, make_manifest, train
 
 
 class FakeFrozenFeatures:
@@ -85,7 +85,7 @@ class EvidenceTests(unittest.TestCase):
         encoder = CPUEncoder()
         base = argparse.Namespace(torch=torch, encoder=encoder, metadata={'CPU_test_only': True})
         xyz = np.random.RandomState(7).normal(size=(300, 3))
-        with patch('seeground.classifiers.pointcloud_classifier_v83.PointCloudClassifier', return_value=base), \
+        with patch('eviground.classifiers.pointcloud_classifier_v83.PointCloudClassifier', return_value=base), \
              patch.object(torch.Tensor, 'cuda', lambda self: self):
             extractor = FrozenFeatures('unused.pth', 'unused.npz')
             features = extractor.extract(xyz, 42)
@@ -152,7 +152,7 @@ class EvidenceTests(unittest.TestCase):
                 args = argparse.Namespace(parts=schema, manifest=manifest, crop_views=0,
                                           checkpoint=backbone, text_features=ROOT/'weights/v82_clip_text_features.npz',
                                           output=root/split, seed=42)
-                with patch('seeground.experiments.train_categories_v83.FrozenFeatures', FakeFrozenFeatures):
+                with patch('eviground.experiments.train_categories_v83.FrozenFeatures', FakeFrozenFeatures):
                     cache_features(args)
             args = argparse.Namespace(train_cache=root/'train/features.npz', dev_cache=root/'dev/features.npz',
                                       text_features=ROOT/'weights/v82_clip_text_features.npz',
@@ -185,8 +185,8 @@ class EvidenceTests(unittest.TestCase):
             np.savez(directory/'scene.npz', xyz=np.random.RandomState(99).normal(size=(90, 3)),
                      ids=np.zeros(90, dtype=np.int64))
             overlap_args.cloud, overlap_args.output, overlap_args.prepare_only = directory/'scene.npz', root/'test_run', False
-            with patch('seeground.classifiers.pointcloud_classifier_v83.FrozenFeatures', FakeFrozenFeatures), \
-                 patch('seeground.classifiers.pointcloud_classifier_v83.POINTNEXT_SHA256', file_hash(backbone)):
+            with patch('eviground.classifiers.pointcloud_classifier_v83.FrozenFeatures', FakeFrozenFeatures), \
+                 patch('eviground.classifiers.pointcloud_classifier_v83.POINTNEXT_SHA256', file_hash(backbone)):
                 self.assertEqual(run(overlap_args), 0)
             prediction = overlap_args.output/'heldout_scene/object_0000/prediction.json'
             saved = prediction.read_bytes()
@@ -196,26 +196,26 @@ class EvidenceTests(unittest.TestCase):
             self.assertIn('unknown', value['part_evidence']['backrest'])
             self.assertNotIn('target', value)
             self.assertFalse((overlap_args.output/'results.json').exists())
-            with patch('seeground.experiments.run_categories_v83.PointCloudClassifierV83') as factory:
+            with patch('eviground.experiments.run_categories_v83.PointCloudClassifierV83') as factory:
                 self.assertEqual(run(overlap_args), 0)
                 factory.assert_not_called()
             self.assertEqual(saved, prediction.read_bytes())
             # Error retries archive the old error and never retry a successful wrong answer.
             overlap_args.output = root/'retry_run'
-            with patch('seeground.experiments.run_categories_v83.PointCloudClassifierV83') as factory:
+            with patch('eviground.experiments.run_categories_v83.PointCloudClassifierV83') as factory:
                 factory.return_value.metadata = {'test': True}
                 factory.return_value.predict.side_effect = ValueError('test data failure')
                 self.assertEqual(run(overlap_args), 1)
             error_path = overlap_args.output/'heldout_scene/object_0000/prediction.json'
             error = error_path.read_bytes()
             overlap_args.retry_errors = True
-            with patch('seeground.experiments.run_categories_v83.PointCloudClassifierV83') as factory:
+            with patch('eviground.experiments.run_categories_v83.PointCloudClassifierV83') as factory:
                 factory.return_value.metadata = {'test': True}
                 factory.return_value.predict.return_value = {'status': 'completed', 'predicted_object': 'chair'}
                 self.assertEqual(run(overlap_args), 0)
                 self.assertEqual(factory.return_value.predict.call_count, 1)
             self.assertEqual(next(error_path.parent.glob('attempts/*/prediction.json')).read_bytes(), error)
-            with patch('seeground.experiments.run_categories_v83.PointCloudClassifierV83') as factory:
+            with patch('eviground.experiments.run_categories_v83.PointCloudClassifierV83') as factory:
                 self.assertEqual(run(overlap_args), 0)
                 factory.assert_not_called()
             (overlap_args.output/'FROZEN.json').write_text('{}')

@@ -1,5 +1,5 @@
 """Offline regressions for narrow v5 attachment coverage; saved r3 geometry fixtures."""
-from seeground.paths import ROOT
+from eviground.paths import ROOT
 from copy import deepcopy
 import importlib.util
 import json
@@ -8,9 +8,9 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-import seeground.query.query_syntax as query_syntax
-from seeground.grounding.active_diagnostic import size_candidate_evidence
-from seeground.grounding.diagnostic import size_conditions
+import eviground.query.query_syntax as query_syntax
+from eviground.grounding.active_diagnostic import size_candidate_evidence
+from eviground.grounding.diagnostic import size_conditions
 
 PROJECT = ROOT
 SAVED = PROJECT / 'local_outputs/v5_ablation_scope_r3'
@@ -22,10 +22,10 @@ frozen_spec.loader.exec_module(frozen)
 
 class V5ScopeAttachmentTests(unittest.TestCase):
     def setUp(self):
-        self.environment = patch.dict(os.environ, {'SEEGROUND_V4': '1',
-            'SEEGROUND_V5': '1', 'SEEGROUND_V5_SCOPE': '1',
-            'SEEGROUND_V5_MEASUREMENTS': '0', 'SEEGROUND_V5_CALL_ECONOMY': '0',
-            'SEEGROUND_API_PROVIDER': 'qwen', 'SEEGROUND_REACT_BACKEND': 'qwen'})
+        self.environment = patch.dict(os.environ, {'EVIGROUND_V4': '1',
+            'EVIGROUND_V5': '1', 'EVIGROUND_V5_SCOPE': '1',
+            'EVIGROUND_V5_MEASUREMENTS': '0', 'EVIGROUND_V5_CALL_ECONOMY': '0',
+            'EVIGROUND_API_PROVIDER': 'qwen', 'EVIGROUND_REACT_BACKEND': 'qwen'})
         self.environment.start()
         self.addCleanup(self.environment.stop)
         for name in ('requests.sessions.Session.request', 'subprocess.Popen'):
@@ -133,7 +133,7 @@ class V5ScopeAttachmentTests(unittest.TestCase):
             query = row['query']
             with self.subTest(row=row['csv_row']):
                 self.assertEqual(query_syntax._analyze(query, False), frozen._analyze(query, False))
-        with patch.dict(os.environ, {'SEEGROUND_V5_SCOPE': '0'}):
+        with patch.dict(os.environ, {'EVIGROUND_V5_SCOPE': '0'}):
             self.assertEqual(query_syntax.analyze_query('small trash can by the door.'),
                              frozen.analyze_query('small trash can by the door.'))
 

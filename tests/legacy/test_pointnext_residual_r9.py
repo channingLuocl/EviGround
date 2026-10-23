@@ -4,8 +4,8 @@ import unittest
 import torch
 from torch.nn import functional as F
 
-from seeground.classifiers.pointnext_residual_r9 import ADAPTER, ResidualPointNext, losses, original_state
-from seeground.classifiers.classifier_residual_r9 import choose
+from eviground.classifiers.pointnext_residual_r9 import ADAPTER, ResidualPointNext, losses, original_state
+from eviground.classifiers.classifier_residual_r9 import choose
 from tests.legacy.test_pointnext_color_r6 import toy
 
 

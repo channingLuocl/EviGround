@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from seeground.experiments.train_pair_views import Gate, choose, fit_head, gate_features, prior, room_folds, standardize
-from seeground.experiments.audit_pair_views import features as numpy_features
+from eviground.experiments.train_pair_views import Gate, choose, fit_head, gate_features, prior, room_folds, standardize
+from eviground.experiments.audit_pair_views import features as numpy_features
 
 
 class PairViewTests(unittest.TestCase):

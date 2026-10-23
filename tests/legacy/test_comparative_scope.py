@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.grounding.active_diagnostic import active_ground, size_candidate_evidence
-from seeground.grounding.diagnostic import attributes_for, diagnose, validate_structure
-from seeground.query.query_rewrite import full_category_size_comparison, rewrite_query
+from eviground.grounding.active_diagnostic import active_ground, size_candidate_evidence
+from eviground.grounding.diagnostic import attributes_for, diagnose, validate_structure
+from eviground.query.query_rewrite import full_category_size_comparison, rewrite_query
 
 
 QUERY = 'The smaller of the cabinets.'
@@ -228,14 +228,14 @@ class ComparativeScopeTests(unittest.TestCase):
             ])
             responses = iter(actions)
             with self.subTest(compute=compute), tempfile.TemporaryDirectory() as directory, patch.dict(
-                    'os.environ', {'SEEGROUND_REACT_BACKEND': 'qwen'}), patch(
-                    'seeground.grounding.active_diagnostic.chat', side_effect=lambda *args, **kwargs: {
+                    'os.environ', {'EVIGROUND_REACT_BACKEND': 'qwen'}), patch(
+                    'eviground.grounding.active_diagnostic.chat', side_effect=lambda *args, **kwargs: {
                     '_content': json.dumps(next(responses, {
                         'action': 'stop', 'reason': 'size has still not been executed'})), '_finish_reason': 'stop',
                         '_baseline': {'model': 'mock', 'latency_s': .01}, 'usage': {}}), patch(
-                    'seeground.grounding.active_diagnostic.render_action', return_value={
+                    'eviground.grounding.active_diagnostic.render_action', return_value={
                         'tool': 'render', 'image': 'mock.png', 'focus_ids': [1, 2]}), patch(
-                    'seeground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}):
+                    'eviground.grounding.active_diagnostic.image_part', return_value={'type': 'text', 'text': 'image'}):
                 result = active_ground(QUERY, data, objects, objects, objects, xyz,
                                        np.zeros_like(xyz, dtype=np.uint8), np.asarray(ids),
                                        Path(directory), [], {}, 3, True)

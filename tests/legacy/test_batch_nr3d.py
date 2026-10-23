@@ -2,13 +2,13 @@ import csv
 import tempfile
 import unittest
 from pathlib import Path
-from seeground.evaluation.batch_nr3d import select_rows, summarize
-from seeground.evaluation.batch_nr3d import experiment_settings
+from eviground.evaluation.batch_nr3d import select_rows, summarize
+from eviground.evaluation.batch_nr3d import experiment_settings
 from unittest.mock import patch
 import io
 import json
 from contextlib import redirect_stdout
-from seeground.evaluation.batch_nr3d import main
+from eviground.evaluation.batch_nr3d import main
 
 class BatchTests(unittest.TestCase):
     def test_active_stop_is_scored_as_unresolved_not_batch_error(self):
@@ -31,7 +31,7 @@ class BatchTests(unittest.TestCase):
             with patch('sys.argv',['batch_nr3d.py','--csv',str(data),'--scene','scene',
                                    '--count','1','--output',str(output),
                                    '--mode','active_diagnostic','--object-table','gt']), \
-                 patch('seeground.evaluation.batch_nr3d.ROOT',root),patch('seeground.evaluation.batch_nr3d.run_query',side_effect=stopped_run), \
+                 patch('eviground.evaluation.batch_nr3d.ROOT',root),patch('eviground.evaluation.batch_nr3d.run_query',side_effect=stopped_run), \
                  redirect_stdout(io.StringIO()):
                 main()
             result=json.loads((output/'results.json').read_text())
@@ -61,16 +61,16 @@ class BatchTests(unittest.TestCase):
                     'predicted_id':1,'bbox_3d':gt[0]['bbox_3d'],'response':'mock','model':'mock'}))
             argv=['batch_nr3d.py','--csv',str(data),'--scene','scene','--count','1',
                   '--output',str(output),'--object-table','gt']
-            with patch('sys.argv',argv),patch('seeground.evaluation.batch_nr3d.ROOT',root), \
-                 patch('seeground.evaluation.batch_nr3d.run_query',side_effect=mock_run),redirect_stdout(io.StringIO()):
+            with patch('sys.argv',argv),patch('eviground.evaluation.batch_nr3d.ROOT',root), \
+                 patch('eviground.evaluation.batch_nr3d.run_query',side_effect=mock_run),redirect_stdout(io.StringIO()):
                 main()
             result=json.loads((output/'results.json').read_text())
             self.assertEqual(result['manifest']['settings']['object_table'],'gt')
             self.assertEqual(result['manifest']['objects_sha256'],hashlib.sha256((scene/'objects_gt.json').read_bytes()).hexdigest())
             self.assertIn('oracle OLT',(output/'report.html').read_text())
             argv[-1]='pred'
-            with patch('sys.argv',argv),patch('seeground.evaluation.batch_nr3d.ROOT',root), \
-                 patch('seeground.evaluation.batch_nr3d.run_query') as api:
+            with patch('sys.argv',argv),patch('eviground.evaluation.batch_nr3d.ROOT',root), \
+                 patch('eviground.evaluation.batch_nr3d.run_query') as api:
                 with self.assertRaisesRegex(ValueError,'不同实验'):main()
                 api.assert_not_called()
 
@@ -92,7 +92,7 @@ class BatchTests(unittest.TestCase):
             console=io.StringIO()
             with patch('sys.argv',['batch_nr3d.py','--csv',str(data),'--scene','scene',
                                    '--count','1','--output',str(output)]), \
-                 patch('seeground.evaluation.batch_nr3d.ROOT',root),patch('seeground.evaluation.batch_nr3d.run_query',side_effect=failed_run), \
+                 patch('eviground.evaluation.batch_nr3d.ROOT',root),patch('eviground.evaluation.batch_nr3d.run_query',side_effect=failed_run), \
                  redirect_stdout(console):
                 main()
             self.assertEqual([json.loads(line) for line in console.getvalue().splitlines()],
@@ -142,12 +142,12 @@ class BatchTests(unittest.TestCase):
             (scene/'scene.npz').write_bytes(b'fixture')
             objects=json.dumps([{'bbox_id':1,'target':'tv','bbox_3d':[0,0,0,1,1,1]}])
             (scene/'objects_gt.json').write_text(objects);(scene/'objects.json').write_text(objects)
-            with patch.dict('os.environ',{'SEEGROUND_REACT_BACKEND':'jev',
-                                         'SEEGROUND_JEV_MODEL':'jev-A','TYPESAFE_API_KEY':'secret-fixture'}):
+            with patch.dict('os.environ',{'EVIGROUND_REACT_BACKEND':'jev',
+                                         'EVIGROUND_JEV_MODEL':'jev-A','TYPESAFE_API_KEY':'secret-fixture'}):
                 first=experiment_settings(scene,'active_diagnostic')
-                with patch.dict('os.environ',{'SEEGROUND_JEV_MODEL':'jev-B'}):
+                with patch.dict('os.environ',{'EVIGROUND_JEV_MODEL':'jev-B'}):
                     self.assertNotEqual(first,experiment_settings(scene,'active_diagnostic'))
-                with patch.dict('os.environ',{'SEEGROUND_REACT_BACKEND':'qwen'}):
+                with patch.dict('os.environ',{'EVIGROUND_REACT_BACKEND':'qwen'}):
                     self.assertNotEqual(first,experiment_settings(scene,'active_diagnostic'))
             self.assertEqual(first['planner_input'],'text_only')
             self.assertEqual(first['jev_model'],'jev-A')
@@ -159,7 +159,7 @@ class BatchTests(unittest.TestCase):
             scene=Path(d)
             (scene/'scene.npz').write_bytes(b'fixture')
             (scene/'objects_gt.json').write_text('[]')
-            with patch.dict('os.environ',{'SEEGROUND_MODEL':'model-A','SEEGROUND_API_KEY':'secret-fixture'}):
+            with patch.dict('os.environ',{'EVIGROUND_MODEL':'model-A','EVIGROUND_API_KEY':'secret-fixture'}):
                 first=experiment_settings(scene,'geometry')
                 second=experiment_settings(scene,'visual_review')
             self.assertNotEqual(first,second)

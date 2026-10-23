@@ -1,7 +1,7 @@
 import unittest
 
-from seeground.grounding.diagnostic import diagnose, recover_vertical_relations, refresh_condition_records, validate_structure
-from seeground.query.query_rewrite import rewrite_query
+from eviground.grounding.diagnostic import diagnose, recover_vertical_relations, refresh_condition_records, validate_structure
+from eviground.query.query_rewrite import rewrite_query
 
 
 class VerticalRecoveryTests(unittest.TestCase):

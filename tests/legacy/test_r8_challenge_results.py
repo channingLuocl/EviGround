@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from seeground.experiments.r8_challenge_results import collect
+from eviground.experiments.r8_challenge_results import collect
 
 
 class CumulativeTests(unittest.TestCase):

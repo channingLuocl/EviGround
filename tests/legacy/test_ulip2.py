@@ -8,10 +8,10 @@ import numpy as np
 import torch
 from torch import nn
 
-from seeground.categories.category_common_v82 import category_vocabulary
-from seeground.classifiers.pointcloud_classifier_v82 import PROMPT, prepare_points
-from seeground.experiments.train_ulip2_scannet import configure_tail
-from seeground.classifiers.ulip2_classifier import (TEXT_MODEL, TEXT_PRETRAINED, TEXT_REVISION, TEXT_SHA256,
+from eviground.categories.category_common_v82 import category_vocabulary
+from eviground.classifiers.pointcloud_classifier_v82 import PROMPT, prepare_points
+from eviground.experiments.train_ulip2_scannet import configure_tail
+from eviground.classifiers.ulip2_classifier import (TEXT_MODEL, TEXT_PRETRAINED, TEXT_REVISION, TEXT_SHA256,
                               ULIP2Encoder, encoder_state, load_ulip2_text,
                               prepare_ulip2_points, to_ulip2_frame)
 

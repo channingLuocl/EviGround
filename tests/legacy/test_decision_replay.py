@@ -6,8 +6,8 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import Mock, patch
 import requests
-from seeground.api.decision_api import DecisionAPIError, decide, validate_answers
-from seeground.experiments.decision_replay import build_input, digest, freeze, rank, recover_record, recover_replay, run_replay, summarize
+from eviground.api.decision_api import DecisionAPIError, decide, validate_answers
+from eviground.experiments.decision_replay import build_input, digest, freeze, rank, recover_record, recover_replay, run_replay, summarize
 
 
 def answers(questions, choice='1'):
@@ -30,8 +30,8 @@ def fixture():
 
 class DecisionTests(unittest.TestCase):
     def setUp(self):
-        env = patch.dict('os.environ', {'SEEGROUND_V5': '0', 'SEEGROUND_API_PROVIDER': 'qwen',
-                                      'SEEGROUND_REACT_BACKEND': 'jev'})
+        env = patch.dict('os.environ', {'EVIGROUND_V5': '0', 'EVIGROUND_API_PROVIDER': 'qwen',
+                                      'EVIGROUND_REACT_BACKEND': 'jev'})
         env.start()
         self.addCleanup(env.stop)
 
@@ -39,7 +39,7 @@ class DecisionTests(unittest.TestCase):
         run,objects=fixture();state,questions=build_input(run,objects)
         payload={'model':'jev-fixture','answers':answers(questions),'usage':{'input_tokens':4}}
         with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}), \
-             patch('seeground.api.decision_api.requests.post',return_value=Mock(ok=True,json=lambda:payload)) as post:
+             patch('eviground.api.decision_api.requests.post',return_value=Mock(ok=True,json=lambda:payload)) as post:
             result=decide('jev',state,questions)
         kwargs=post.call_args.kwargs
         self.assertEqual(post.call_args.args[0],'https://api.typesafe.ai/v1/systemone')
@@ -53,12 +53,12 @@ class DecisionTests(unittest.TestCase):
         run,objects=fixture();state,questions=build_input(run,objects)
         raw={'_content':json.dumps({'answers':answers(questions)}),
              '_baseline':{'model':'mock'},'_finish_reason':'stop'}
-        with patch('seeground.api.decision_api.chat',return_value=raw) as chat:
+        with patch('eviground.api.decision_api.chat',return_value=raw) as chat:
             result=decide('qwen',state,questions)
         self.assertEqual(json.loads(chat.call_args.args[0][1]['content']),{'state':state,'questions':questions})
         self.assertEqual(result['model'],'mock')
         raw['_finish_reason']='length'
-        with patch('seeground.api.decision_api.chat',return_value=raw):
+        with patch('eviground.api.decision_api.chat',return_value=raw):
             with self.assertRaisesRegex(ValueError,'truncated'):decide('qwen',state,questions)
 
     def test_invalid_answers_are_rejected(self):
@@ -86,7 +86,7 @@ class DecisionTests(unittest.TestCase):
         run,objects=fixture();state,questions=build_input(run,objects)
         payload={'model':'jev-fixture','answers':{}}
         with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}), \
-             patch('seeground.api.decision_api.requests.post',return_value=Mock(ok=True,json=lambda:payload)):
+             patch('eviground.api.decision_api.requests.post',return_value=Mock(ok=True,json=lambda:payload)):
             with self.assertRaises(ValueError) as error:decide('jev',state,questions)
         self.assertEqual(error.exception.response_data,payload)
 
@@ -119,12 +119,12 @@ class DecisionTests(unittest.TestCase):
         value=answers(questions,choice='2');value['target']['probabilities']={'2':.125}
         payload={'answers':value,'model':'mock'}
         raw={'_content':json.dumps(payload),'_baseline':{'model':'mock'},'_finish_reason':'stop'}
-        with patch('seeground.api.decision_api.chat',return_value=raw):
+        with patch('eviground.api.decision_api.chat',return_value=raw):
             result=decide('qwen',state,questions)
         self.assertEqual(result['answers']['target']['choice'],'2')
         self.assertEqual(len(result['validation_warnings']),2)
         with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}), \
-             patch('seeground.api.decision_api.requests.post',return_value=Mock(ok=True,json=lambda:payload)):
+             patch('eviground.api.decision_api.requests.post',return_value=Mock(ok=True,json=lambda:payload)):
             with self.assertRaises(ValueError):decide('jev',state,questions)
 
     def test_offline_recovery_never_calls_api_or_changes_source(self):
@@ -143,7 +143,7 @@ class DecisionTests(unittest.TestCase):
                 (source/f'q001/qwen_{repeat:03d}.json').write_text(json.dumps(qwen))
                 (source/f'q001/jev_{repeat:03d}.json').write_text(json.dumps(jev))
             hashes={str(p):digest(p) for p in source.rglob('*.json')}
-            with patch('seeground.experiments.decision_replay.decide') as api,patch('seeground.api.decision_api.requests.post') as http, \
+            with patch('eviground.experiments.decision_replay.decide') as api,patch('eviground.api.decision_api.requests.post') as http, \
                  redirect_stdout(io.StringIO()):
                 stats=recover_replay(plan,source,root/'recovered')
                 api.assert_not_called();http.assert_not_called()
@@ -157,9 +157,9 @@ class DecisionTests(unittest.TestCase):
     def test_jev_errors_do_not_echo_key_or_response_body(self):
         run,objects=fixture();state,questions=build_input(run,objects)
         with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}):
-            with patch('seeground.api.decision_api.requests.post',return_value=Mock(ok=False,status_code=401)):
+            with patch('eviground.api.decision_api.requests.post',return_value=Mock(ok=False,status_code=401)):
                 with self.assertRaisesRegex(ValueError,'HTTP 401'):decide('jev',state,questions)
-            with patch('seeground.api.decision_api.requests.post',side_effect=requests.Timeout('secret-fixture')):
+            with patch('eviground.api.decision_api.requests.post',side_effect=requests.Timeout('secret-fixture')):
                 with self.assertRaises(ValueError) as error:decide('jev',state,questions)
                 self.assertNotIn('secret-fixture',str(error.exception))
 
@@ -167,7 +167,7 @@ class DecisionTests(unittest.TestCase):
         run,objects=fixture();state,questions=build_input(run,objects)
         body={'error':'invalid question criteria'}
         with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}), \
-             patch('seeground.api.decision_api.requests.post',return_value=Mock(ok=False,status_code=400,
+             patch('eviground.api.decision_api.requests.post',return_value=Mock(ok=False,status_code=400,
                                                                    json=lambda:body)):
             with self.assertRaises(DecisionAPIError) as error:decide('jev',state,questions)
         self.assertEqual(error.exception.diagnostic['failure_kind'],'http_4xx')
@@ -181,7 +181,7 @@ class DecisionTests(unittest.TestCase):
         body={'error':'invalid criteria','Authorization':'Bearer secret-fixture',
               'image_url':'data:image/png;base64,QUJDRA=='}
         with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}), \
-             patch('seeground.api.decision_api.requests.post',return_value=Mock(ok=False,status_code=400,
+             patch('eviground.api.decision_api.requests.post',return_value=Mock(ok=False,status_code=400,
                    json=lambda:body,headers={'x-request-id':'jev-400'})) as post:
             with self.assertRaises(DecisionAPIError) as error:
                 decide('jev',state,questions)
@@ -197,7 +197,7 @@ class DecisionTests(unittest.TestCase):
         state={'bad':float('nan')};questions={'q':{'type':'choice','instructions':'pick',
                                                    'criteria':{'a':'A','b':'B'}}}
         with patch.dict('os.environ',{'TYPESAFE_API_KEY':'secret-fixture'}), \
-             patch('seeground.api.decision_api.requests.post') as post:
+             patch('eviground.api.decision_api.requests.post') as post:
             with self.assertRaisesRegex(ValueError,'严格 JSON'):
                 decide('jev',state,questions)
         post.assert_not_called()
@@ -242,7 +242,7 @@ class DecisionTests(unittest.TestCase):
             manifest={'scene':'s','settings':{'mode':'diagnostic','object_table':'gt'},'objects_sha256':digest(obj)}
             (source/'results.json').write_text(json.dumps({'manifest':manifest,'results':[
                 {'csv_row':2,'query':run['query'],'target_id':2,'predicted_id':1}]}))
-            with patch('seeground.experiments.decision_replay.ROOT',root),redirect_stdout(io.StringIO()):
+            with patch('eviground.experiments.decision_replay.ROOT',root),redirect_stdout(io.StringIO()):
                 plan=freeze(source,root/'plan.json',[2])
                 self.assertEqual(plan['cases'][0]['evaluation'],{'target_id':2})
                 self.assertNotIn('target_id',plan['cases'][0]['state'])
@@ -255,9 +255,9 @@ class DecisionTests(unittest.TestCase):
             case={'scene':'s','csv_row':2,'state':state,'questions':questions,'evaluation':{'target_id':1}}
             plan=root/'plan.json';plan.write_text(json.dumps({'version':2,'cases':[case]}))
             reply={'model':'mock','answers':answers(questions),'latency_s':.1}
-            env={'TYPESAFE_API_KEY':'SECRET','SEEGROUND_API_KEY':'SECRET',
-                 'SEEGROUND_MODEL':'mock','SEEGROUND_BASE_URL':'https://example.invalid/v1'}
-            with patch.dict('os.environ',env),patch('seeground.experiments.decision_replay.decide',return_value=reply) as api, \
+            env={'TYPESAFE_API_KEY':'SECRET','EVIGROUND_API_KEY':'SECRET',
+                 'EVIGROUND_MODEL':'mock','EVIGROUND_BASE_URL':'https://example.invalid/v1'}
+            with patch.dict('os.environ',env),patch('eviground.experiments.decision_replay.decide',return_value=reply) as api, \
                  redirect_stdout(io.StringIO()):
                 run_replay(plan,root/'dry',2,dry_run=True);api.assert_not_called()
                 self.assertFalse((root/'dry').exists())
@@ -284,7 +284,7 @@ class DecisionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);plan=root/'plan.json'
             plan.write_text(json.dumps({'version':1,'cases':[{}]}))
-            with patch('seeground.experiments.decision_replay.decide') as api:
+            with patch('eviground.experiments.decision_replay.decide') as api:
                 with self.assertRaisesRegex(ValueError,'version=2'):run_replay(plan,root/'out',2)
                 api.assert_not_called()
 

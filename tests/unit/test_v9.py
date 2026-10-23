@@ -9,12 +9,12 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seeground.categories.categories_v9 import (VERSION, gate_categories, load_category_objects, prepare_tables, sha256)
-from seeground.experiments.compare_grounding_v9 import compare
-from seeground.grounding.evidence import match_retrieval_categories
-from seeground.grounding.real_scene import run_query
-from seeground.grounding.react_decision import jev_state
-from seeground.cli.run_grounding_v9 import save_manifest, run_case
+from eviground.categories.categories_v9 import (VERSION, gate_categories, load_category_objects, prepare_tables, sha256)
+from eviground.experiments.compare_grounding_v9 import compare
+from eviground.grounding.evidence import match_retrieval_categories
+from eviground.grounding.real_scene import run_query
+from eviground.grounding.react_decision import jev_state
+from eviground.cli.run_grounding_v9 import save_manifest, run_case
 from tests.legacy.test_v7_evidence import obj, parse
 
 
@@ -107,9 +107,9 @@ class PipelineTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.scene = self.root/'scene'; self.scene.mkdir()
         self.tables = self.root/'tables'
-        env = patch.dict(os.environ, {'SEEGROUND_V4': '1', 'SEEGROUND_V7': '1', 'SEEGROUND_V7_4': '1',
-            'SEEGROUND_V9': '1', 'SEEGROUND_REACT_BACKEND': 'openai', 'SEEGROUND_API_PROVIDER': 'openai',
-            'SEEGROUND_V9_CATEGORY_ROOT': str(self.tables)})
+        env = patch.dict(os.environ, {'EVIGROUND_V4': '1', 'EVIGROUND_V7': '1', 'EVIGROUND_V7_4': '1',
+            'EVIGROUND_V9': '1', 'EVIGROUND_REACT_BACKEND': 'openai', 'EVIGROUND_API_PROVIDER': 'openai',
+            'EVIGROUND_V9_CATEGORY_ROOT': str(self.tables)})
         env.start(); self.addCleanup(env.stop)
         self.rows = [prepared(1, top5()), prepared(2, top5(('table', 'desk', 'box', 'bag', 'sofa')))]
         write_table(self.tables/'scene'/'objects_top5.json', self.rows)
@@ -130,9 +130,9 @@ class PipelineTests(unittest.TestCase):
             return {'query': query, 'predicted_id': 1, 'bbox_3d': objects[0]['bbox_3d'],
                 'implementation_version': VERSION, 'prediction_source': 'mock',
                 'decision_status': 'tentative', 'diagnosis': {}, 'active_trace': trace}
-        with patch('seeground.grounding.real_scene.parse_query', return_value=parsed) as parser, \
-                patch('seeground.grounding.active_diagnostic.active_ground', side_effect=ground), \
-                patch('seeground.geometry.wall_geometry.attach_wall_geometry', side_effect=lambda objects, *args: objects):
+        with patch('eviground.grounding.real_scene.parse_query', return_value=parsed) as parser, \
+                patch('eviground.grounding.active_diagnostic.active_ground', side_effect=ground), \
+                patch('eviground.geometry.wall_geometry.attach_wall_geometry', side_effect=lambda objects, *args: objects):
             result = run_query(self.scene, query, self.root/'out', mode='active_diagnostic', object_table='v9_top5')
         self.assertIn('chair', parser.call_args.kwargs['scene_categories'])
         self.assertEqual(result['category_target_ids'], [1])
@@ -141,9 +141,9 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse(result['gt_categories_supplied_to_model'])
 
     def test_missing_target_abstains_without_full_scene_fallback(self):
-        with patch('seeground.grounding.real_scene.parse_query', return_value=parse('the laptop', 'laptop', [])), \
-                patch('seeground.grounding.active_diagnostic.active_ground') as ground, \
-                patch('seeground.geometry.wall_geometry.attach_wall_geometry', side_effect=lambda objects, *args: objects):
+        with patch('eviground.grounding.real_scene.parse_query', return_value=parse('the laptop', 'laptop', [])), \
+                patch('eviground.grounding.active_diagnostic.active_ground') as ground, \
+                patch('eviground.geometry.wall_geometry.attach_wall_geometry', side_effect=lambda objects, *args: objects):
             result = run_query(self.scene, 'the laptop', self.root/'out', mode='active_diagnostic', object_table='v9_top5')
         ground.assert_not_called()
         self.assertIsNone(result['predicted_id'])
@@ -151,7 +151,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result['category_target_ids'], [])
 
     def test_generic_planner_receives_hypothesis_policy(self):
-        from seeground.grounding.active_diagnostic import active_ground
+        from eviground.grounding.active_diagnostic import active_ground
         query = 'the chair'
         parsed = parse(query, 'chair', [])
         (self.root/'out').mkdir()
@@ -160,11 +160,11 @@ class PipelineTests(unittest.TestCase):
                    '_finish_reason': 'stop', '_baseline': {}}
         answer = {'_content': json.dumps({'predicted_id': None, 'reason': 'Insufficient category evidence',
             'evidence': [], 'unresolved': ['uncertain category']}), '_finish_reason': 'stop', '_baseline': {}}
-        with patch.dict(os.environ, {'SEEGROUND_V4_FINAL_REVIEW': '0'}), \
-                patch('seeground.grounding.active_diagnostic.chat', return_value=stopped) as planner, \
-                patch('seeground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
-                patch('seeground.grounding.v74_grounding.image_part', return_value={}), \
-                patch('seeground.grounding.v74_grounding.chat', return_value=answer):
+        with patch.dict(os.environ, {'EVIGROUND_V4_FINAL_REVIEW': '0'}), \
+                patch('eviground.grounding.active_diagnostic.chat', return_value=stopped) as planner, \
+                patch('eviground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
+                patch('eviground.grounding.v74_grounding.image_part', return_value={}), \
+                patch('eviground.grounding.v74_grounding.chat', return_value=answer):
             active_ground(query, parsed, self.rows, self.rows, self.rows[:1], points, points,
                           np.array([1, 2]), self.root/'out', [], {}, 3, False)
         messages = planner.call_args.args[0]
@@ -173,7 +173,7 @@ class PipelineTests(unittest.TestCase):
         self.assertIn('category_hypotheses', payload['target_table'][0])
 
     def test_scene_model_receives_alternatives_as_hypotheses(self):
-        from seeground.grounding.active_diagnostic import active_ground
+        from eviground.grounding.active_diagnostic import active_ground
         query = 'the chair at the bottom of the stack'
         parsed = parse(query, 'chair', [], unhandled=['at the bottom of the stack'])
         (self.root/'out').mkdir()
@@ -181,9 +181,9 @@ class PipelineTests(unittest.TestCase):
             'evidence': [{'source_quote': query, 'object_ids': [1], 'observation': 'Chair at base'}],
             'unresolved': ['category remains tentative']}), '_finish_reason': 'stop', '_baseline': {}}
         points = np.array([[0., 0., 0.], [1., 1., 1.]])
-        with patch('seeground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
-                patch('seeground.grounding.v74_grounding.image_part', return_value={}), \
-                patch('seeground.grounding.v74_grounding.chat', return_value=reply) as model:
+        with patch('eviground.grounding.v74_grounding.scene_views', return_value=[{'image': 'test.png'}]), \
+                patch('eviground.grounding.v74_grounding.image_part', return_value={}), \
+                patch('eviground.grounding.v74_grounding.chat', return_value=reply) as model:
             result = active_ground(query, parsed, self.rows, self.rows, self.rows[:1], points, points,
                                   np.array([1, 2]), self.root/'out', [], {}, 3, False)
         messages = model.call_args.args[0]
@@ -221,7 +221,7 @@ class EvaluationTests(unittest.TestCase):
                     'object_table': 'v9_top5', 'mode': 'active_diagnostic', 'predicted_id': None,
                     'category_target_ids': [], 'bbox_3d': None}))
                 return SimpleNamespace(returncode=0)
-            with patch('seeground.cli.run_grounding_v9.subprocess.run', side_effect=worker) as process:
+            with patch('eviground.cli.run_grounding_v9.subprocess.run', side_effect=worker) as process:
                 result = run_case(row, root, output, 5, 3)
                 self.assertFalse(result['correct'])
                 self.assertNotIn('error', result)

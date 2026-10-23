@@ -12,15 +12,15 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image
 
-import seeground.classifiers.object_classifier_v8 as classifier
-import seeground.experiments.run_object_classification as batch
-from seeground.rendering.mesh_renderer_v8 import read_scene_faces, render_mesh
-from seeground.api.qwen_api import QwenAPIError
+import eviground.classifiers.object_classifier_v8 as classifier
+import eviground.experiments.run_object_classification as batch
+from eviground.rendering.mesh_renderer_v8 import read_scene_faces, render_mesh
+from eviground.api.qwen_api import QwenAPIError
 
 
-ENV = {'SEEGROUND_MODEL': 'test-model', 'SEEGROUND_BASE_URL': 'https://example.test/v1',
-       'SEEGROUND_API_KEY': 'test-key', 'SEEGROUND_API_PROVIDER': 'openai',
-       'SEEGROUND_V4': '0'}
+ENV = {'EVIGROUND_MODEL': 'test-model', 'EVIGROUND_BASE_URL': 'https://example.test/v1',
+       'EVIGROUND_API_KEY': 'test-key', 'EVIGROUND_API_PROVIDER': 'openai',
+       'EVIGROUND_V4': '0'}
 
 
 def response(label='chair', **answer):
@@ -54,7 +54,7 @@ class ObjectClassificationTests(unittest.TestCase):
             args, xyz, ids = fixture(Path(td))
             with np.load(args.scene_root/'scene0001_00/scene.npz') as cloud:
                 rgb = cloud['rgb']
-            with patch('seeground.classifiers.object_classifier_v8.chat', return_value=response()) as chat:
+            with patch('eviground.classifiers.object_classifier_v8.chat', return_value=response()) as chat:
                 prediction = classifier.classify_instance(xyz, rgb, ids, 3, Path(td)/'views', ['chair', 'stool'])
             messages = chat.call_args.args[0]
             text = json.dumps(messages)
@@ -78,12 +78,12 @@ class ObjectClassificationTests(unittest.TestCase):
                       response(None), {**response(), '_finish_reason': 'length'}]:
             with self.subTest(reply=reply), tempfile.TemporaryDirectory() as td, \
                     patch.dict('os.environ', ENV), \
-                    patch('seeground.classifiers.object_classifier_v8.render_instance', return_value=(Path(td)/'image.png',
+                    patch('eviground.classifiers.object_classifier_v8.render_instance', return_value=(Path(td)/'image.png',
                           {'extent_xyz_m': [1, 1, 1], 'point_count': 10,
                            'observed_bottom_above_floor_m': 0.,
                            'views': [{'image': str(Path(td)/'image.png')}]})), \
-                    patch('seeground.classifiers.object_classifier_v8.image_part', return_value={'type': 'image_url'}), \
-                    patch('seeground.classifiers.object_classifier_v8.chat', return_value=reply):
+                    patch('eviground.classifiers.object_classifier_v8.image_part', return_value={'type': 'image_url'}), \
+                    patch('eviground.classifiers.object_classifier_v8.chat', return_value=reply):
                 with self.assertRaises(Exception):
                     classifier.classify_instance(None, None, None, 3, Path(td), ['chair', 'stool'])
                 self.assertTrue((Path(td)/'response.json').exists())
@@ -150,7 +150,7 @@ class ObjectClassificationTests(unittest.TestCase):
 
     def test_resume_reuses_wrong_predictions_and_expansion_calls_only_new_objects(self):
         with tempfile.TemporaryDirectory() as td, patch.dict('os.environ', ENV), \
-                patch('seeground.experiments.run_object_classification.classify_instance') as classify:
+                patch('eviground.experiments.run_object_classification.classify_instance') as classify:
             args, _, _ = fixture(Path(td))
             classify.side_effect = lambda xyz, rgb, ids, oid, out, vocab, faces=None: {
                 'bbox_id': oid, 'predicted_object': 'stool', 'status': 'completed'}
@@ -173,13 +173,13 @@ class ObjectClassificationTests(unittest.TestCase):
 
     def test_model_input_change_and_frozen_output_stop_before_requests(self):
         with tempfile.TemporaryDirectory() as td, patch.dict('os.environ', ENV), \
-                patch('seeground.experiments.run_object_classification.classify_instance') as classify, \
+                patch('eviground.experiments.run_object_classification.classify_instance') as classify, \
                 redirect_stdout(StringIO()), redirect_stderr(StringIO()):
             args, _, _ = fixture(Path(td))
             args.prepare_only = True
             batch.run(args)
             args.prepare_only = False
-            with patch.dict('os.environ', {'SEEGROUND_MODEL': 'changed'}), \
+            with patch.dict('os.environ', {'EVIGROUND_MODEL': 'changed'}), \
                     self.assertRaisesRegex(ValueError, 'changed'):
                 batch.run(args)
             path = args.scene_root/'scene0001_00/objects_gt.json'
@@ -193,7 +193,7 @@ class ObjectClassificationTests(unittest.TestCase):
 
     def test_service_error_stops_scheduling_and_retry_archives_error(self):
         with tempfile.TemporaryDirectory() as td, patch.dict('os.environ', ENV), \
-                patch('seeground.experiments.run_object_classification.classify_instance') as classify, \
+                patch('eviground.experiments.run_object_classification.classify_instance') as classify, \
                 redirect_stdout(StringIO()), redirect_stderr(StringIO()):
             args, _, _ = fixture(Path(td))
             args.limit = 0
@@ -211,7 +211,7 @@ class ObjectClassificationTests(unittest.TestCase):
 
     def test_early_service_stop_exports_unstarted_scenes_as_partial(self):
         with tempfile.TemporaryDirectory() as td, patch.dict('os.environ', ENV), \
-                patch('seeground.experiments.run_object_classification.classify_instance') as classify, \
+                patch('eviground.experiments.run_object_classification.classify_instance') as classify, \
                 redirect_stdout(StringIO()), redirect_stderr(StringIO()):
             args, _, _ = fixture(Path(td))
             shutil.copytree(args.scene_root/'scene0001_00', args.scene_root/'scene0002_00')

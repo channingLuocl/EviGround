@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import torch
 from torch.nn import functional as F
-from seeground.experiments.train_scan_domain import make_head, choose, checkpoint_key
+from eviground.experiments.train_scan_domain import make_head, choose, checkpoint_key
 
 
 class TrainingTests(unittest.TestCase):
