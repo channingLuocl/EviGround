@@ -1,0 +1,19 @@
+{
+  "source_run": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r8_r18_thinking_full7805_20261021",
+  "artifacts": [
+    {
+      "source": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r8_r18_thinking_full7805_20261021/results.json",
+      "snapshot": "results.json.gz",
+      "uncompressed_bytes": 58217779,
+      "uncompressed_sha256": "8707ad5c7bd25cd815a8da00af33bc2acd177406649a5e32a8aeaa676d2794f3",
+      "compressed_sha256": "4252dc7c3c00f08b11e93d649c7050850451a6cb503c3bcf28b16064cac732ce"
+    },
+    {
+      "source": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/v74_r8_r18_thinking_full7805_20261021/manifest.json",
+      "snapshot": "original_manifest.json.gz",
+      "uncompressed_bytes": 3534372,
+      "uncompressed_sha256": "be04d99be21f4ccf26c53dae04e662fa7b501ec28ffd2964b6834b0eed98a5e4",
+      "compressed_sha256": "b15947675238c48ce8d8ecebe5a11c94a19f448124e7c82e731daf9698b5348f"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "expected_total": 7805,
+  "recorded": 7805,
+  "correct": 5437,
+  "predictions": 7629,
+  "fatal_errors": 36,
+  "category_gate_abstentions": 136,
+  "full_selected_denominator_accuracy": 0.6966047405509289,
+  "missing_rows": [],
+  "structural_issues": [],
+  "verified_complete": true,
+  "threshold": 0.66,
+  "threshold_passed": true,
+  "cumulative": false
+}
