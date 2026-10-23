@@ -1,0 +1,15 @@
+# Install a CUDA-compatible torch separately. These are inference-only dependencies.
+numpy>=1.24,<2
+scipy>=1.10,<1.14
+scikit-learn>=1.2,<1.6
+PyYAML>=6,<7
+easydict==1.13
+multimethod==1.10
+termcolor>=2,<3
+shortuuid>=1,<2
+transformers==4.44.2
+huggingface-hub>=0.24,<1
+safetensors>=0.4
+setuptools>=68,<81
+wheel
+ninja

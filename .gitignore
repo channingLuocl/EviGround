@@ -12,3 +12,12 @@ archives/
 *.pth
 *.pt
 *.pkl
+
+# Package builds and new experiment runs
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+outputs/runs/
+._*
