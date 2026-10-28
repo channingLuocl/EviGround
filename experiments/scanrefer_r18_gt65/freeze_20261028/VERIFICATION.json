@@ -1,0 +1,31 @@
+{
+  "verified_at_utc": "2026-10-28T15:45:38.862850+00:00",
+  "snapshot_files": 327,
+  "source_bytes": 3516689,
+  "entry_and_runtime_match_active_protocol": true,
+  "snapshot_matches_source": true,
+  "tests": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=<visual109_runtime>:<source_r18/local>:<experiment> <existing .venv Python> -B -m unittest test_all_false_gpt61 test_visual109 test_null_visual_recall",
+    "run_from": "/Volumes/KESU/experiments/scanrefer_r18_gt65",
+    "passed": 30,
+    "failed": 0,
+    "benchmark_calls": 0
+  },
+  "secret_scan": {
+    "files_scanned": 331,
+    "flags": 0,
+    "credential_file_read": false
+  },
+  "source_runtime_modified": false,
+  "live_process_signalled": false,
+  "live_experiment_branch_changed": false,
+  "dataset_or_live_outputs_copied": false,
+  "plan_only": {
+    "target_stopping_implemented_or_started": false,
+    "ablations_started": false
+  },
+  "existing_whitespace_preserved": [
+    "source_r18/local/computed_evidence.py:413: existing blank line at EOF; exact frozen bytes retained"
+  ],
+  "handoff_plan_sha256": "75c891d7dd247f5818158f1aceb481ec5ca2dec859ba993234db6803421133ce"
+}

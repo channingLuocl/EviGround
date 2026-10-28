@@ -1,0 +1,21 @@
+{
+  "original": {
+    "path": "/Users/luocl/Desktop/seeground/outputs/r13_single_pass_20261020/source_r18",
+    "matched_python_files": 152
+  },
+  "reference_copy": {
+    "path": "/Volumes/KESU/experiments/scanrefer_r18_gt/source_r18",
+    "matched_python_files": 152
+  },
+  "predictions.json": "34aa94cbc455324fdd28ddfd21a3832bba743eac25c32d58037c9bc460b1da9e",
+  "config.json": "de36aaaaea37c20062c3e4f9c9cc9b5fb039a810ddfa644b9a40f124dd6d6dba",
+  "historical_manifest_sha256": "be04d99be21f4ccf26c53dae04e662fa7b501ec28ffd2964b6834b0eed98a5e4",
+  "verified_at": "2026-10-26T16:23:03.097611+00:00",
+  "owner": "ScanRefer frozen r18 GT65 user-authorized experiment",
+  "historical_nr3d": {
+    "correct": 5437,
+    "total": 7805,
+    "instance_id_accuracy": 0.6966047405509289
+  },
+  "copy_policy": "Only regular .py/.sh files and SOURCE_MANIFEST.json; no symlinks followed; no secrets copied"
+}

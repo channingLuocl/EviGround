@@ -1,0 +1,131 @@
+{
+  "name": "r18-all-false-gpt61-sol-v1",
+  "created_at": "2026-10-28T13:18:50.439845+00:00",
+  "baseline": "/Volumes/KESU/experiments/scanrefer_r18_gt65/outputs/r18-visual109-v1",
+  "selection": "All 3377 Acc@0.25 failures in the latest completed 9508-query cumulative baseline",
+  "selection_uses_evaluation": true,
+  "evaluation_answers_in_worker": false,
+  "generalization_claim": "Targeted retry of known failures; not an independent-test gain",
+  "official_denominator": 9508,
+  "baseline_correct25": 6131,
+  "preserved_other_rows": 6131,
+  "max_additional_rounds": 1,
+  "manual_launch_only": true,
+  "rl_enabled": false,
+  "model_changed": true,
+  "candidate_recall_changed": false,
+  "recall_policy": "all_instances_atlas_binding_v1",
+  "model": "gpt-6.1-sol",
+  "api_base": "http://106.14.25.135:3000/v1",
+  "runtime_settings": {
+    "api": {
+      "provider": "openai",
+      "request_options": {
+        "enable_thinking": true,
+        "temperature": 0.0,
+        "response_format": {
+          "type": "json_schema"
+        }
+      },
+      "thinking_token_floor": 8192,
+      "structured_outputs": true,
+      "token_parameter": "max_completion_tokens",
+      "allow_http": true,
+      "api_concurrency": 8,
+      "api_slot_dir": "/Volumes/KESU/experiments/scanrefer_r18_gt65/outputs/r18-all-false-gpt61-sol-v1/round001/.api_slots"
+    },
+    "policy": {
+      "v7": true,
+      "version": "predicted-category-grounding-v9-r8-r18",
+      "v6": true,
+      "v5": true,
+      "v5_scope": true,
+      "v5_measurements": true,
+      "v5_call_economy": true,
+      "extra_api_attempts_limit": 1,
+      "context_text_upper_bound": 131072,
+      "inventory": true,
+      "backtrack": true,
+      "final_review": true,
+      "size": true,
+      "relations": true,
+      "dynamic_threshold": false,
+      "backtrack_limit": 1,
+      "backtrack_evidence_reserve": 1,
+      "size_visual_calls_limit": 2,
+      "relation_visual_calls_limit": 2,
+      "final_review_calls_limit": 2,
+      "views_per_visual_call": 1,
+      "relaxed_relative_margin_floor": 0.05,
+      "relaxed_length_margin_floor_m": 0.03
+    },
+    "query_syntax": {
+      "backend": "spacy",
+      "implementation_version": "predicted-category-grounding-v9-r8-r18",
+      "model": "en_core_web_sm",
+      "spacy_version": "3.8.16",
+      "model_version": "3.8.0"
+    },
+    "models": {
+      "SEEGROUND_REACT_BACKEND": "openai",
+      "SEEGROUND_JEV_MODEL": "",
+      "SEEGROUND_MODEL": "gpt-6.1-sol",
+      "SEEGROUND_BASE_URL": "http://106.14.25.135:3000/v1"
+    }
+  },
+  "fixed_policy": {
+    "name": "all_instances_atlas_binding_v1",
+    "dynamic_tool_actions": 3,
+    "max_focus_ids": 12,
+    "overview_images": 3,
+    "atlas_tile_px": 300,
+    "atlas_columns": 4,
+    "atlas_instances_per_page": 12,
+    "atlas_azimuth_deg": 315,
+    "atlas_elevation_deg": 30,
+    "atlas_point_radius_px": 2,
+    "atlas_order": "ascending instance ID; every classifier-covered instance",
+    "atlas_category_labels": false,
+    "atlas_satisfies_dynamic_inspection": false
+  },
+  "additional_resources": "3 overviews, ceil(N/12) atlas pages, N independent 300px renders per grounded case; 3 dynamic actions",
+  "merge_policy": "Replace all 3377 outcomes once; no best-of selection or correctness-based cache",
+  "ground_truth_used_for_recall": false,
+  "tool_budget": 3,
+  "outside_original_three_round_protocol": true,
+  "runtime_sha256": {
+    "real_scene.py": "213984f719a515e9c111d585c4eab438195cc954b52145d2b89f1ae3fcb509f2",
+    "r18_react.py": "8c2224ba332eb9eef6f6ec84c845eb28d489efacc1b145e7f6cb9858eea88a22",
+    "run_grounding_v9.py": "2074968767f9910fbac24938c5dce2db6da9d49a54bcefd6e209c61b97d8ebdc"
+  },
+  "entry_sha256": {
+    "retry_all_false_gpt61.py": "30695bf37b651a80331d88f1f85c573cd0afd6b5e2bdd8065d642c0365a7c692",
+    "retry_all_false_gpt61.sh": "3b360a18a3bdc238de98df0b3ee0457827403baed0c4983671d8c5b0e63b72d8",
+    "retry_all_false_gpt61_progress.py": "dba18669b868086512b1f94c870ce9f4b36946876a5aca9550cfdbd1354673de",
+    "ALL_FALSE_GPT61_RULES.md": "623da3ddd9ffd7c616aa8b6461b2a0434b3e9818704c649331b85f3d96643111",
+    "test_all_false_gpt61.py": "2d28d07857b3fad09cc9ef4d8eb7be365d3aa967eb63a556c23454b99ad7e949"
+  },
+  "baseline_sha256": "124993ca593825357842f6f3e15202fc6bf555858d7b4a0fa9ec9b54449294ce",
+  "selection_sha256": "8a0c5effcb72fc3a6df6c57d2b0733b0cb5f1e6666c863638027c1783058b226",
+  "manifest_sha256": "50a3518938d554a56546965cabb9662544bb85224768f952f60deeaf3b62e0cf",
+  "selected_count": 3377,
+  "protocol_source_sha256": "3ec306cc775e3d785ab515923378173503fb5a104596b9eed1553b47ce164d22",
+  "selection_ids_omitted": true,
+  "credential_fingerprint_omitted": true,
+  "source_reference_sha256": {
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/retry_visual109.py": "f617c0222aebb9c3f9fecce4f3a8097019c7ddf7379cce83b51f09c156ea213e",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/retry_visual109.sh": "8a70c346cd92a290a64a0b0d392fd60ebaa227945ed8f3e7958c12ae115fbca8",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/retry_visual109_progress.py": "254e16223ce4d9c00a9de8221f78100f2958fda56a79291ec887a963df0bd1d7",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/visual109_policy.py": "a6c10e51606cf704d11ef9a46dd4cce83e1fac663c4261b9e8bbfb57e3c32d4c",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/VISUAL109_RULES.md": "b3c2ac775a56f2c94c144abfc600643760203a68ab297237f7d62017a14ae896",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/test_visual109.py": "85abadd9dc3bd6da3485472706993755b75eb70205ca80b91a8e6be779ec5798",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/visual109_runtime/real_scene.py": "213984f719a515e9c111d585c4eab438195cc954b52145d2b89f1ae3fcb509f2",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/visual109_runtime/r18_react.py": "8c2224ba332eb9eef6f6ec84c845eb28d489efacc1b145e7f6cb9858eea88a22",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/visual109_runtime/run_grounding_v9.py": "2074968767f9910fbac24938c5dce2db6da9d49a54bcefd6e209c61b97d8ebdc",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/retry_null.py": "f8e49db4a71aebf829785e22a8f6c06d63f2c42262107d14f38efbfac7044bd7",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/retry_state.py": "824009ad706e790918fcd7b4eaab0b8cf15ca0c78f054ea314755fb893c5578d",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/retry_null_progress.py": "be04d4acde1f4955131c72050e7c0544604caf7319820798c9ada42771e049c4",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/scanrefer_metrics.py": "1ed5d25e7e36770af4d619a77761c351e5525bb6354aa174ea5b95ea669a51e6",
+    "/Volumes/KESU/experiments/scanrefer_r18_gt65/verify.py": "d58f9b78d51d7e69e0c9aecf404f11c93e817e7b6bac6b64d5edf12adbb62880"
+  }
+}
