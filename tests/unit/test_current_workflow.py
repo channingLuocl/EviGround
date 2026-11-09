@@ -76,6 +76,25 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(retained), 5)
         self.assertTrue(all(h["score"] < 0 for h in retained))
 
+    def test_computer_screen_alias_retrieves_monitor_without_computer_tower(self):
+        objects = [{"bbox_id": 1, "target": "monitor"},
+                   {"bbox_id": 2, "target": "computer tower"},
+                   {"bbox_id": 3, "target": "projection screen"}]
+        expected = [o["bbox_id"] for o in match_retrieval_categories(["monitor"], objects)]
+        self.assertIn(1, expected)
+        self.assertNotIn(2, expected)
+        for name in ("computer screen", "computer screens", "computer monitor", "computer monitors"):
+            with self.subTest(name=name):
+                self.assertEqual([o["bbox_id"] for o in match_retrieval_categories([name], objects)], expected)
+
+    def test_knapsack_retrieves_backpack_without_merging_other_bags(self):
+        objects = [{"bbox_id": 1, "target": "backpack"},
+                   {"bbox_id": 2, "target": "suitcase"},
+                   {"bbox_id": 3, "target": "bag"}]
+        for name in ("knapsack", "knapsacks", "black knapsack"):
+            with self.subTest(name=name):
+                self.assertEqual(match_retrieval_categories([name], objects), [objects[0]])
+
     def test_malformed_categories_and_scores_are_rejected(self):
         for field, value in [
             ("category", "stool"),
@@ -141,6 +160,10 @@ class WorkflowTests(unittest.TestCase):
 
     def test_actual_render_measure_finish_trajectory_has_no_gt_input(self):
         self.prepare()
+        table_path = self.tables / "synthetic/objects_top5.json"
+        table = json.loads(table_path.read_text())
+        table["objects"][0]["proposal_detection_score"] = .0001
+        table_path.write_text(json.dumps(table))
         query = "the chair nearest to the table"
 
         def action(kind, **updates):
@@ -206,6 +229,9 @@ class WorkflowTests(unittest.TestCase):
         ):
             result = pipeline.run_query(self.scenes / "synthetic", query, self.out)
         self.assertEqual(result["predicted_id"], 1)
+        initial = result["active_trace"]["react_initial_input"]
+        self.assertEqual(next(o for o in initial["objects"] if o["id"] == 1)["proposal_detection_score"], .0001)
+        self.assertIn(1, initial["allowed_target_ids"])
         self.assertEqual(result["api_calls"], 5)
         self.assertEqual(
             result["active_trace"]["react_observations"][0]["tool"], "finish_check"
@@ -216,6 +242,7 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertTrue(all(Path(p).is_file() for p in result["images"]))
         sent = json.dumps(payloads)
+        self.assertIn('"proposal_detection_score": 0.0001', sent.replace('\\"', '"'))
         self.assertNotIn("SECRET", sent)
         self.assertNotIn("evaluation_only", sent)
         self.assertFalse(result["gt_categories_supplied_to_model"])

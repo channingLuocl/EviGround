@@ -27,9 +27,9 @@ from eviground.query.parser import parse_query
 from eviground.rendering.renderer import load_objects
 
 
-def structural_objects(scene_dir, objects):
+def structural_objects(scene_dir, objects, excluded_ids=()):
     """Supplement geometry only; annotated names never reach inference."""
-    known = {o["bbox_id"] for o in objects}
+    known = {o["bbox_id"] for o in objects} | set(excluded_ids)
     return [
         {"bbox_id": o["bbox_id"], "bbox_3d": o["bbox_3d"], "target": "object"}
         for o in load_objects(scene_dir / "scene_instances.json")
@@ -47,7 +47,8 @@ def run_query(scene_dir, query, out, top_k=5, review_limit=3):
         raise ValueError("Prepared classifier category root is required")
     objects_path = Path(category_root) / scene_dir.name / f"objects_top{top_k}.json"
     objects = load_category_objects(objects_path)
-    supplemental = structural_objects(scene_dir, objects)
+    table = json.loads(objects_path.read_text())
+    supplemental = structural_objects(scene_dir, objects, table.get("suppressed_instance_ids", ()))
     geometry_objects = objects + supplemental
     out.mkdir(parents=True, exist_ok=True)
     started, calls = (perf_counter(), [])

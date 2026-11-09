@@ -34,9 +34,23 @@ def save_checkpoint(path, value):
 
 
 def retryable(diagnostic):
-    return diagnostic.get("failure_kind") in ("timeout", "network") or diagnostic.get(
+    if diagnostic.get("failure_kind") in ("timeout", "network") or diagnostic.get(
         "http_status"
-    ) in (502, 503, 504)
+    ) in (500, 502, 503, 504):
+        return True
+    if diagnostic.get("http_status") != 400:
+        return False
+    try:
+        error = json.loads(diagnostic.get("response_body", "")).get("error", {})
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return (
+        isinstance(error, dict)
+        and error.get("code") == "invalid_parameter_error"
+        and str(error.get("message", "")).startswith(
+            "Model output became abnormal while generating a JSON response for response_format."
+        )
+    )
 
 
 def file_identity(paths):

@@ -52,6 +52,8 @@ def precision_evidence(query, parsed, objects, candidates):
             {
                 "id": item["bbox_id"],
                 "category": item["target"],
+                **({"proposal_detection_score": item["proposal_detection_score"]}
+                   if "proposal_detection_score" in item else {}),
                 "category_hypotheses": [
                     {"category": h["category"], "rank": h["rank"]} for h in hypotheses
                 ],

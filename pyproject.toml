@@ -12,6 +12,9 @@ dependencies = [
   "json-repair", "python-dotenv", "spacy==3.8.16",
 ]
 
+[project.optional-dependencies]
+scanrefer = ["plyfile"]
+
 [project.scripts]
 eviground = "eviground.cli.entrypoint:main"
 

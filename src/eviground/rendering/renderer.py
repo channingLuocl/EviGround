@@ -70,7 +70,10 @@ def render(xyz, rgb, output, eye=None, at=None, ids=None, size=800, point_radius
         )
         pix, idx = (pix[inside], idx[inside])
     flat = pix[:, 1] * size + pix[:, 0]
-    order = np.argsort(depth[idx], kind="stable")
+    # At identical depth, a duplicated unmarked context vertex must not erase
+    # the focused instance's marker. Strictly nearer geometry still occludes it.
+    order = (np.lexsort((ids[idx] < 0, depth[idx])) if ids is not None
+             else np.argsort(depth[idx], kind="stable"))
     _, first = np.unique(flat[order], return_index=True)
     visible = idx[order[first]]
     image = np.full((size, size, 3), 245, dtype=np.uint8)

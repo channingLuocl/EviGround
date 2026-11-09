@@ -17,9 +17,39 @@ from eviground.api.response_schemas import (
     REASON,
     schema_kwargs,
 )
-from eviground.grounding.settings import settings
+from eviground.grounding.settings import evidence_policy, settings
 
 INSTRUCTIONS = "Locate the object described by the original utterance. You control evidence acquisition.\nRead the scene, compare the plausible target instances, and request the next observation that can\ndistinguish them. Then reconsider the alternatives using the returned evidence. There is no fixed\nsequence of tools. Every request and final choice must be grounded in the original description.\n\nActions:\n- inspect: render 1-12 focus_ids in panels of at most 6, including targets AND references. Use isolated to compare\n  category, shape, texture or color without contamination. Use scene to see their physical context.\n  Choose azimuth_deg in [0,360) and elevation_deg in [10,75] to expose the unresolved property.\n  Null camera angles use the tool's documented defaults: azimuth=315, elevation=30 degrees.\n  Isolated tiles have separate cameras and scales; their placement/size is not a spatial relation.\n- measure: supply focus_ids for the objects to compare. Returns measured dimensions, pair distances,\n  overlap and sorted size orders. For observer-relative order supply frame: origin_ids=[] means room\n  center, otherwise the mean center of those instances; facing_ids defines the group being faced.\n  For 'from A facing B', origin_ids is A and facing_ids is B. For 'room center facing B', use\n  origin_ids=[] and facing_ids=B. An object being faced is NOT the observer origin. For 'looking\n  at both targets', use the visually bound target group as facing_ids. Never use identical origin\n  and facing groups. Without a directional clause use frame=null; distances need no observer frame.\n  Both groups must follow the description and visible layout. Use frame=null for other measurements.\n  The returned selected_observer_frame is conditional on YOUR chosen groups. Bind the described\n  references and comparison group first. Include all plausible comparison members, not just a guess.\n  Measurements are observations, not proof that a reference/category interpretation is correct.\n- finish: choose one allowed_target_id, or null if essential evidence is unavailable. Give compact\n  evidence, name the actual reference IDs, and state unresolved assumptions. Return one final choice.\n\nUse inspect when category alternatives, a reference's color, an object's visible part or facing\ndirection are unresolved. Use measure when distance, support, height, order or grouping separates\nthe plausible objects. Inspect references as needed; a convenient reference ID is not a bound noun.\nPrefer a discriminating observation to repeating an unchanged view or merely confirming a guess.\nAll clauses must refer to a compatible assignment of target and reference instances. Keep negation,\nthe exact comparison group, and noun attachment. The original utterance outranks the parser summary.\nClassifier ranks are fallible priors. A rank-2 category can win with visible support; rank-1 gets\npreference only if the remaining evidence is comparable. Never use image left as speaker left.\ngap_from_top1 is the difference between uncalibrated classifier scores, NOT a probability. Within\none instance, a small gap denotes a closer classifier alternative than a large gap. It does not\nestablish the category, and should not be compared using a probability cutoff.\nTop-5 recall expands the pool; it does not make all five names true. Before choosing an alternative-only\ntarget category, inspect that instance and plausible primary-category rivals. Geometry alone cannot\nturn a monitor stand into a monitor, or a toilet into a stool. A finish without that inspection is\ndeferred while a tool call remains. Check reference categories and their qualifiers independently;\ndo not select whichever door, desk or shelf happens to make a convenient distance minimum.\nFor a nested relation such as an object ON a desk, first bind the object to its actual support desk\nusing overlap and vertical surface gap; only then compare targets relative to that SAME desk.\nPreserve every clause: color, visible part, group, negation and relative order cannot be replaced by\nnearest, largest or highest. If one clause distinguishes the current best two candidates, acquire\nevidence for that clause before finishing. State what distinguishes the winner from its best rival.\nWhen no observer is given, explicitly state any assumed frame; do not reverse numeric order to\nsupport a preferred ID. AABB dimensions alone do not identify the head or foot of a bed.\nAn unobserved attribute stays unknown. Return the best supported target despite minor uncertainty,\nbut do not invent appearance, references or evidence. Unknown does not eliminate an alternative.\n\nKeep reason within 60 words, evidence within 4 entries, and each observation within 35 words.\nEvery evidence source_quote must be the COMPLETE original description verbatim. For inspect or\nmeasure, use predicted_id=null and evidence=[]. For inspect and finish use frame=null. For finish use\nfocus_ids=[], context=null, azimuth_deg=null and elevation_deg=null. Return a single top-level JSON\nOBJECT with the schema keys, never an array containing an object.\n"
+
+
+INSTRUCTIONS += "\nWhen provided, proposal_detection_score is the separate Mask3D detection ranking score, not the Top-5 category fusion score or a calibrated probability. Very weak detections can be fragmented, merged or spurious geometry. Weigh detection reliability alongside appearance and layout; keep low-score objects eligible when the description and visible evidence support them. Do not count overlapping fragments as distinct physical members of an ordinal group.\n"
+
+
+def planner_instructions(policy):
+    """Remove unavailable actions and their requirements from ablation prompts."""
+    text = INSTRUCTIONS
+    for name, following in (("inspect", "measure"), ("measure", "finish")):
+        if not policy[name]:
+            start, end = text.index(f"- {name}:"), text.index(f"- {following}:")
+            text = text[:start] + text[end:]
+    if not policy["category_inspection_required"]:
+        start = text.index("Before choosing an alternative-only")
+        end = text.index("Check reference categories", start)
+        text = text[:start] + text[end:]
+    if not (policy["inspect"] and policy["measure"]):
+        start = text.index("Use inspect when category alternatives")
+        end = text.index("All clauses must refer", start)
+        guide = "Use only the available actions and evidence. "
+        if policy["inspect"]:
+            guide += "Use inspect to resolve visible properties and reference bindings.\n"
+        elif policy["measure"]:
+            guide += "Use measure to resolve distances, support, height and conditional order.\n"
+        else:
+            guide += "Choose finish using the initial views and basic box geometry.\n"
+            text = text.replace("acquire\nevidence for that clause before finishing",
+                                "compare\nthat clause using the available evidence before finishing")
+        text = text[:start] + guide + text[end:]
+    return text
 
 
 def observer_frame(frame, objects, selected):
@@ -152,9 +182,13 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
 
     known = {o["bbox_id"] for o in objects}
     allowed = sorted((o["bbox_id"] for o in candidates))
+    policy = evidence_policy()
+    available = [name for name in ("inspect", "measure") if policy[name]] + ["finish"]
+    tool_limit = limit if len(available) > 1 else 0
+    instructions = planner_instructions(policy)
     schema = obj(
         {
-            "action": enum("inspect", "measure", "finish"),
+            "action": enum(*available),
             "reason": REASON,
             "focus_ids": array({"type": "integer", "enum": sorted(known)}),
             "context": nullable(enum("scene", "isolated")),
@@ -241,14 +275,16 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         react_actions=actions,
         react_observations=observations,
         react_tool_budget=limit,
+        react_available_actions=available,
+        react_evidence_policy=policy,
     )
     decision = None
-    for step in range(limit + 1):
+    for step in range(tool_limit + 1):
         state = {
             **payload,
             "observations": observations,
             "previous_actions": actions,
-            "remaining_tool_calls": limit - step,
+            "remaining_tool_calls": tool_limit - step,
             "views": [
                 {
                     k: v
@@ -268,7 +304,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             ],
         }
         action_schema = json.loads(json.dumps(schema))
-        if step == limit:
+        if step == tool_limit:
             action_schema["properties"]["action"] = enum("finish")
         call = {
             "stage": "react_decision",
@@ -279,7 +315,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         calls.append(call)
         response = chat(
             [
-                {"role": "system", "content": INSTRUCTIONS + CATEGORY_INSTRUCTIONS},
+                {"role": "system", "content": instructions + CATEGORY_INSTRUCTIONS},
                 {
                     "role": "user",
                     "content": [
@@ -301,12 +337,15 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             raise ValueError("ReAct action response is incomplete")
         action = parse_json_object(response["_content"])
         actions.append(action)
+        if action.get("action") not in available:
+            raise ValueError("ReAct returned an unavailable action")
         if action.get("action") == "finish":
             decision = validate_decision(action, query, allowed, known)
             oid = decision["predicted_id"]
-            if best_ranks.get(oid) in (2, 3, 4, 5) and oid not in inspected:
+            if (policy["category_inspection_required"]
+                    and best_ranks.get(oid) in (2, 3, 4, 5) and oid not in inspected):
                 gap = "The selected target is an alternative-only category match and has not been visibly inspected. Inspect it with plausible primary matches; distance alone is not category evidence."
-                if step < limit:
+                if step < tool_limit:
                     observation = {"tool": "finish_check", "missing": gap}
                     observations.append(observation)
                     trace["steps"].append(
@@ -315,7 +354,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                     continue
                 decision.setdefault("unresolved", []).append(gap)
             break
-        if step == limit:
+        if step == tool_limit:
             raise ValueError("ReAct must finish when the evidence budget is exhausted")
         focus = action.get("focus_ids")
         try:

@@ -21,3 +21,9 @@ dist/
 .coverage
 outputs/
 ._*
+
+# Local experiment snapshots, paper builds, and temporary research assets
+/experiments/
+/output/
+/tmp/
+/docs/figures/

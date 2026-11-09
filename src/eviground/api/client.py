@@ -677,6 +677,7 @@ def _chat_once(
         "api_slot_wait_s": slot_wait_s,
         "api_concurrency": api_concurrency(),
         "model": model,
+        "response_model": data.get("model"),
         "provider": api_provider(),
         "request_summary": summary,
         **(

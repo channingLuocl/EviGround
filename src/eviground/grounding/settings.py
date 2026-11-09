@@ -3,11 +3,28 @@
 import os
 
 
+def evidence_policy():
+    """Explicit tool availability for controlled ablations; defaults are unchanged."""
+    enabled = {}
+    for name, variable in (
+        ("inspect", "EVIGROUND_INSPECT_ENABLED"),
+        ("measure", "EVIGROUND_MEASURE_ENABLED"),
+        ("category_inspection_required", "EVIGROUND_CATEGORY_INSPECTION_REQUIRED"),
+    ):
+        raw = os.getenv(variable, "1").strip()
+        if raw not in ("0", "1"):
+            raise ValueError(f"{variable} must be 0 or 1")
+        enabled[name] = raw == "1"
+    enabled["category_inspection_required"] &= enabled["inspect"]
+    return enabled
+
+
 def settings():
     return {
         "version": "eviground-0.1.0",
         "extra_api_attempts_limit": 1,
         "context_text_upper_bound": int(os.getenv("EVIGROUND_CONTEXT_LIMIT", "131072")),
+        "evidence_tools": evidence_policy(),
     }
 
 

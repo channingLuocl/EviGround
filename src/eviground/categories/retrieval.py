@@ -11,6 +11,10 @@ ALIASES = {
     "screens": "tv",
     "monitor": "tv",
     "monitors": "tv",
+    "computer screen": "tv",
+    "computer screens": "tv",
+    "computer monitor": "tv",
+    "computer monitors": "tv",
     "trashcan": "trash can",
     "trashcans": "trash can",
     "trash cans": "trash can",
@@ -35,6 +39,8 @@ ALIASES = {
     "blackboards": "blackboard",
     "countertop": "counter",
     "countertops": "counter",
+    "knapsack": "backpack",
+    "knapsacks": "backpack",
 }
 
 

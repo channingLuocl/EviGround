@@ -68,33 +68,29 @@ def run_case(row, scene_root, output, top_k, review_limit):
                 )
             if process.returncode:
                 raise ValueError(f"Worker failed ({process.returncode}); see {log}")
-        result = evaluate(row, prediction, log, table)
-        data = json.loads(prediction.read_text())
-        result["category_candidate_recall"] = (
-            row["target_id"] in data["category_target_ids"]
-        )
-        result["category_candidate_count"] = len(data["category_target_ids"])
-        target_binding = next(
-            (
-                b
-                for b in data.get("category_bindings", {}).get("targets", [])
-                if b["bbox_id"] == row["target_id"]
-            ),
-            {},
-        )
-        ranks = [h["rank"] for h in target_binding.get("matched_hypotheses", [])]
-        result["target_category_best_rank"] = min(ranks) if ranks else None
         boxes = {
             o["bbox_id"]: o["bbox_3d"]
-            for o in json.loads(
-                (scene_root / row["scene"] / "objects_gt.json").read_text()
-            )
+            for o in json.loads((scene_root / row["scene"] / "objects_gt.json").read_text())
         }
-        result["iou_3d"] = (
-            bbox_iou_3d(data["bbox_3d"], boxes[row["target_id"]])
-            if data.get("bbox_3d")
-            else 0.0
-        )
+        result = evaluate(row, prediction, log, table, gt_box=boxes[row["target_id"]])
+        data = json.loads(prediction.read_text())
+        if row.get("dataset") == "scanrefer":
+            proposals = {
+                o["bbox_id"]: o["bbox_3d"] for o in json.loads(
+                    (scene_root / row["scene"] / "scene_instances.json").read_text()
+                )
+            }
+            matching_ids = {
+                oid for oid in data["category_target_ids"]
+                if bbox_iou_3d(proposals[oid], boxes[row["target_id"]]) >= 0.25
+            }
+        else:
+            matching_ids = {row["target_id"]} & set(data["category_target_ids"])
+        result["category_candidate_recall"] = bool(matching_ids)
+        result["category_candidate_count"] = len(data["category_target_ids"])
+        ranks = [h["rank"] for binding in data.get("category_bindings", {}).get("targets", [])
+                 if binding["bbox_id"] in matching_ids for h in binding.get("matched_hypotheses", [])]
+        result["target_category_best_rank"] = min(ranks) if ranks else None
     except (ValueError, OSError, KeyError) as exc:
         from eviground.api.client import _redact
 
@@ -128,6 +124,8 @@ def main():
     )
     parser.add_argument("--predictions", type=Path, required="--worker" not in sys.argv)
     parser.add_argument("--scene-root", type=Path, default=ROOT / "local_outputs")
+    parser.add_argument("--proposal-policy", type=Path,
+                        help="Optional predicted-mask duplicate suppression policy; no GT input")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--category-top-k", type=int, choices=(1, 5), default=5)
     parser.add_argument("--limit", type=int)
@@ -178,6 +176,7 @@ def main():
         output / "category_inputs",
         scenes,
         args.category_top_k,
+        proposal_policy=args.proposal_policy,
     )
     from eviground.api.client import api_config_summary
     from eviground.query.query_syntax import syntax_settings
@@ -236,7 +235,8 @@ def main():
             flush=True,
         )
         return
-    progress = BatchProgress(len(rows), initial_results=results)
+    progress = BatchProgress(len(rows), initial_results=results,
+                             metric_label="IoU@0.25" if selection.get("dataset") == "scanrefer" else "True")
     last_report = time.monotonic()
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         jobs = [

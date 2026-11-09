@@ -88,10 +88,14 @@ def load_export(source):
     return (rows, sources, marker["files"])
 
 
-def prepare_tables(source, scene_root, output, scenes, top_k):
+def prepare_tables(source, scene_root, output, scenes, top_k, proposal_policy=None):
     rows, sources, hashes = load_export(source)
     gate = {"top_k": top_k, "score_type": SCORE_TYPE}
     files, counts = ({}, [])
+    policy = json.loads(Path(proposal_policy).read_text()) if proposal_policy is not None else None
+    if policy is not None and (policy.get("version") != "mask-nms-proposal-policy-v1"
+                              or sha256(scene_root / "protocol.json") != policy["source_protocol_sha256"]):
+        raise ValueError("Proposal policy belongs to a different scene frontend")
     for scene in sorted(scenes):
         if Path(scene).name != scene or scene in (".", "..") or scene not in sources:
             raise ValueError(f"Unknown classifier scene: {scene}")
@@ -101,6 +105,22 @@ def prepare_tables(source, scene_root, output, scenes, top_k):
         with np.load(cloud_path, allow_pickle=False) as cloud:
             known = set(map(int, np.unique(cloud["ids"])))
         objects = []
+        selection = policy["scenes"][scene] if policy is not None else None
+        if selection is not None:
+            if selection["cloud_sha256"] != sources[scene] or selection["instances_sha256"] != sha256(scene_root / scene / "scene_instances.json"):
+                raise ValueError(f"Proposal policy geometry changed: {scene}")
+            classified = {r["bbox_id"] for r in rows if r["scene"] == scene}
+            if not selection["kept_ids"] or not set(selection["kept_ids"]) <= classified:
+                raise ValueError(f"Proposal policy has unknown or empty representatives: {scene}")
+            if "proposal_scores" in selection:
+                if sha256(scene_root / scene / "masks.npz") != selection["masks_sha256"]:
+                    raise ValueError(f"Proposal detection scores belong to changed masks: {scene}")
+                scores = selection["proposal_scores"]
+                if set(scores) != {str(i) for i in classified} or any(
+                    isinstance(s, bool) or not isinstance(s, (float, int)) or not 0 <= s <= 1
+                    for s in scores.values()
+                ):
+                    raise ValueError(f"Invalid proposal detection scores: {scene}")
         for row in sorted(
             (r for r in rows if r["scene"] == scene), key=lambda r: r["bbox_id"]
         ):
@@ -108,6 +128,8 @@ def prepare_tables(source, scene_root, output, scenes, top_k):
                 raise ValueError(
                     f"Unknown classified instance: {scene}/{row['bbox_id']}"
                 )
+            if selection is not None and row["bbox_id"] not in selection["kept_ids"]:
+                continue
             retained, audit = gate_categories(row["top5"], **gate)
             objects.append(
                 {
@@ -122,6 +144,8 @@ def prepare_tables(source, scene_root, output, scenes, top_k):
                     ),
                 }
             )
+            if selection is not None and "proposal_scores" in selection:
+                objects[-1]["proposal_detection_score"] = selection["proposal_scores"][str(row["bbox_id"])]
             counts.append(len(retained))
         value = {
             "version": VERSION,
@@ -132,6 +156,9 @@ def prepare_tables(source, scene_root, output, scenes, top_k):
             "cloud_sha256": sources[scene],
             "objects": objects,
         }
+        if selection is not None:
+            value["proposal_policy_sha256"] = sha256(proposal_policy)
+            value["suppressed_instance_ids"] = sorted(classified - set(selection["kept_ids"]))
         path = output / scene / f"objects_top{top_k}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists() and json.loads(path.read_text()) != value:
@@ -150,4 +177,5 @@ def prepare_tables(source, scene_root, output, scenes, top_k):
         "retained_count_histogram": {str(i): counts.count(i) for i in range(6)},
         "mean_retained": float(np.mean(counts)),
         "instances": len(counts),
+        **({"proposal_policy_sha256": sha256(proposal_policy)} if policy is not None else {}),
     }

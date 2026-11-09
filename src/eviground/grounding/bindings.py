@@ -11,7 +11,7 @@ from eviground.categories.retrieval import (
 def target_head_hint(query, categories):
     """Recognize only a leading category noun, not subjects in later clauses."""
     match = re.match(
-        "^\\s*(?:please\\s+)?(?:(?:select|choose|pick|find|locate)\\s+)?(?:the|a|an|this|that)\\s+(.+?)\\s+(?:in|on|with|under|above|below|beneath|at|that|which)\\b",
+        "^\\s*(?:please\\s+)?(?:(?:select|choose|pick|find|locate)\\s+)?(?:there\\s+(?:is|are)\\s+)?(?:the|a|an|this|that)\\s+(.+?)\\s+(?:in|on|with|under|above|below|beneath|at|that|which|is|are|has|have|contains|contain)\\b",
         query,
         re.I,
     )
@@ -19,7 +19,14 @@ def target_head_hint(query, categories):
         ",\\s*(?:the|a|an|this|that)\\s+", query[match.end() :], re.I
     ):
         return None
-    name = retrieval_category(match.group(1))
+    if re.search(
+        r"\b(?:this|that)\s+(?:is\s+)?(?:the|a|an)\b|\b(?:select|choose|pick|find|locate)\b",
+        query[match.end():], re.I,
+    ):
+        return None
+    phrase = re.sub(r"^(?:set|group|pair|row)\s+of\s+", "", match.group(1), flags=re.I)
+    phrase = re.sub(r"\b(?:bottom|top|upper|lower)\b", "", phrase, flags=re.I)
+    name = retrieval_category(phrase)
     if not name or name not in {retrieval_category(c) for c in categories}:
         return None
     return {"category": name, "source_quote": match.group(1)}

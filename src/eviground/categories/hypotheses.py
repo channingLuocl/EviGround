@@ -97,6 +97,11 @@ def load_category_objects(path):
             }
         )
         result[-1]["category_score_type"] = score_type
+        if "proposal_detection_score" in item:
+            score = item["proposal_detection_score"]
+            if isinstance(score, bool) or not isinstance(score, (float, int)) or not 0 <= score <= 1:
+                raise ValueError("Invalid proposal detection score")
+            result[-1]["proposal_detection_score"] = float(score)
         expected_status = "single_hypothesis" if len(retained) == 1 else "uncertain"
         if item["category_status"] != expected_status:
             raise ValueError("Category status disagrees with retained hypotheses")
@@ -107,7 +112,8 @@ def load_category_objects(path):
     return result
 
 
-def prepare_tables(source, scene_root, output, scenes, top_k=5):
+def prepare_tables(source, scene_root, output, scenes, top_k=5, proposal_policy=None):
     from eviground.categories.export import prepare_tables as prepare_export
 
-    return prepare_export(Path(source), Path(scene_root), Path(output), scenes, top_k)
+    return prepare_export(Path(source), Path(scene_root), Path(output), scenes, top_k,
+                          proposal_policy=proposal_policy)

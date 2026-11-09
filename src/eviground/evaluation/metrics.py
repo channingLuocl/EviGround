@@ -20,4 +20,4 @@ def bbox_iou_3d(first: Sequence[float], second: Sequence[float]) -> float:
     volume_a = first[3] * first[4] * first[5]
     volume_b = second[3] * second[4] * second[5]
     union = volume_a + volume_b - intersection
-    return intersection / union if union > 0 else 0.0
+    return min(1.0, max(0.0, intersection / union)) if union > 0 else 0.0

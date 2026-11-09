@@ -122,6 +122,54 @@ class APITests(unittest.TestCase):
                 client.chat(self.messages, json_mode=True)
         self.assertEqual(post.call_count, 1)
 
+    def test_http_500_recovers_once_without_restarting_the_sample(self):
+        failure = SimpleNamespace(ok=False, status_code=500, headers={}, text="internal error")
+        with patch(
+            "eviground.api.client.requests.post",
+            side_effect=[failure, self.transport('{"choice":"chair"}')],
+        ) as post:
+            result = client.chat(self.messages, json_mode=True)
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(json.loads(result["_content"]), {"choice": "chair"})
+        self.assertTrue(sample_recovery.get()["used"])
+        self.assertEqual(len(result["_request"]["api_attempts"]), 2)
+
+    def test_persistent_http_500_stops_after_one_recovery_attempt(self):
+        failure = SimpleNamespace(ok=False, status_code=500, headers={}, text="internal error")
+        with patch("eviground.api.client.requests.post", return_value=failure) as post:
+            with self.assertRaises(client.APIError):
+                client.chat(self.messages, json_mode=True)
+        self.assertEqual(post.call_count, 2)
+
+    def test_provider_aborted_json_generation_recovers_the_same_request_once(self):
+        body = json.dumps({"error": {"code": "invalid_parameter_error", "message":
+            "Model output became abnormal while generating a JSON response for response_format. The generation was aborted because the partial output may be incomplete or invalid JSON."}})
+        failure = SimpleNamespace(ok=False, status_code=400, headers={}, text=body)
+        with patch("eviground.api.client.requests.post",
+                   side_effect=[failure, self.transport('{"choice":"chair"}')]) as post:
+            result = client.chat(self.messages, json_mode=True, response_schema=self.schema)
+        self.assertEqual(json.loads(result["_content"]), {"choice": "chair"})
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(post.call_args_list[0].kwargs["json"], post.call_args_list[1].kwargs["json"])
+        self.assertTrue(sample_recovery.get()["used"])
+
+    def test_provider_aborted_json_generation_does_not_retry_indefinitely(self):
+        body = json.dumps({"error": {"code": "invalid_parameter_error", "message":
+            "Model output became abnormal while generating a JSON response for response_format."}})
+        failure = SimpleNamespace(ok=False, status_code=400, headers={}, text=body)
+        with patch("eviground.api.client.requests.post", return_value=failure) as post:
+            with self.assertRaises(client.APIError):
+                client.chat(self.messages, json_mode=True, response_schema=self.schema)
+        self.assertEqual(post.call_count, 2)
+
+    def test_other_http_400_parameter_errors_are_not_retried(self):
+        failure = SimpleNamespace(ok=False, status_code=400, headers={},
+            text=json.dumps({"error": {"code": "invalid_parameter_error", "message": "Input token limit exceeded"}}))
+        with patch("eviground.api.client.requests.post", return_value=failure) as post:
+            with self.assertRaises(client.APIError):
+                client.chat(self.messages, json_mode=True, response_schema=self.schema)
+        self.assertEqual(post.call_count, 1)
+
     def test_completed_request_replay_is_confined_to_explicit_same_sample_recovery(
         self,
     ):

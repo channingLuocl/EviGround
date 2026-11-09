@@ -2,9 +2,10 @@
 
 import json
 from eviground.evaluation.run_storage import ensure_run_writable, write_json
+from eviground.evaluation.metrics import bbox_iou_3d
 
 
-def evaluate(row, prediction, log, top_k):
+def evaluate(row, prediction, log, top_k, gt_box=None):
     data = json.loads(prediction.read_text())
     if (
         data["query"] != row["query"]
@@ -14,11 +15,18 @@ def evaluate(row, prediction, log, top_k):
     ):
         raise ValueError(f"Prediction provenance mismatch: {prediction}")
     trace = data.get("active_trace", {})
+    scanrefer = row.get("dataset") == "scanrefer"
+    if scanrefer and gt_box is None:
+        raise ValueError("ScanRefer evaluation requires the independent target GT box")
+    iou = bbox_iou_3d(data["bbox_3d"], gt_box) if data.get("bbox_3d") and gt_box is not None else 0.0
+    answered = data.get("predicted_id") is not None
     return {
         **row,
         "category_top_k": top_k,
         "predicted_id": data.get("predicted_id"),
-        "correct": data.get("predicted_id") == row["target_id"],
+        "correct": answered and iou >= 0.25 if scanrefer else data.get("predicted_id") == row["target_id"],
+        "evaluation_metric": "iou25" if scanrefer else "instance_id",
+        "iou_3d": iou,
         "decision_status": data.get("decision_status"),
         "api_calls": data.get("api_calls", 0),
         "api_attempts": data.get("api_attempts", 0),
@@ -53,12 +61,14 @@ def summarize(results, total=None):
         ),
         "actual_api_attempts": sum((r.get("api_attempts", 0) for r in results)),
         "acc25": (
-            sum((r.get("iou_3d", 0) >= 0.25 for r in results)) / total
+            sum((not r.get("error") and r.get("predicted_id") is not None
+                 and r.get("iou_3d", 0) >= 0.25 for r in results)) / total
             if total
             else None
         ),
         "acc50": (
-            sum((r.get("iou_3d", 0) >= 0.5 for r in results)) / total if total else None
+            sum((not r.get("error") and r.get("predicted_id") is not None
+                 and r.get("iou_3d", 0) >= 0.5 for r in results)) / total if total else None
         ),
         "evaluation_policy": "single_pass",
     }
