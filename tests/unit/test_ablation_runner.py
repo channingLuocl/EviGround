@@ -23,6 +23,32 @@ def load_runner(environment):
 
 
 class AblationRunnerTests(unittest.TestCase):
+    def test_key_input_skips_empty_lines_and_preserves_slot_assignment(self):
+        runner = load_runner({})
+        with redirect_stdout(io.StringIO()):
+            keys = runner.read_keys(io.StringIO('\n  \n[" unit-test-key "]\n'))
+        self.assertEqual(keys, ["unit-test-key"] * 2)
+        self.assertEqual(runner.read_keys(io.StringIO('["first-test-key", "second-test-key"]\n')),
+                         ["first-test-key", "second-test-key"])
+
+    def test_key_input_reports_closed_stdin_without_json_traceback(self):
+        runner = load_runner({})
+        for contents in ("", "\n  \n"):
+            with self.subTest(contents=contents), redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(ValueError, "No API key received"):
+                    runner.read_keys(io.StringIO(contents))
+
+    def test_invalid_key_input_never_exposes_the_submitted_value(self):
+        runner = load_runner({})
+        private = "private-test-credential"
+        for contents in (private, json.dumps(private), json.dumps({"key": private}),
+                         "[]", '["  "]', '[123]', '["a","b","c"]'):
+            with self.subTest(contents=contents):
+                with self.assertRaises(ValueError) as caught:
+                    runner.read_keys(io.StringIO(contents + "\n"))
+                self.assertNotIn(private, str(caught.exception))
+                self.assertIn("JSON array", str(caught.exception))
+
     def test_defaults_do_not_depend_on_a_private_endpoint_or_home_directory(self):
         runner = load_runner({})
         self.assertEqual(runner.BASE_URL, "https://api.openai.com/v1")

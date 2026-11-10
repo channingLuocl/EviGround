@@ -248,6 +248,24 @@ def check_pilots(variant_id, documents):
             raise ValueError(f"DAG technical pilot failed for {variant_id}; inspect diagnostics.json before final evaluation")
 
 
+def read_keys(stream):
+    for line in stream:
+        if line.strip():
+            break
+        print('Blank line ignored. Paste a JSON array such as ["YOUR_API_KEY"] and press Enter.', flush=True)
+    else:
+        raise ValueError('No API key received before stdin closed; supply a JSON array such as ["YOUR_API_KEY"]')
+    try:
+        keys = json.loads(line)
+    except json.JSONDecodeError:
+        raise ValueError('API key input must be a one-line JSON array such as ["YOUR_API_KEY"]') from None
+    if (not isinstance(keys, list) or len(keys) not in (1, 2)
+            or any(not isinstance(k, str) or not k.strip() for k in keys)):
+        raise ValueError('Supply one or two nonempty API keys in a JSON array such as ["YOUR_API_KEY"]')
+    keys = [k.strip() for k in keys]
+    return keys * 2 if len(keys) == 1 else keys
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workers-per-key", type=int, default=3)
@@ -268,12 +286,7 @@ def main():
     STUDY.mkdir(parents=True, exist_ok=True)
     manifests = freeze_inputs(args.workers_per_key)
     print("Waiting for a JSON array of one or two API keys on stdin (not persisted).", flush=True)
-    keys = json.loads(sys.stdin.readline())
-    if (not isinstance(keys, list) or len(keys) not in (1, 2)
-            or any(not isinstance(k, str) or not k for k in keys)):
-        raise ValueError("Supply one key shared by both shards, or two API keys")
-    if len(keys) == 1:
-        keys = [keys[0], keys[0]]
+    keys = read_keys(sys.stdin)
     if args.detach:
         command = [sys.executable, "-u", *[arg for arg in sys.argv if arg != "--detach"]]
         with (STUDY / "runner.log").open("a") as log:
