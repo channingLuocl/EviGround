@@ -18,6 +18,9 @@ MODEL = os.getenv("EVIGROUND_ABLATION_MODEL", "gpt-6.1-sol")
 BASE_URL = os.getenv("EVIGROUND_ABLATION_BASE_URL", os.getenv("EVIGROUND_BASE_URL", "https://api.openai.com/v1"))
 SCENES = Path(os.getenv("EVIGROUND_ABLATION_SCENES", ROOT / "local_outputs"))
 EXPORT = Path(os.getenv("EVIGROUND_ABLATION_PREDICTIONS", ROOT / "local_outputs/classifier_predictions"))
+DAG_MONITOR = os.getenv("EVIGROUND_ABLATION_DAG_MONITOR_ENABLED", "0").strip()
+if DAG_MONITOR not in ("0", "1"):
+    raise ValueError("EVIGROUND_ABLATION_DAG_MONITOR_ENABLED must be 0 or 1")
 VARIANTS = {
     "E0": {"name": "Full EviGround", "inspect": 1, "measure": 1, "top_k": 5, "guard": 1},
     "E1": {"name": "Without supplementary inspection", "inspect": 0, "measure": 1, "top_k": 5, "guard": 0},
@@ -57,6 +60,7 @@ def environment(key, variant, workers):
                 "EVIGROUND_INSPECT_ENABLED": str(variant["inspect"]),
                 "EVIGROUND_MEASURE_ENABLED": str(variant["measure"]),
                 "EVIGROUND_CATEGORY_INSPECTION_REQUIRED": str(variant["guard"])})
+    env["EVIGROUND_DAG_MONITOR_ENABLED"] = DAG_MONITOR
     env.update({k: "1" for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
                                "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")})
     return env
@@ -96,6 +100,8 @@ def freeze_inputs(workers):
         "dataset": "nr3d", "model": MODEL,
         "base_url": BASE_URL, "queries": 1500,
         "conditions": VARIANTS, "nonterminal_evidence_budget": 5,
+        "dag_monitor_enabled": DAG_MONITOR == "1",
+        "controller": "dynamic_dag_monitor" if DAG_MONITOR == "1" else "react",
         "initial_evidence": "same overview, top-down view and basic AABB geometry in all conditions",
         "subset_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
         "sampling": subset["sampling"], "sharding": "alternating fixed csv_row order; same key slot across conditions",

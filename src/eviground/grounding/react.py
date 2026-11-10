@@ -17,7 +17,7 @@ from eviground.api.response_schemas import (
     REASON,
     schema_kwargs,
 )
-from eviground.grounding.settings import evidence_policy, settings
+from eviground.grounding.settings import dag_monitor_enabled, evidence_policy, settings
 
 INSTRUCTIONS = "Locate the object described by the original utterance. You control evidence acquisition.\nRead the scene, compare the plausible target instances, and request the next observation that can\ndistinguish them. Then reconsider the alternatives using the returned evidence. There is no fixed\nsequence of tools. Every request and final choice must be grounded in the original description.\n\nActions:\n- inspect: render 1-12 focus_ids in panels of at most 6, including targets AND references. Use isolated to compare\n  category, shape, texture or color without contamination. Use scene to see their physical context.\n  Choose azimuth_deg in [0,360) and elevation_deg in [10,75] to expose the unresolved property.\n  Null camera angles use the tool's documented defaults: azimuth=315, elevation=30 degrees.\n  Isolated tiles have separate cameras and scales; their placement/size is not a spatial relation.\n- measure: supply focus_ids for the objects to compare. Returns measured dimensions, pair distances,\n  overlap and sorted size orders. For observer-relative order supply frame: origin_ids=[] means room\n  center, otherwise the mean center of those instances; facing_ids defines the group being faced.\n  For 'from A facing B', origin_ids is A and facing_ids is B. For 'room center facing B', use\n  origin_ids=[] and facing_ids=B. An object being faced is NOT the observer origin. For 'looking\n  at both targets', use the visually bound target group as facing_ids. Never use identical origin\n  and facing groups. Without a directional clause use frame=null; distances need no observer frame.\n  Both groups must follow the description and visible layout. Use frame=null for other measurements.\n  The returned selected_observer_frame is conditional on YOUR chosen groups. Bind the described\n  references and comparison group first. Include all plausible comparison members, not just a guess.\n  Measurements are observations, not proof that a reference/category interpretation is correct.\n- finish: choose one allowed_target_id, or null if essential evidence is unavailable. Give compact\n  evidence, name the actual reference IDs, and state unresolved assumptions. Return one final choice.\n\nUse inspect when category alternatives, a reference's color, an object's visible part or facing\ndirection are unresolved. Use measure when distance, support, height, order or grouping separates\nthe plausible objects. Inspect references as needed; a convenient reference ID is not a bound noun.\nPrefer a discriminating observation to repeating an unchanged view or merely confirming a guess.\nAll clauses must refer to a compatible assignment of target and reference instances. Keep negation,\nthe exact comparison group, and noun attachment. The original utterance outranks the parser summary.\nClassifier ranks are fallible priors. A rank-2 category can win with visible support; rank-1 gets\npreference only if the remaining evidence is comparable. Never use image left as speaker left.\ngap_from_top1 is the difference between uncalibrated classifier scores, NOT a probability. Within\none instance, a small gap denotes a closer classifier alternative than a large gap. It does not\nestablish the category, and should not be compared using a probability cutoff.\nTop-5 recall expands the pool; it does not make all five names true. Before choosing an alternative-only\ntarget category, inspect that instance and plausible primary-category rivals. Geometry alone cannot\nturn a monitor stand into a monitor, or a toilet into a stool. A finish without that inspection is\ndeferred while a tool call remains. Check reference categories and their qualifiers independently;\ndo not select whichever door, desk or shelf happens to make a convenient distance minimum.\nFor a nested relation such as an object ON a desk, first bind the object to its actual support desk\nusing overlap and vertical surface gap; only then compare targets relative to that SAME desk.\nPreserve every clause: color, visible part, group, negation and relative order cannot be replaced by\nnearest, largest or highest. If one clause distinguishes the current best two candidates, acquire\nevidence for that clause before finishing. State what distinguishes the winner from its best rival.\nWhen no observer is given, explicitly state any assumed frame; do not reverse numeric order to\nsupport a preferred ID. AABB dimensions alone do not identify the head or foot of a bed.\nAn unobserved attribute stays unknown. Return the best supported target despite minor uncertainty,\nbut do not invent appearance, references or evidence. Unknown does not eliminate an alternative.\n\nKeep reason within 60 words, evidence within 4 entries, and each observation within 35 words.\nEvery evidence source_quote must be the COMPLETE original description verbatim. For inspect or\nmeasure, use predicted_id=null and evidence=[]. For inspect and finish use frame=null. For finish use\nfocus_ids=[], context=null, azimuth_deg=null and elevation_deg=null. Return a single top-level JSON\nOBJECT with the schema keys, never an array containing an object.\n"
 
@@ -215,6 +215,14 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             "unresolved": array(TEXT),
         }
     )
+    monitor = None
+    if dag_monitor_enabled():
+        from eviground.grounding.dag_monitor import DagMonitor, INSTRUCTIONS as MONITOR_INSTRUCTIONS
+
+        monitor = DagMonitor(query, parsed, known, allowed, available)
+        schema["properties"]["monitor"] = monitor.schema()
+        schema["required"].append("monitor")
+        instructions += MONITOR_INSTRUCTIONS
     overview = scene_views(parsed, objects, candidates, xyz, rgb, ids, out)
     views = [overview[0], overview[-1]]
     basic = precision_evidence(query, parsed, objects, candidates)["objects"]
@@ -278,6 +286,9 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         react_available_actions=available,
         react_evidence_policy=policy,
     )
+    if monitor is not None:
+        trace.update(policy="model-revised task DAG with monitored dependencies and reversible exclusions",
+                     interface="multimodal_react_dag_monitor", dag_monitor_history=monitor.history)
     decision = None
     for step in range(tool_limit + 1):
         state = {
@@ -303,6 +314,8 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                 for view in views
             ],
         }
+        if monitor is not None:
+            state.update(monitor.context(observations))
         action_schema = json.loads(json.dumps(schema))
         if step == tool_limit:
             action_schema["properties"]["action"] = enum("finish")
@@ -312,6 +325,8 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             "step": step,
             "images": [v["image"] for v in views],
         }
+        if monitor is not None:
+            call["role"] = "multimodal_dag_monitor_and_executor"
         calls.append(call)
         response = chat(
             [
@@ -324,7 +339,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                     ],
                 },
             ],
-            max_tokens=1600,
+            max_tokens=4000 if monitor is not None else 1600,
             json_mode=True,
             **schema_kwargs("react_action", action_schema),
         )
@@ -339,6 +354,22 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         actions.append(action)
         if action.get("action") not in available:
             raise ValueError("ReAct returned an unavailable action")
+        if monitor is not None:
+            try:
+                if action["action"] == "finish":
+                    validate_decision(action, query, allowed, known)
+                event = monitor.update(action.get("monitor"), action, observations)
+                trace["dag_monitor_current_node_id"] = event["current_node_id"]
+            except ValueError as exc:
+                observation = {"tool": "monitor_check", "error": str(exc),
+                               "no_evidence_acquired": True}
+                observations.append(observation)
+                trace["steps"].append({"action": action, "observation": observation})
+                if step == tool_limit:
+                    decision = {"predicted_id": None, "reason": "DAG verification did not pass before the decision budget ended",
+                                "evidence": [], "unresolved": [str(exc)]}
+                    break
+                continue
         if action.get("action") == "finish":
             decision = validate_decision(action, query, allowed, known)
             oid = decision["predicted_id"]
@@ -353,6 +384,8 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                     )
                     continue
                 decision.setdefault("unresolved", []).append(gap)
+                if monitor is not None:
+                    decision["predicted_id"] = None
             break
         if step == tool_limit:
             raise ValueError("ReAct must finish when the evidence budget is exhausted")
@@ -438,6 +471,9 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                 "error": str(exc),
                 "no_evidence_acquired": True,
             }
+        if monitor is not None:
+            observation["evidence_id"] = f"observation_{step + 1}"
+            observation["monitor_node_id"] = monitor.plan["current_node_id"]
         observations.append(observation)
         trace["steps"].append({"action": action, "observation": observation})
     oid = decision["predicted_id"]
@@ -451,6 +487,11 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             "missing": decision.get("unresolved", []),
         },
     )
+    if monitor is not None:
+        trace.update(stop_reason="dag_monitor_finish" if oid is not None else "dag_monitor_abstained",
+                     dag_monitor_final_plan=monitor.plan,
+                     dag_monitor_active_target_ids=monitor.active_ids(),
+                     final_candidate_ids=monitor.active_ids())
     trace["steps"].append({"action": "finish", "decision": decision})
     trace["internal_usage"]["render"] += len(overview)
     trace["internal_usage"]["visual_check"] += len(actions)
@@ -459,7 +500,8 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         "predicted_id": oid,
         "bbox_3d": selected["bbox_3d"] if selected else None,
         "implementation_version": settings()["version"],
-        "prediction_source": ("react_tentative" if oid is not None else "abstained"),
+        "prediction_source": (("dag_monitor_tentative" if monitor is not None else "react_tentative")
+                              if oid is not None else "abstained"),
         "decision_status": "tentative" if oid is not None else "missing",
         "images": [v["image"] for v in views],
         "response": call.get("response", ""),

@@ -41,6 +41,70 @@ PYTHON_DOTENV_DISABLED=1 PYTHONPATH=src \
 
 完整运行后，用 `python scripts/summarize_nr3d_ablation.py --help` 查看审计汇总参数。`summarize_mixed_nr3d_ablation.py` 仅用于如实记录不同条件使用不同模型的历史比较；跨模型差异不能单独解释为模块贡献。错误、弃答和缺失均不能从固定样本分母中剔除。
 
+## 动态 DAG Monitor 与原 ReAct 对比
+
+原 ReAct 仍为默认。直接调用推理入口时，用 `EVIGROUND_DAG_MONITOR_ENABLED=1`
+开启；使用本页消融调度器时，必须设置
+`EVIGROUND_ABLATION_DAG_MONITOR_ENABLED=1`，由调度器显式传给冻结源码的 worker。
+两个开关只接受 `0`、`1`，设置会进入运行身份及新实验协议。
+
+Monitor 和执行器由同一次多模态模型调用共同完成，没有另训练一个模型，也不额外
+增加一轮独立 critic 调用。每轮除原动作外，模型输出完整任务 DAG、当前节点、
+要重开的旧节点及修订理由。程序校验无环依赖、语言条件覆盖、已有证据引用、
+当前任务是否就绪以及动作是否属于该任务。
+
+- 节点可表达参照物绑定、属性、空间关系、候选组比较和最终核验，支持并行分支。
+- 回退或修改已完成节点的语义/绑定时，该节点及受影响后继自动失效；旧结论、
+  证据关联和排除记录清空，原始观察继续保留，相关目标自动恢复比较资格。
+- 排除只改变目标资格，不删除用于判断“中间”等关系的物理比较成员。
+- 选择目标须位于最终核验节点、全部任务完成、条件覆盖且活动目标唯一，并通过原有
+  类别观察检查；有未决项则不能作为成功完成。预算内收到无效 DAG 会返回检查反馈，
+  耗尽后仍无法通过则输出 null，不强行制造唯一候选。
+- 默认仍为至多 5 个非终止决策轮次，加最后一次结束决策。无效计划和提前结束被驳回
+  也消耗决策轮次，没有隐藏的无限重试。DAG 模式单次请求输出上限从 1,600 调至
+  4,000 tokens；现有 runner 统一使用的 thinking floor 仍是 8,192。
+  图和历史会增加上下文成本，对比时同时报告实际 tokens、时延、弃答和准确率。
+
+程序只能检查结构和证据关联，不能保证视觉结论或语义解释正确。本实现没有新增
+“between/on/middle”确定性几何判定器，也没有把分类分数当概率设置动态阈值。
+本轮要验证的是整体计划、阶段状态及依赖回退机制。
+
+先只跑同一子集的 E0，无需重跑 E1–E5。沿用原消融的场景、预测分类、模型与 API
+设置，但使用**全新的实验目录**；不要复用或改写旧 source 快照。已有冻结子集时
+原样复制；如果只拿到了源码，可用前面的抽样命令和相同 seed 重建，并核对选中行。
+
+```bash
+# 在仓库根目录、已安装依赖的 Python 环境中执行。
+export EVIGROUND_ABLATION_STUDY="/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_v1"
+export EVIGROUND_ABLATION_SCENES="/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs"
+export EVIGROUND_ABLATION_DAG_MONITOR_ENABLED=1
+# 沿用原消融的分类预测导出、模型和 API 配置；勿指向按 query 保存的推理结果。
+: "${EVIGROUND_ABLATION_PREDICTIONS:?请设置为原消融使用的已验证分类导出目录或 ZIP}"
+mkdir -p "$EVIGROUND_ABLATION_STUDY"
+cp /Volumes/KESU/EviGround/experiments/ablation_20261104/nr3d_subset_1500.json \
+   "$EVIGROUND_ABLATION_STUDY/nr3d_subset_1500.json"
+
+PYTHON_DOTENV_DISABLED=1 PYTHONPATH=src \
+  python scripts/run_nr3d_ablation.py \
+  --start-condition E0 --end-condition E0 --workers-per-key 3
+```
+
+这里的场景、子集和新输出路径是本机已挂载的 KESU 路径，未搬移或覆盖旧数据。
+换机器运行时修改相应路径。外盘可用空间需覆盖新增渲染图与日志；不要将数据提交 Git。
+
+按原方式从标准输入提供 API key 数组；脚本先预检和运行两条子集外技术样本。
+若出现技术错误先查日志，不按准确率修改样本或重跑。E0 的汇总保存在
+`$EVIGROUND_ABLATION_STUDY/runs/E0/results.json`，每条
+`runs/E0/key_slot_*/q*/prediction.json` 的 `active_trace` 内有
+`dag_monitor_history`、`dag_monitor_current_node_id`、`dag_monitor_final_plan` 和
+`dag_monitor_active_target_ids`，可检查回退、失效节点及恢复的目标。
+原始请求、响应和 token 用量仍在同目录 `run.json`。
+
+若要在本次源码下重新跑原 ReAct 对照，改成另一个新目录
+`nr3d_react_baseline_v1`，设置 `EVIGROUND_ABLATION_DAG_MONITOR_ENABLED=0`，
+复制**同一份**冻结子集，再执行相同 E0 命令。保持模型、输入、工具开关和预算一致。
+本节只运行单条件 E0，不要对该目录使用要求 E0–E5 全部完成的六条件汇总器。
+
 ## 后续 ScanRefer 子集消融
 
 本轮整理没有启动新的 ScanRefer 模型调用。现有 `scripts/scanrefer.py` 可生成官方格式的验证清单并按 Unique / Multiple / Overall 汇总 Acc@0.25 与 Acc@0.5；主批处理 `eviground --manifest ...` 已支持 ScanRefer 的 IoU 评估。

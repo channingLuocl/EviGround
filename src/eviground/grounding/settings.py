@@ -3,6 +3,13 @@
 import os
 
 
+def dag_monitor_enabled():
+    raw = os.getenv("EVIGROUND_DAG_MONITOR_ENABLED", "0").strip()
+    if raw not in ("0", "1"):
+        raise ValueError("EVIGROUND_DAG_MONITOR_ENABLED must be 0 or 1")
+    return raw == "1"
+
+
 def evidence_policy():
     """Explicit tool availability for controlled ablations; defaults are unchanged."""
     enabled = {}
@@ -25,6 +32,7 @@ def settings():
         "extra_api_attempts_limit": 1,
         "context_text_upper_bound": int(os.getenv("EVIGROUND_CONTEXT_LIMIT", "131072")),
         "evidence_tools": evidence_policy(),
+        "dag_monitor_enabled": dag_monitor_enabled(),
     }
 
 

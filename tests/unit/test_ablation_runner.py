@@ -47,3 +47,13 @@ class AblationRunnerTests(unittest.TestCase):
     def test_shared_endpoint_is_used_when_ablation_override_is_absent(self):
         runner = load_runner({"EVIGROUND_BASE_URL": "https://shared.example/v1"})
         self.assertEqual(runner.BASE_URL, "https://shared.example/v1")
+
+    def test_monitor_switch_is_explicitly_forwarded_to_frozen_workers(self):
+        runner = load_runner({"EVIGROUND_ABLATION_DAG_MONITOR_ENABLED": "1"})
+        worker = runner.environment("unit-test-key", runner.VARIANTS["E0"], 2)
+        self.assertEqual(worker["EVIGROUND_DAG_MONITOR_ENABLED"], "1")
+        baseline = load_runner({})
+        self.assertEqual(baseline.environment("unit-test-key", baseline.VARIANTS["E0"], 2)
+                         ["EVIGROUND_DAG_MONITOR_ENABLED"], "0")
+        with self.assertRaisesRegex(ValueError, "must be 0 or 1"):
+            load_runner({"EVIGROUND_ABLATION_DAG_MONITOR_ENABLED": "true"})
