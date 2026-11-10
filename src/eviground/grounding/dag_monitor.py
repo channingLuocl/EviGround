@@ -26,7 +26,10 @@ force a reference chain when the utterance instead needs group comparison.
 The current_node_id is the stage being worked on. For a tool call it must be
 pending and all dependencies completed; the action must be allowed by that node.
 A completed node needs an explicit conclusion grounded in existing evidence IDs.
-For a tool action, include every focus_id in the current node's bound_object_ids.
+bound_object_ids records the node's current object bindings, not every object it
+may need to examine. Tool focus_ids may also include unbound alternatives and
+reference/comparison objects needed to resolve the current task. Examining an
+object does not automatically bind it or complete the task.
 Completed reasoning-only nodes may have allowed_actions=[]; pending nodes need
 an available action. This also permits initial-evidence-only tool ablations.
 initial denotes the supplied initial views/basic geometry, not future evidence.
@@ -36,7 +39,10 @@ Measurements are conditional on the chosen reference/group/frame, not proof of
 their interpretation. Unknown or unobserved does not mean false.
 
 Use excluded_target_ids ONLY for targets contradicted by this node's evidence;
-state the exclusion basis in its conclusion. Do not exclude an unexamined rival
+state the exclusion basis in its conclusion. The cited observation must include
+the excluded object; initial includes all supplied views/basic object geometry.
+Excluded rivals need not remain in bound_object_ids, which may hold the winner.
+Do not exclude an unexamined rival
 merely to obtain uniqueness. Exclusion affects target eligibility, never removal
 of a physical member from a comparison group. The original target pool is fixed.
 
@@ -59,7 +65,12 @@ and leave unresolved empty. Uniqueness alone is not sufficient. Existing categor
 inspection requirements still apply. If the decision budget ends without a valid
 unique supported target, finish with predicted_id=null and state what is missing;
 do not force exclusions. A null finish is abstention, not successful completion.
-Keep node conclusions and revision_reason concise; prefer small task graphs.
+Invalid plans receive correction feedback and use a separate bounded repair
+allowance, not an evidence-tool call. Correct the reported node/requirement IDs
+before repeating a rejected plan. remaining_tool_calls counts successful tools;
+remaining_plan_repairs bounds further correction attempts. Once no tools remain,
+return action=finish, including during a plan repair. Keep node conclusions and
+revision_reason concise; prefer small task graphs.
 """
 
 
@@ -116,6 +127,18 @@ class DagMonitor:
                               and o.get("tool") not in ("finish_check", "monitor_check")
                               and not o.get("error")}
 
+    def evidence_objects(self, observations):
+        """Object scope actually supplied by each usable observation."""
+        scopes = {"initial": self.known}
+        valid = self.evidence_ids(observations)
+        for observation in observations:
+            eid = observation.get("evidence_id")
+            if eid in valid:
+                scopes[eid] = set(observation.get("focus_ids", [])) | {
+                    row["id"] for row in observation.get("objects", [])
+                }
+        return scopes
+
     @staticmethod
     def descendants(nodes, roots):
         affected = set(roots)
@@ -143,6 +166,7 @@ class DagMonitor:
             raise ValueError("Monitor node IDs must be unique")
         requirements = {r["id"] for r in self.requirements}
         evidence = self.evidence_ids(observations)
+        evidence_objects = self.evidence_objects(observations)
         for n in nodes:
             if (not n["source_quotes"] or any(q.casefold() not in self.query.casefold()
                                               for q in n["source_quotes"])):
@@ -156,13 +180,17 @@ class DagMonitor:
             if any(i not in by_id for i in n["depends_on"]):
                 raise ValueError("Monitor dependency references an absent node")
             if not set(n["evidence_ids"]) <= evidence:
-                raise ValueError("Monitor cites absent, future or failed evidence")
+                raise ValueError(f"Task {n['id']} cites absent, future or failed evidence; "
+                                 f"use existing IDs {sorted(evidence)}")
             if n["status"] == "completed" and (not n["evidence_ids"] or not n["conclusion"].strip()):
                 raise ValueError("Completed tasks need existing evidence and a conclusion")
             if n["status"] != "completed" and n["excluded_target_ids"]:
                 raise ValueError("Pending tasks cannot exclude targets")
-            if not set(n["excluded_target_ids"]) <= set(n["bound_object_ids"]):
-                raise ValueError("Excluded targets must be examined by the excluding task")
+            observed = set().union(*(evidence_objects[eid] for eid in n["evidence_ids"]))
+            unsupported = set(n["excluded_target_ids"]) - observed
+            if unsupported:
+                raise ValueError(f"Task {n['id']} excludes {sorted(unsupported)} outside its cited evidence; "
+                                 "inspect/measure those objects or cite supporting initial evidence")
         # Kahn traversal checks acyclicity without depending on model array order.
         done = set()
         while len(done) < len(nodes):
@@ -185,8 +213,10 @@ class DagMonitor:
             ancestors = expanded
         if ancestors != set(by_id):
             raise ValueError("Final verification must depend on every planned task")
-        if {c for n in nodes for c in n["condition_ids"]} != requirements:
-            raise ValueError("Monitor DAG must cover all language requirements")
+        covered = {c for n in nodes for c in n["condition_ids"]}
+        if covered != requirements:
+            raise ValueError("Monitor DAG must cover all language requirements; "
+                             f"assign missing IDs {sorted(requirements - covered)} to the tasks that resolve them")
 
         old = {n["id"]: n for n in (self.plan or {}).get("nodes", [])}
         reopened = set(plan["reopen_node_ids"])
@@ -223,8 +253,6 @@ class DagMonitor:
             if current["status"] != "pending" or any(by_id[d]["status"] != "completed"
                                                       for d in current["depends_on"]):
                 raise ValueError("Current stage is not ready; resolve its prerequisites first")
-            if not set(action.get("focus_ids", [])) <= set(current["bound_object_ids"]):
-                raise ValueError("Tool focus IDs must belong to the current task")
         elif action.get("predicted_id") is not None:
             if (current is not final or any(n["status"] != "completed" for n in nodes)
                     or self.active_ids(plan) != [action["predicted_id"]]

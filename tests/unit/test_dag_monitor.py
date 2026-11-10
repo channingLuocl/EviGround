@@ -12,7 +12,7 @@ import numpy as np
 
 from eviground.grounding import react
 from eviground.grounding.dag_monitor import DagMonitor
-from eviground.grounding.settings import dag_monitor_enabled, settings
+from eviground.grounding.settings import dag_monitor_enabled, dag_repair_limit, settings
 from tests.helpers import parsed, response
 
 
@@ -161,11 +161,40 @@ class DagMonitorTests(unittest.TestCase):
         self.assertIn("new_compare", event["invalidated_node_ids"])
         self.assertEqual(event["active_target_ids"], [1, 2])
 
-    def test_tool_must_be_related_to_current_task(self):
+    def test_tool_can_examine_unbound_comparison_members(self):
         p = plan()
         p["nodes"][1]["bound_object_ids"] = [1, 2]
-        with self.assertRaisesRegex(ValueError, "focus IDs"):
-            self.monitor.update(p, action(), [])
+        event = self.monitor.update(p, action(), [])
+        self.assertEqual(event["current_node_id"], "compare")
+        self.assertEqual(self.monitor.plan["nodes"][1]["bound_object_ids"], [1, 2])
+
+    def test_exclusions_use_cited_observations_not_only_winner_bindings(self):
+        p = plan()
+        p["nodes"][1].update(status="completed", bound_object_ids=[1],
+                             evidence_ids=["observation_1"], conclusion="chair 2 is outside the group",
+                             excluded_target_ids=[2])
+        p["current_node_id"] = "verify"
+        observation = {"evidence_id": "observation_1", "tool": "measure", "focus_ids": [1, 2, 3]}
+        self.monitor.update(p, action("finish"), [observation])
+        self.assertEqual(self.monitor.active_ids(), [1])
+
+    def test_exclusions_cannot_cite_an_observation_of_other_objects(self):
+        p = plan()
+        p["nodes"][1].update(status="completed", evidence_ids=["observation_1"],
+                             conclusion="chair 2 is outside the group", excluded_target_ids=[2])
+        p["current_node_id"] = "verify"
+        observation = {"evidence_id": "observation_1", "tool": "measure", "focus_ids": [1, 3]}
+        with self.assertRaisesRegex(ValueError, "cited evidence"):
+            self.monitor.update(p, action("finish"), [observation])
+
+    def test_initial_evidence_can_rule_out_an_unbound_rival(self):
+        p = plan()
+        p["nodes"][1].update(status="completed", bound_object_ids=[1],
+                             evidence_ids=["initial"], conclusion="initial geometry rules out chair 2",
+                             excluded_target_ids=[2])
+        p["current_node_id"] = "verify"
+        self.monitor.update(p, action("finish"), [])
+        self.assertEqual(self.monitor.active_ids(), [1])
 
     def test_reordering_completed_bindings_does_not_reopen_a_stage(self):
         self.monitor.update(plan(), action(), [])
@@ -210,9 +239,22 @@ class DagMonitorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "must be 0 or 1"):
                 dag_monitor_enabled()
 
+    def test_repair_budget_is_bounded_and_enters_run_identity(self):
+        with patch.dict(os.environ, {"EVIGROUND_DAG_MONITOR_ENABLED": "1",
+                                     "EVIGROUND_DAG_REPAIR_LIMIT": "6"}):
+            self.assertEqual(dag_repair_limit(), 6)
+            original = settings()
+        with patch.dict(os.environ, {"EVIGROUND_DAG_MONITOR_ENABLED": "1",
+                                     "EVIGROUND_DAG_REPAIR_LIMIT": "3"}):
+            self.assertNotEqual(settings(), original)
+        for raw in ("-1", "abc", "1.5"):
+            with patch.dict(os.environ, {"EVIGROUND_DAG_REPAIR_LIMIT": raw}):
+                with self.assertRaisesRegex(ValueError, "nonnegative integer"):
+                    dag_repair_limit()
+
 
 class DagGroundingTests(unittest.TestCase):
-    def run_ground(self, responses, limit, alternative_category=False):
+    def run_ground(self, responses, limit, alternative_category=False, repairs=1):
         objects = [{"bbox_id": i, "target": "chair", "bbox_3d": [i, 0, .5, 1, 1, 1],
                     "category_hypotheses": [{"category": "chair", "rank": 1,
                                              "gap_from_top1": 0}]}
@@ -226,6 +268,7 @@ class DagGroundingTests(unittest.TestCase):
         trace = {"steps": [], "internal_usage": {"render": 0, "compute": 0, "visual_check": 0}}
         with (tempfile.TemporaryDirectory() as out,
               patch.dict(os.environ, {"EVIGROUND_DAG_MONITOR_ENABLED": "1",
+                                      "EVIGROUND_DAG_REPAIR_LIMIT": str(repairs),
                                       "EVIGROUND_INSPECT_ENABLED": "1", "EVIGROUND_MEASURE_ENABLED": "1",
                                       "EVIGROUND_CATEGORY_INSPECTION_REQUIRED": "1"}),
               patch("eviground.rendering.overview.scene_views", return_value=views),
@@ -235,6 +278,56 @@ class DagGroundingTests(unittest.TestCase):
                                   np.zeros((3, 3)), np.zeros((3, 3)), np.arange(3),
                                   Path(out), [], trace, limit)
         return result, chat.call_args_list
+
+    def verified_plan(self, evidence_id):
+        p = plan()
+        for n in p["nodes"][1:]:
+            n.update(status="completed", evidence_ids=[evidence_id], conclusion="comparison supports chair 1")
+        p["nodes"][1]["excluded_target_ids"] = [2]
+        p["current_node_id"] = "verify"
+        return p
+
+    def test_plan_repair_preserves_the_full_evidence_budget(self):
+        bad = plan()
+        bad["nodes"][0]["evidence_ids"] = ["future"]
+        responses = [action() | {"monitor": bad}, action() | {"monitor": plan()},
+                     action("finish", 1) | {"monitor": self.verified_plan("observation_2")}]
+        result, calls = self.run_ground(responses, 1)
+        self.assertEqual(result["predicted_id"], 1)
+        state = json.loads(calls[1].args[0][1]["content"][0]["text"])
+        self.assertEqual(state["remaining_tool_calls"], 1)
+        self.assertEqual(state["remaining_plan_repairs"], 0)
+        self.assertEqual(result["active_trace"]["dag_monitor_budget"]["successful_tool_calls"], 1)
+        self.assertEqual(result["active_trace"]["dag_monitor_budget"]["failed_checks"], 1)
+
+    def test_final_plan_can_be_repaired_after_tools_are_exhausted(self):
+        responses = [action() | {"monitor": plan()},
+                     action("finish", 1) | {"monitor": plan()},
+                     action("finish", 1) | {"monitor": self.verified_plan("observation_1")}]
+        result, calls = self.run_ground(responses, 1)
+        self.assertEqual(result["predicted_id"], 1)
+        self.assertEqual(len(calls), 3)
+        for call in calls[1:]:
+            self.assertEqual(call.kwargs["response_schema"]["schema"]["properties"]["action"]["enum"], ["finish"])
+
+    def test_invalid_tool_request_uses_repair_allowance_not_evidence(self):
+        responses = [action() | {"focus_ids": [], "monitor": plan()},
+                     action() | {"monitor": plan()},
+                     action("finish", 1) | {"monitor": self.verified_plan("observation_2")}]
+        result, calls = self.run_ground(responses, 1)
+        self.assertEqual(result["predicted_id"], 1)
+        state = json.loads(calls[1].args[0][1]["content"][0]["text"])
+        self.assertEqual(state["remaining_tool_calls"], 1)
+        self.assertNotIn("observation_1", state["supporting_evidence_ids"])
+        self.assertEqual(result["active_trace"]["dag_monitor_budget"]["failed_checks"], 1)
+
+    def test_repeated_invalid_plans_cannot_retry_indefinitely(self):
+        invalid = action("finish", 1) | {"monitor": plan()}
+        result, calls = self.run_ground([invalid] * 3, 12, repairs=2)
+        self.assertIsNone(result["predicted_id"])
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(result["active_trace"]["dag_monitor_budget"]["successful_tool_calls"], 0)
+        self.assertIn("repair budget", result["decision_reasons"][0])
 
     def test_measure_then_verified_unique_finish_preserves_full_candidate_pool(self):
         p = plan()

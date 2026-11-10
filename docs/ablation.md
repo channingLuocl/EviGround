@@ -53,17 +53,32 @@ Monitor 和执行器由同一次多模态模型调用共同完成，没有另训
 要重开的旧节点及修订理由。程序校验无环依赖、语言条件覆盖、已有证据引用、
 当前任务是否就绪以及动作是否属于该任务。
 
+`bound_object_ids` 表示当前绑定结果，工具的 `focus_ids` 可包含尚未绑定的候选、
+参照物和比较成员。排除记录按该节点引用的实际观察范围检查，不要求被排除的竞争者
+仍在绑定结果里。`initial` 覆盖已提供的初始视图与全场景基础几何；工具观察只覆盖
+实际查看或测量的对象。证据范围检查不等于证明视觉结论正确。
+
 - 节点可表达参照物绑定、属性、空间关系、候选组比较和最终核验，支持并行分支。
 - 回退或修改已完成节点的语义/绑定时，该节点及受影响后继自动失效；旧结论、
   证据关联和排除记录清空，原始观察继续保留，相关目标自动恢复比较资格。
 - 排除只改变目标资格，不删除用于判断“中间”等关系的物理比较成员。
 - 选择目标须位于最终核验节点、全部任务完成、条件覆盖且活动目标唯一，并通过原有
-  类别观察检查；有未决项则不能作为成功完成。预算内收到无效 DAG 会返回检查反馈，
-  耗尽后仍无法通过则输出 null，不强行制造唯一候选。
-- 默认仍为至多 5 个非终止决策轮次，加最后一次结束决策。无效计划和提前结束被驳回
-  也消耗决策轮次，没有隐藏的无限重试。DAG 模式单次请求输出上限从 1,600 调至
-  4,000 tokens；现有 runner 统一使用的 thinking floor 仍是 8,192。
+  类别观察检查；有未决项则不能作为成功完成。无效 DAG 会返回具体缺失条件或证据 ID，
+  修正额度耗尽后仍无法通过则输出 null，不强行制造唯一候选。
+- DAG 模式按成功执行的工具调用计算取证预算；计划校验失败、无效工具请求和被驳回的
+  提前结束使用独立的有限修正额度，不占用取证次数。默认取证上限仍为 5，额外修正额度
+  默认为 6，总动作决策调用上限为 `取证上限 + 修正额度 + 1`。工具用完后仍可修正最终
+  核验，但不能继续取证。关闭 DAG 的原 ReAct 仍按原有非终止决策轮数计费。
+  DAG 模式单次请求输出上限从 1,600 调至 4,000 tokens；现有 runner 统一使用的
+  thinking floor 仍是 8,192。
   图和历史会增加上下文成本，对比时同时报告实际 tokens、时延、弃答和准确率。
+
+直接推理用 `--review-limit` 设置取证上限，`EVIGROUND_DAG_REPAIR_LIMIT` 设置额外
+修正额度；消融调度器对应使用 `EVIGROUND_ABLATION_REVIEW_LIMIT` 和
+`EVIGROUND_ABLATION_DAG_REPAIR_LIMIT`，显式传给 worker 并写入实验协议及运行身份。
+以下新实验使用 12 次取证和 6 次修正，至多 19 次动作决策；解析及客户端重试另计。
+与历史 5 轮结果的差异同时包含预算变化，不能单独解释为 DAG 的贡献；公平对比须
+另设相同预算的 baseline，或同时报告成本。
 
 程序只能检查结构和证据关联，不能保证视觉结论或语义解释正确。本实现没有新增
 “between/on/middle”确定性几何判定器，也没有把分类分数当概率设置动态阈值。
@@ -75,9 +90,11 @@ Monitor 和执行器由同一次多模态模型调用共同完成，没有另训
 
 ```bash
 # 在仓库根目录、已安装依赖的 Python 环境中执行。
-export EVIGROUND_ABLATION_STUDY="/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_v1"
+export EVIGROUND_ABLATION_STUDY="/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_v2"
 export EVIGROUND_ABLATION_SCENES="/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs"
 export EVIGROUND_ABLATION_DAG_MONITOR_ENABLED=1
+export EVIGROUND_ABLATION_REVIEW_LIMIT=12
+export EVIGROUND_ABLATION_DAG_REPAIR_LIMIT=6
 # 沿用原消融的分类预测导出、模型和 API 配置；勿指向按 query 保存的推理结果。
 : "${EVIGROUND_ABLATION_PREDICTIONS:?请设置为原消融使用的已验证分类导出目录或 ZIP}"
 mkdir -p "$EVIGROUND_ABLATION_STUDY"
@@ -86,18 +103,22 @@ cp /Volumes/KESU/EviGround/experiments/ablation_20261104/nr3d_subset_1500.json \
 
 PYTHON_DOTENV_DISABLED=1 PYTHONPATH=src \
   python scripts/run_nr3d_ablation.py \
-  --start-condition E0 --end-condition E0 --workers-per-key 3
+  --start-condition E0 --end-condition E0 --workers-per-key 3 --technical-pilot-only
 ```
 
 这里的场景、子集和新输出路径是本机已挂载的 KESU 路径，未搬移或覆盖旧数据。
 换机器运行时修改相应路径。外盘可用空间需覆盖新增渲染图与日志；不要将数据提交 Git。
 
-按原方式从标准输入提供 API key 数组；脚本先预检和运行两条子集外技术样本。
+按原方式从标准输入提供 API key 数组；上述命令只预检并运行两条固定的子集外技术样本，
+不会启动 1,500 条正式评估。DAG 技术试运行还要求每条至少接受过一版任务图，且没有
+耗尽修正额度；不设置正确率门槛，合法弃答仍如实记录。检查
+`technical_pilot/E0/diagnostics.json` 后，移除 `--technical-pilot-only` 可启动正式评估。
 若出现技术错误先查日志，不按准确率修改样本或重跑。E0 的汇总保存在
 `$EVIGROUND_ABLATION_STUDY/runs/E0/results.json`，每条
 `runs/E0/key_slot_*/q*/prediction.json` 的 `active_trace` 内有
 `dag_monitor_history`、`dag_monitor_current_node_id`、`dag_monitor_final_plan` 和
-`dag_monitor_active_target_ids`，可检查回退、失效节点及恢复的目标。
+`dag_monitor_active_target_ids`，可检查回退、失效节点及恢复的目标；`dag_monitor_budget`
+另记实际工具次数、失败检查数与决策调用数。
 原始请求、响应和 token 用量仍在同目录 `run.json`。
 
 若要在本次源码下重新跑原 ReAct 对照，改成另一个新目录

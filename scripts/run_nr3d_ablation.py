@@ -21,6 +21,10 @@ EXPORT = Path(os.getenv("EVIGROUND_ABLATION_PREDICTIONS", ROOT / "local_outputs/
 DAG_MONITOR = os.getenv("EVIGROUND_ABLATION_DAG_MONITOR_ENABLED", "0").strip()
 if DAG_MONITOR not in ("0", "1"):
     raise ValueError("EVIGROUND_ABLATION_DAG_MONITOR_ENABLED must be 0 or 1")
+REVIEW_LIMIT = int(os.getenv("EVIGROUND_ABLATION_REVIEW_LIMIT", "5"))
+DAG_REPAIR_LIMIT = int(os.getenv("EVIGROUND_ABLATION_DAG_REPAIR_LIMIT", "6"))
+if REVIEW_LIMIT < 1 or DAG_REPAIR_LIMIT < 0:
+    raise ValueError("Review limit must be positive and DAG repair limit must be nonnegative")
 VARIANTS = {
     "E0": {"name": "Full EviGround", "inspect": 1, "measure": 1, "top_k": 5, "guard": 1},
     "E1": {"name": "Without supplementary inspection", "inspect": 0, "measure": 1, "top_k": 5, "guard": 0},
@@ -61,6 +65,7 @@ def environment(key, variant, workers):
                 "EVIGROUND_MEASURE_ENABLED": str(variant["measure"]),
                 "EVIGROUND_CATEGORY_INSPECTION_REQUIRED": str(variant["guard"])})
     env["EVIGROUND_DAG_MONITOR_ENABLED"] = DAG_MONITOR
+    env["EVIGROUND_DAG_REPAIR_LIMIT"] = str(DAG_REPAIR_LIMIT)
     env.update({k: "1" for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
                                "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")})
     return env
@@ -99,8 +104,11 @@ def freeze_inputs(workers):
     protocol = {
         "dataset": "nr3d", "model": MODEL,
         "base_url": BASE_URL, "queries": 1500,
-        "conditions": VARIANTS, "nonterminal_evidence_budget": 5,
+        "conditions": VARIANTS, "nonterminal_evidence_budget": REVIEW_LIMIT,
         "dag_monitor_enabled": DAG_MONITOR == "1",
+        "dag_monitor_repair_limit": DAG_REPAIR_LIMIT if DAG_MONITOR == "1" else 0,
+        "decision_budget_policy": ("successful evidence calls plus bounded plan/tool repairs and a final decision"
+                                   if DAG_MONITOR == "1" else "bounded nonterminal decisions plus a final decision"),
         "controller": "dynamic_dag_monitor" if DAG_MONITOR == "1" else "react",
         "initial_evidence": "same overview, top-down view and basic AABB geometry in all conditions",
         "subset_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
@@ -170,7 +178,7 @@ def run_pair(variant_id, keys, manifests, workers, phase, prepare=False):
             command = [sys.executable, "-u", "-m", "eviground.cli.ground",
                        "--manifest", str(manifest), "--predictions", str(EXPORT),
                        "--scene-root", str(SCENES), "--output", str(output),
-                       "--category-top-k", str(variant["top_k"]), "--review-limit", "5",
+                       "--category-top-k", str(variant["top_k"]), "--review-limit", str(REVIEW_LIMIT),
                        "--workers", str(workers), "--api-concurrency", str(workers)]
             if prepare:
                 command.append("--prepare-only")
@@ -210,14 +218,37 @@ def aggregate(variant_id, documents):
     return summary
 
 
+def check_pilots(variant_id, documents):
+    if any(not d["summary"]["complete"] or d["summary"]["errors"] for d in documents):
+        raise ValueError(f"Technical pilot failed for {variant_id}; final evaluation not started")
+    if DAG_MONITOR == "1":
+        diagnostics = []
+        for document in documents:
+            for row in document["results"]:
+                prediction = json.loads(Path(row["prediction_path"]).read_text())
+                trace = prediction["active_trace"]
+                diagnostics.append({"csv_row": row["csv_row"],
+                                    "answered": prediction["predicted_id"] is not None,
+                                    "accepted_dag_revisions": len(trace.get("dag_monitor_history", [])),
+                                    "budget": trace.get("dag_monitor_budget", {}),
+                                    "decision_reasons": prediction["decision_reasons"]})
+        save(STUDY / "technical_pilot" / variant_id / "diagnostics.json", diagnostics)
+        if not diagnostics or any(not d["accepted_dag_revisions"] or
+                                  d["budget"].get("failed_checks", 0) > DAG_REPAIR_LIMIT
+                                  for d in diagnostics):
+            raise ValueError(f"DAG technical pilot failed for {variant_id}; inspect diagnostics.json before final evaluation")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workers-per-key", type=int, default=3)
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument("--technical-pilot-only", action="store_true",
+                        help="Run API preflight and fixed out-of-subset pilots, then stop before formal evaluation")
     parser.add_argument("--skip-preflight", action="store_true",
                         help="Use the two successful preflights already performed with the same keys")
     parser.add_argument("--skip-technical-pilot", action="store_true",
-                        help="Use all twelve completed technical pilots already verified")
+                        help="Reuse completed fixed technical pilots for the selected conditions")
     parser.add_argument("--start-condition", choices=tuple(VARIANTS), default="E0")
     parser.add_argument("--end-condition", choices=tuple(VARIANTS), default="E5")
     parser.add_argument("--detach", action="store_true",
@@ -259,7 +290,7 @@ def main():
         raise ValueError("start-condition must not follow end-condition")
     selected_conditions = condition_ids[first:last + 1]
     # Validate all 130 scenes before any grounding request.
-    if args.start_condition == "E0":
+    if args.start_condition == "E0" and not args.technical_pilot_only:
         run_pair("E0", keys, manifests, args.workers_per_key, "runs", prepare=True)
     pilots = [STUDY / f"pilot_shard_{i+1}.json" for i in range(2)]
     for variant_id in selected_conditions:
@@ -268,8 +299,12 @@ def main():
                                      f"key_slot_{i+1}/results.json").read_text()) for i in range(2)]
         else:
             documents = run_pair(variant_id, keys, pilots, args.workers_per_key, "technical_pilot")
-        if any(not d["summary"]["complete"] or d["summary"]["errors"] for d in documents):
-            raise ValueError(f"Technical pilot failed for {variant_id}; final evaluation not started")
+        check_pilots(variant_id, documents)
+    if args.technical_pilot_only:
+        save(STUDY / "status.json", {"updated_at": now(), "phase": "technical_pilot_complete",
+                                     "conditions": selected_conditions})
+        print("Technical pilots complete; formal evaluation not started.", flush=True)
+        return
     summaries = {}
     for variant_id in selected_conditions:
         documents = run_pair(variant_id, keys, manifests, args.workers_per_key, "runs")

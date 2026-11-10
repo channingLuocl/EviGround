@@ -10,6 +10,17 @@ def dag_monitor_enabled():
     return raw == "1"
 
 
+def dag_repair_limit():
+    raw = os.getenv("EVIGROUND_DAG_REPAIR_LIMIT", "6").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError("EVIGROUND_DAG_REPAIR_LIMIT must be a nonnegative integer") from None
+    if value < 0:
+        raise ValueError("EVIGROUND_DAG_REPAIR_LIMIT must be a nonnegative integer")
+    return value
+
+
 def evidence_policy():
     """Explicit tool availability for controlled ablations; defaults are unchanged."""
     enabled = {}
@@ -27,13 +38,16 @@ def evidence_policy():
 
 
 def settings():
-    return {
+    policy = {
         "version": "eviground-0.1.0",
         "extra_api_attempts_limit": 1,
         "context_text_upper_bound": int(os.getenv("EVIGROUND_CONTEXT_LIMIT", "131072")),
         "evidence_tools": evidence_policy(),
         "dag_monitor_enabled": dag_monitor_enabled(),
     }
+    if policy["dag_monitor_enabled"]:
+        policy["dag_monitor_repair_limit"] = dag_repair_limit()
+    return policy
 
 
 def evidence_inventory(query, parsed):
