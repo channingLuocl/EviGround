@@ -1,6 +1,7 @@
 """Ablation input locations are explicit and portable across machines."""
 
 import importlib.util
+from contextlib import redirect_stdout
 import io
 import json
 import os
@@ -50,6 +51,53 @@ class AblationRunnerTests(unittest.TestCase):
     def test_shared_endpoint_is_used_when_ablation_override_is_absent(self):
         runner = load_runner({"EVIGROUND_BASE_URL": "https://shared.example/v1"})
         self.assertEqual(runner.BASE_URL, "https://shared.example/v1")
+
+    def test_shared_key_preflight_checks_both_slots_sequentially_and_keeps_failure(self):
+        runner = load_runner({})
+        failure = Mock(returncode=1, stdout=json.dumps({"ok": False, "error": "HTTP 401", "http_status": 401}))
+        success = Mock(returncode=0, stdout=json.dumps({"ok": True, "finish_reason": "stop",
+                                                       "content": '{"color":"red"}', "response_model": runner.MODEL}))
+        with (tempfile.TemporaryDirectory() as directory,
+              patch.object(runner, "STUDY", Path(directory)),
+              patch.object(runner, "ThreadPoolExecutor") as pool,
+              patch.object(runner.subprocess, "run", side_effect=[failure, success]) as run,
+              redirect_stdout(io.StringIO())):
+            with self.assertRaisesRegex(ValueError, "Key slots 1 failed"):
+                runner.preflight(["unit-test-key"] * 2, 3)
+            pool.assert_not_called()
+            self.assertEqual(run.call_count, 2)
+            first, second = run.call_args_list
+            self.assertEqual(first.kwargs["env"], second.kwargs["env"])
+            self.assertEqual(json.loads((runner.STUDY / "preflight_key_1.json").read_text())["http_status"], 401)
+            self.assertTrue(json.loads((runner.STUDY / "preflight_key_2.json").read_text())["ok"])
+
+    def test_preflight_failure_reports_provider_diagnostics_without_credentials(self):
+        from eviground.api import client
+
+        runner = load_runner({})
+        process = Mock(returncode=1, stdout='{"ok":false,"error":"test failure"}')
+        with (tempfile.TemporaryDirectory() as directory,
+              patch.object(runner, "STUDY", Path(directory)),
+              patch.object(runner.subprocess, "run", return_value=process) as run,
+              redirect_stdout(io.StringIO())):
+            with self.assertRaises(ValueError):
+                runner.preflight(["unit-test-key"] * 2, 3)
+            script = run.call_args.args[0][2]
+            secret = "unit-test-private-credential"
+            failure = client.APIError("HTTP 401", diagnostic={"failure_kind": "http_4xx", "http_status": 401,
+                "request_id": "test-request-id", "response_body": f"Invalid API key: {secret}"})
+            output = io.StringIO()
+            with (patch.dict(os.environ, {"EVIGROUND_API_KEY": secret}),
+                  patch.object(client, "chat", side_effect=failure),
+                  patch.object(runner.sys, "argv", ["-c", str(Path(directory) / "test.png")]),
+                  redirect_stdout(output)):
+                with self.assertRaises(SystemExit) as stopped:
+                    exec(script, {})
+            self.assertEqual(stopped.exception.code, 1)
+            result = json.loads(output.getvalue())
+            self.assertEqual(result["http_status"], 401)
+            self.assertEqual(result["request_id"], "test-request-id")
+            self.assertNotIn(secret, output.getvalue())
 
     def test_monitor_switch_is_explicitly_forwarded_to_frozen_workers(self):
         runner = load_runner({"EVIGROUND_ABLATION_DAG_MONITOR_ENABLED": "1"})

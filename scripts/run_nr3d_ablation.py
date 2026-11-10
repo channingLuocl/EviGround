@@ -146,7 +146,9 @@ try:
     data=chat([{"role":"user","content":[{"type":"text","text":"Name the image's dominant color. Return JSON with color."}, image_part(p)]}], max_tokens=512, json_mode=True, **schema_kwargs("vision_preflight", obj({"color":TEXT})))
     print(json.dumps({"ok":True,"requested_model":data["_request"]["model"],"response_model":data.get("model"),"content":data["_content"],"finish_reason":data.get("_finish_reason"),"usage":data.get("usage")}))
 except Exception as exc:
-    print(json.dumps({"ok":False,"error":_redact(str(exc))}));sys.exit(1)
+    diagnostic=getattr(exc,"diagnostic",{})
+    details={name:diagnostic.get(name) for name in ("failure_kind","http_status","request_id","response_body")}
+    print(json.dumps(_redact({"ok":False,"error":str(exc),**details})));sys.exit(1)
 '''
     def check(slot):
         process = subprocess.run([sys.executable, "-c", script, str(STUDY / f"preflight_{slot+1}.png")],
@@ -158,12 +160,19 @@ except Exception as exc:
             result = {"ok": False, "error": "Preflight process failed before producing diagnostics"}
         save(STUDY / f"preflight_key_{slot+1}.json", result)
         print(f"key slot {slot+1} preflight: {result}", flush=True)
-        if (process.returncode or not result.get("ok") or result.get("finish_reason") != "stop"
-                or "red" not in result.get("content", "").lower()
-                or result.get("response_model") != MODEL):
-            raise ValueError(f"Key slot {slot+1} failed model/vision/schema preflight")
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        list(pool.map(check, range(2)))
+        return not (process.returncode or not result.get("ok") or result.get("finish_reason") != "stop"
+                    or "red" not in result.get("content", "").lower()
+                    or result.get("response_model") != MODEL)
+    if keys[0] == keys[1]:
+        print("Shared key: checking both slots sequentially.", flush=True)
+        passed = [check(slot) for slot in range(2)]
+    else:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            passed = list(pool.map(check, range(2)))
+    failed = [str(slot + 1) for slot, ok in enumerate(passed) if not ok]
+    if failed:
+        raise ValueError(f"Key slots {', '.join(failed)} failed model/vision/schema preflight; "
+                         "inspect preflight_key_*.json for redacted diagnostics")
 
 
 def run_pair(variant_id, keys, manifests, workers, phase, prepare=False):

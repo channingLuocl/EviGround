@@ -39,6 +39,11 @@ PYTHON_DOTENV_DISABLED=1 PYTHONPATH=src \
 
 输入场景与分类导出路径可通过上述环境变量配置。API 地址优先取 `EVIGROUND_ABLATION_BASE_URL`，其次取 `EVIGROUND_BASE_URL`，均未设置时使用 `https://api.openai.com/v1`；不会自动使用历史私有转发地址。
 
+两个分片共享同一 key 时，模型预检顺序执行，两次均通过才继续；两个不同 key 仍并行预检。
+预检失败会在 `preflight_key_*.json` 保存脱敏的 HTTP 状态、服务端错误响应和 request ID，
+不会因另一个槽位成功而忽略 401。顺序预检用于排除预检请求相互影响，不能据此认定
+供应商有并发限制，也不改变正式推理的并发配置。
+
 完整运行后，用 `python scripts/summarize_nr3d_ablation.py --help` 查看审计汇总参数。`summarize_mixed_nr3d_ablation.py` 仅用于如实记录不同条件使用不同模型的历史比较；跨模型差异不能单独解释为模块贡献。错误、弃答和缺失均不能从固定样本分母中剔除。
 
 ## 动态 DAG Monitor 与原 ReAct 对比
