@@ -65,7 +65,7 @@ class DagMonitorTests(unittest.TestCase):
         self.monitor.update(plan(), action(), [])
         before = deepcopy(self.monitor.plan)
         for variant in ("cycle", "absent", "duplicate", "future", "failed", "unknown_id",
-                        "unquoted", "coverage", "unsupported_exclusion", "skip_prerequisite"):
+                        "unquoted", "coverage", "unsupported_exclusion"):
             p = plan()
             if variant == "cycle":
                 p["nodes"][0]["depends_on"] = ["compare"]
@@ -84,14 +84,88 @@ class DagMonitorTests(unittest.TestCase):
                     n["condition_ids"] = []
             elif variant == "unsupported_exclusion":
                 p["nodes"][1]["excluded_target_ids"] = [2]
-            else:
-                p["nodes"][0].update(status="pending", conclusion="", evidence_ids=[])
             observations = [{"evidence_id": "observation_1", "tool": "measure",
                              "error": "bad frame", "no_evidence_acquired": True}]
             with self.subTest(variant=variant), self.assertRaises(ValueError):
                 self.monitor.update(p, action(), observations)
             self.assertEqual(self.monitor.plan, before)
             self.assertEqual(len(self.monitor.history), 1)
+
+    def test_rollback_is_retained_when_a_stale_finish_is_rejected(self):
+        self.monitor.update(plan(), action(), [])
+        revised = plan()
+        for n in revised["nodes"]:
+            n.update(status="completed", evidence_ids=["initial"], conclusion="supported")
+        revised["nodes"][0]["conclusion"] = "revised group binding"
+        revised["nodes"][1]["excluded_target_ids"] = [2]
+        revised["current_node_id"] = "verify"
+        with self.assertRaisesRegex(ValueError, "Rollback accepted"):
+            self.monitor.update(revised, action("finish", 1), [])
+        self.assertEqual(len(self.monitor.history), 2)
+        self.assertEqual(self.monitor.plan["nodes"][0]["status"], "pending")
+        self.assertEqual(self.monitor.active_ids(), [1, 2])
+        self.assertEqual(self.monitor.context([])["ready_node_ids"], ["group"])
+        repaired = deepcopy(self.monitor.plan)
+        for n in repaired["nodes"]:
+            n.update(status="completed", evidence_ids=["initial"], conclusion="rechecked against initial evidence")
+        repaired["nodes"][1]["excluded_target_ids"] = [2]
+        self.monitor.update(repaired, action("finish", 1), [])
+        self.assertEqual(self.monitor.active_ids(), [1])
+
+    def test_verified_finish_derives_a_missing_redundant_final_binding(self):
+        p = plan()
+        for n in p["nodes"]:
+            n.update(status="completed", evidence_ids=["initial"], conclusion="supported")
+        p["nodes"][1]["excluded_target_ids"] = [2]
+        p["nodes"][-1]["bound_object_ids"] = []
+        p["current_node_id"] = "verify"
+        event = self.monitor.update(p, action("finish", 1), [])
+        self.assertEqual(self.monitor.plan["nodes"][-1]["bound_object_ids"], [1])
+        self.assertTrue(event["normalized_final_binding"])
+        self.assertEqual(p["nodes"][-1]["bound_object_ids"], [])
+
+    def test_final_binding_normalization_does_not_bypass_verification(self):
+        for variant in ("incomplete", "not_unique", "unresolved", "conflicting_binding"):
+            p = plan()
+            for n in p["nodes"]:
+                n.update(status="completed", evidence_ids=["initial"], conclusion="supported")
+            p["nodes"][1]["excluded_target_ids"] = [2]
+            p["nodes"][-1]["bound_object_ids"] = []
+            p["current_node_id"] = "verify"
+            a = action("finish", 1)
+            if variant == "incomplete":
+                p["nodes"][-1].update(status="pending", evidence_ids=[], conclusion="")
+            elif variant == "not_unique":
+                p["nodes"][1]["excluded_target_ids"] = []
+            elif variant == "unresolved":
+                a["unresolved"] = ["observer frame uncertain"]
+            else:
+                p["nodes"][-1]["bound_object_ids"] = [2]
+            with self.subTest(variant=variant), self.assertRaises(ValueError):
+                self.monitor.update(p, a, [])
+
+    def test_repeated_missing_final_binding_does_not_trigger_false_rollback(self):
+        p = plan()
+        for n in p["nodes"]:
+            n.update(status="completed", evidence_ids=["initial"], conclusion="supported")
+        p["nodes"][1]["excluded_target_ids"] = [2]
+        p["nodes"][-1]["bound_object_ids"] = []
+        p["current_node_id"] = "verify"
+        self.monitor.update(p, action("finish", 1), [])
+        event = self.monitor.update(p, action("finish", 1), [])
+        self.assertEqual(event["invalidated_node_ids"], [])
+        self.assertEqual(self.monitor.plan["nodes"][-1]["status"], "completed")
+
+    def test_malformed_rollback_does_not_change_accepted_state(self):
+        self.monitor.update(plan(), action(), [])
+        before = deepcopy(self.monitor.plan)
+        revised = plan()
+        revised["nodes"][0]["conclusion"] = "revised group binding"
+        revised["nodes"][1]["depends_on"] = ["verify"]
+        with self.assertRaisesRegex(ValueError, "cycle"):
+            self.monitor.update(revised, action("finish", 1), [])
+        self.assertEqual(self.monitor.plan, before)
+        self.assertEqual(len(self.monitor.history), 1)
 
     def test_finish_needs_unique_target_and_completed_final_stage(self):
         for variant in ("incomplete", "not_unique", "unresolved", "wrong_current"):
@@ -309,6 +383,29 @@ class DagGroundingTests(unittest.TestCase):
         self.assertEqual(len(calls), 3)
         for call in calls[1:]:
             self.assertEqual(call.kwargs["response_schema"]["schema"]["properties"]["action"]["enum"], ["finish"])
+
+    def test_rejected_stale_finish_supplies_reset_plan_to_the_next_turn(self):
+        revised = self.verified_plan("observation_1")
+        revised["nodes"][0]["conclusion"] = "revised group binding"
+        repaired = deepcopy(revised)
+        for n in repaired["nodes"]:
+            n["evidence_ids"] = ["observation_1"]
+        responses = [action() | {"monitor": plan()},
+                     action("finish", 1) | {"monitor": revised},
+                     action("finish", 1) | {"monitor": repaired}]
+        result, calls = self.run_ground(responses, 1)
+        self.assertEqual(result["predicted_id"], 1)
+        state = json.loads(calls[2].args[0][1]["content"][0]["text"])
+        self.assertEqual(state["ready_node_ids"], ["group"])
+        self.assertTrue(all(n["status"] == "pending" for n in state["task_dag"]["nodes"]))
+        self.assertEqual(state["active_target_ids"], [1, 2])
+        self.assertIn("observation_1", state["supporting_evidence_ids"])
+        self.assertEqual(state["remaining_tool_calls"], 0)
+        self.assertIn("Rollback accepted", state["observations"][-1]["error"])
+        history = result["active_trace"]["dag_monitor_history"]
+        self.assertEqual(len(history), 3)
+        self.assertIn("action_error", history[1])
+        self.assertEqual(result["active_trace"]["dag_monitor_budget"]["failed_checks"], 1)
 
     def test_invalid_tool_request_uses_repair_allowance_not_evidence(self):
         responses = [action() | {"focus_ids": [], "monitor": plan()},

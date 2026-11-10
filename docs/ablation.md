@@ -69,10 +69,16 @@ Monitor 和执行器由同一次多模态模型调用共同完成，没有另训
 - 节点可表达参照物绑定、属性、空间关系、候选组比较和最终核验，支持并行分支。
 - 回退或修改已完成节点的语义/绑定时，该节点及受影响后继自动失效；旧结论、
   证据关联和排除记录清空，原始观察继续保留，相关目标自动恢复比较资格。
+  结构合法的回退即使附带了尚不能执行的动作，也会保留失效后的图，并通过
+  `ready_node_ids` 告知下一轮可重核的节点；无环、条件覆盖、证据引用等结构检查
+  未通过的提案仍整体拒绝。历史中的 `action_error` 表示回退已接受、动作被拒绝。
 - 排除只改变目标资格，不删除用于判断“中间”等关系的物理比较成员。
 - 选择目标须位于最终核验节点、全部任务完成、条件覆盖且活动目标唯一，并通过原有
   类别观察检查；有未决项则不能作为成功完成。无效 DAG 会返回具体缺失条件或证据 ID，
   修正额度耗尽后仍无法通过则输出 null，不强行制造唯一候选。
+  仅当上述完成、唯一性、无未决项检查均通过，且最终节点绑定列表为空时，使用
+  显式 `predicted_id` 补齐该冗余绑定，并记录 `normalized_final_binding`；非空冲突
+  绑定不会被覆盖，已有类别观察检查也不会跳过。回退导致任务失效后仍不能直接结束。
 - DAG 模式按成功执行的工具调用计算取证预算；计划校验失败、无效工具请求和被驳回的
   提前结束使用独立的有限修正额度，不占用取证次数。默认取证上限仍为 5，额外修正额度
   默认为 6，总动作决策调用上限为 `取证上限 + 修正额度 + 1`。工具用完后仍可修正最终
@@ -98,7 +104,7 @@ Monitor 和执行器由同一次多模态模型调用共同完成，没有另训
 
 ```bash
 # 在仓库根目录、已安装依赖的 Python 环境中执行。
-export EVIGROUND_ABLATION_STUDY="/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_v2"
+export EVIGROUND_ABLATION_STUDY="/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_v3"
 export EVIGROUND_ABLATION_SCENES="/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs"
 export EVIGROUND_ABLATION_DAG_MONITOR_ENABLED=1
 export EVIGROUND_ABLATION_REVIEW_LIMIT=12

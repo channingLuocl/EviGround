@@ -368,6 +368,8 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                 trace["dag_monitor_current_node_id"] = event["current_node_id"]
             except ValueError as exc:
                 repair_failures += 1
+                if monitor.plan is not None:
+                    trace["dag_monitor_current_node_id"] = monitor.plan["current_node_id"]
                 observation = {"tool": "monitor_check", "error": str(exc),
                                "no_evidence_acquired": True}
                 observations.append(observation)

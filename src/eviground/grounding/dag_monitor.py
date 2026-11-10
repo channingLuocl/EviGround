@@ -57,6 +57,9 @@ changed completed conclusion/binding also triggers this reset. Reactivated
 targets must be reconsidered. Never add a backwards dependency: revise the next
 version of the DAG instead. Explain the revision in revision_reason.
 reopen_node_ids applies only to this revision; normally return an empty array.
+A valid rollback is retained even when its proposed action is rejected. Use the
+returned task_dag and ready_node_ids to recheck the reset stages against retained
+observations; do not repeat a stale finish or keep reopening the same stage.
 
 Finish with a target ONLY at the completed final verification node, after all
 nodes are completed, every requirement is covered and the program-derived active
@@ -112,8 +115,15 @@ class DagMonitor:
     def context(self, observations):
         return {"monitor_requirements": self.requirements,
                 "task_dag": self.plan,
+                "ready_node_ids": self.ready_ids(),
                 "active_target_ids": self.active_ids(),
                 "supporting_evidence_ids": sorted(self.evidence_ids(observations))}
+
+    def ready_ids(self, plan=None):
+        nodes = (plan or self.plan or {}).get("nodes", [])
+        completed = {n["id"] for n in nodes if n["status"] == "completed"}
+        return [n["id"] for n in nodes if n["status"] == "pending"
+                and set(n["depends_on"]) <= completed]
 
     def active_ids(self, plan=None):
         excluded = {i for n in (plan or self.plan or {}).get("nodes", [])
@@ -150,7 +160,7 @@ class DagMonitor:
             affected = expanded
 
     def update(self, proposal, action, observations):
-        """Accept only an executable plan/action pair, atomically."""
+        """Reject malformed graphs; retain safe rollbacks even if the action fails."""
         from jsonschema import ValidationError, validate
 
         try:
@@ -185,7 +195,8 @@ class DagMonitor:
             if n["status"] == "completed" and (not n["evidence_ids"] or not n["conclusion"].strip()):
                 raise ValueError("Completed tasks need existing evidence and a conclusion")
             if n["status"] != "completed" and n["excluded_target_ids"]:
-                raise ValueError("Pending tasks cannot exclude targets")
+                raise ValueError(f"Pending tasks cannot exclude targets: {n['id']}; "
+                                 "clear its exclusions or complete it with supporting evidence")
             observed = set().union(*(evidence_objects[eid] for eid in n["evidence_ids"]))
             unsupported = set(n["excluded_target_ids"]) - observed
             if unsupported:
@@ -203,8 +214,10 @@ class DagMonitor:
         if len(finals) != 1 or finals[0]["allowed_actions"] != ["finish"]:
             raise ValueError("Monitor needs one final verification task allowing only finish")
         final = finals[0]
-        if any("finish" in n["allowed_actions"] for n in nodes if n is not final):
-            raise ValueError("Only final verification may finish")
+        nonfinal_finish = [n["id"] for n in nodes if n is not final and "finish" in n["allowed_actions"]]
+        if nonfinal_finish:
+            raise ValueError(f"Only final verification may finish: remove finish from {nonfinal_finish}; "
+                             f"use final node {final['id']}")
         ancestors = {final["id"]}
         while True:
             expanded = ancestors | {d for i in ancestors for d in by_id[i]["depends_on"]}
@@ -217,6 +230,15 @@ class DagMonitor:
         if covered != requirements:
             raise ValueError("Monitor DAG must cover all language requirements; "
                              f"assign missing IDs {sorted(requirements - covered)} to the tasks that resolve them")
+
+        # The explicit, uniquely verified decision already supplies an omitted final binding.
+        normalized_binding = (action["action"] == "finish" and action.get("predicted_id") is not None
+                              and plan["current_node_id"] == final["id"]
+                              and all(n["status"] == "completed" for n in nodes)
+                              and self.active_ids(plan) == [action["predicted_id"]]
+                              and not action.get("unresolved") and not final["bound_object_ids"])
+        if normalized_binding:
+            final["bound_object_ids"] = [action["predicted_id"]]
 
         old = {n["id"]: n for n in (self.plan or {}).get("nodes", [])}
         reopened = set(plan["reopen_node_ids"])
@@ -247,23 +269,46 @@ class DagMonitor:
         current = by_id.get(plan["current_node_id"])
         if current is None:
             raise ValueError("Current monitor stage is absent")
-        if action["action"] not in current["allowed_actions"]:
-            raise ValueError("Action is not allowed by the current monitor stage")
-        if action["action"] != "finish":
-            if current["status"] != "pending" or any(by_id[d]["status"] != "completed"
-                                                      for d in current["depends_on"]):
-                raise ValueError("Current stage is not ready; resolve its prerequisites first")
-        elif action.get("predicted_id") is not None:
-            if (current is not final or any(n["status"] != "completed" for n in nodes)
-                    or self.active_ids(plan) != [action["predicted_id"]]
-                    or action["predicted_id"] not in current["bound_object_ids"]
-                    or action.get("unresolved")):
-                raise ValueError("Finish needs completed final verification, one active target and no unresolved conditions")
         before, after = set(self.active_ids()), set(self.active_ids(plan))
         event = {"revision": len(self.history) + 1, "current_node_id": current["id"],
                  "invalidated_node_ids": sorted(invalidated),
                  "reactivated_target_ids": sorted(after - before),
                  "active_target_ids": sorted(after), "plan": deepcopy(plan)}
+        if normalized_binding:
+            event["normalized_final_binding"] = True
+
+        def reject_action(message):
+            if invalidated:
+                event["action_error"] = message
+                self.plan = plan
+                self.history.append(event)
+                message = (f"Rollback accepted; reset nodes {sorted(invalidated)}. "
+                           f"Ready node IDs: {self.ready_ids()}. Action rejected: {message}")
+            raise ValueError(message)
+
+        if action["action"] not in current["allowed_actions"]:
+            reject_action(f"Action {action['action']} is not allowed by current stage {current['id']}; "
+                          f"allowed actions: {current['allowed_actions']}")
+        if action["action"] != "finish":
+            if current["status"] != "pending" or any(by_id[d]["status"] != "completed"
+                                                      for d in current["depends_on"]):
+                reject_action(f"Current stage {current['id']} is not ready; "
+                              f"resolve ready stages {self.ready_ids(plan)} first")
+        elif action.get("predicted_id") is not None:
+            incomplete = [n["id"] for n in nodes if n["status"] != "completed"]
+            if current is not final:
+                reject_action(f"Finish must use final verification node {final['id']}")
+            if incomplete:
+                reject_action(f"Finish needs completed tasks: recheck {incomplete} using existing evidence "
+                              "or acquire missing evidence before finishing")
+            if self.active_ids(plan) != [action["predicted_id"]]:
+                reject_action(f"Finish needs one active target matching predicted_id; "
+                              f"active targets: {self.active_ids(plan)}")
+            if action["predicted_id"] not in current["bound_object_ids"]:
+                reject_action(f"Final binding {current['bound_object_ids']} conflicts with "
+                              f"predicted_id {action['predicted_id']}")
+            if action.get("unresolved"):
+                reject_action("Finish cannot select a target while conditions remain unresolved")
         self.plan = plan
         self.history.append(event)
         return event
