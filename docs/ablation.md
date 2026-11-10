@@ -65,14 +65,20 @@ Monitor 和执行器由同一次多模态模型调用共同完成，没有另训
 参照物和比较成员。排除记录按该节点引用的实际观察范围检查，不要求被排除的竞争者
 仍在绑定结果里。`initial` 覆盖已提供的初始视图与全场景基础几何；工具观察只覆盖
 实际查看或测量的对象。证据范围检查不等于证明视觉结论正确。
+每轮 `supporting_evidence_objects` 明确列出各可用证据 ID 覆盖的对象。
 
 - 节点可表达参照物绑定、属性、空间关系、候选组比较和最终核验，支持并行分支。
 - 回退或修改已完成节点的语义/绑定时，该节点及受影响后继自动失效；旧结论、
   证据关联和排除记录清空，原始观察继续保留，相关目标自动恢复比较资格。
   结构合法的回退即使附带了尚不能执行的动作，也会保留失效后的图，并通过
   `ready_node_ids` 告知下一轮可重核的节点；无环、条件覆盖、证据引用等结构检查
-  未通过的提案仍整体拒绝。历史中的 `action_error` 表示回退已接受、动作被拒绝。
+  未通过的提案仍整体拒绝。历史中的 `action_error` 表示安全图状态已保留、动作被拒绝。
 - 排除只改变目标资格，不删除用于判断“中间”等关系的物理比较成员。
+  未完成节点的排除、以及超出该节点引用证据范围的排除，会被保守撤销，并记录为
+  `discarded_exclusions`；相应候选继续有效，其余合法取证动作仍可执行。程序不会
+  自动补上 `initial` 引用或猜测排除理由。这种直接撤销不产生额外模型调用，也不计为
+  一次失败修正；证据 ID 无效、缺少结论或结构错误仍会拒绝整个提案。
+  若撤销后目标不再唯一，finish 仍被拒绝，但保留安全修正后的图供下一轮继续处理。
 - 选择目标须位于最终核验节点、全部任务完成、条件覆盖且活动目标唯一，并通过原有
   类别观察检查；有未决项则不能作为成功完成。无效 DAG 会返回具体缺失条件或证据 ID，
   修正额度耗尽后仍无法通过则输出 null，不强行制造唯一候选。
@@ -104,7 +110,7 @@ Monitor 和执行器由同一次多模态模型调用共同完成，没有另训
 
 ```bash
 # 在仓库根目录、已安装依赖的 Python 环境中执行。
-export EVIGROUND_ABLATION_STUDY="/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_v3"
+export EVIGROUND_ABLATION_STUDY="/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_v4"
 export EVIGROUND_ABLATION_SCENES="/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs"
 export EVIGROUND_ABLATION_DAG_MONITOR_ENABLED=1
 export EVIGROUND_ABLATION_REVIEW_LIMIT=12

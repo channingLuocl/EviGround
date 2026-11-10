@@ -65,7 +65,7 @@ class DagMonitorTests(unittest.TestCase):
         self.monitor.update(plan(), action(), [])
         before = deepcopy(self.monitor.plan)
         for variant in ("cycle", "absent", "duplicate", "future", "failed", "unknown_id",
-                        "unquoted", "coverage", "unsupported_exclusion"):
+                        "unquoted", "coverage"):
             p = plan()
             if variant == "cycle":
                 p["nodes"][0]["depends_on"] = ["compare"]
@@ -82,8 +82,6 @@ class DagMonitorTests(unittest.TestCase):
             elif variant == "coverage":
                 for n in p["nodes"]:
                     n["condition_ids"] = []
-            elif variant == "unsupported_exclusion":
-                p["nodes"][1]["excluded_target_ids"] = [2]
             observations = [{"evidence_id": "observation_1", "tool": "measure",
                              "error": "bad frame", "no_evidence_acquired": True}]
             with self.subTest(variant=variant), self.assertRaises(ValueError):
@@ -252,14 +250,72 @@ class DagMonitorTests(unittest.TestCase):
         self.monitor.update(p, action("finish"), [observation])
         self.assertEqual(self.monitor.active_ids(), [1])
 
-    def test_exclusions_cannot_cite_an_observation_of_other_objects(self):
+    def test_tool_continues_with_unobserved_rivals_retained(self):
         p = plan()
-        p["nodes"][1].update(status="completed", evidence_ids=["observation_1"],
-                             conclusion="chair 2 is outside the group", excluded_target_ids=[2])
+        p["nodes"][0].update(evidence_ids=["observation_1"], excluded_target_ids=[2])
+        observation = {"evidence_id": "observation_1", "tool": "render", "focus_ids": [1, 3]}
+        event = self.monitor.update(p, action(), [observation])
+        self.assertEqual(self.monitor.active_ids(), [1, 2])
+        self.assertEqual(self.monitor.plan["nodes"][0]["excluded_target_ids"], [])
+        self.assertEqual(event["discarded_exclusions"], [{"node_id": "group", "target_ids": [2],
+                                                        "reason": "outside_cited_evidence"}])
+        self.assertEqual(p["nodes"][0]["excluded_target_ids"], [2])
+        self.assertEqual(self.monitor.context([observation])["discarded_exclusions"],
+                         event["discarded_exclusions"])
+
+    def test_pending_node_cannot_exclude_targets_but_can_acquire_evidence(self):
+        p = plan()
+        p["nodes"][1]["excluded_target_ids"] = [2]
+        event = self.monitor.update(p, action(), [])
+        self.assertEqual(self.monitor.active_ids(), [1, 2])
+        self.assertEqual(self.monitor.plan["nodes"][1]["status"], "pending")
+        self.assertEqual(self.monitor.plan["nodes"][1]["excluded_target_ids"], [])
+        self.assertEqual(event["discarded_exclusions"][0]["reason"], "node_not_completed")
+
+    def test_exclusions_cannot_make_unobserved_rivals_ineligible_at_finish(self):
+        p = plan()
+        for n in p["nodes"]:
+            n.update(status="completed", evidence_ids=["observation_1"], conclusion="supported")
+        p["nodes"][1]["excluded_target_ids"] = [2]
+        p["nodes"][-1]["bound_object_ids"] = []
         p["current_node_id"] = "verify"
         observation = {"evidence_id": "observation_1", "tool": "measure", "focus_ids": [1, 3]}
-        with self.assertRaisesRegex(ValueError, "cited evidence"):
-            self.monitor.update(p, action("finish"), [observation])
+        with self.assertRaisesRegex(ValueError, "active targets: \\[1, 2\\]"):
+            self.monitor.update(p, action("finish", 1), [observation])
+        self.assertEqual(self.monitor.active_ids(), [1, 2])
+        self.assertEqual(self.monitor.plan["nodes"][1]["excluded_target_ids"], [])
+        self.assertEqual(self.monitor.plan["nodes"][-1]["bound_object_ids"], [])
+        self.assertNotIn("normalized_final_binding", self.monitor.history[-1])
+        self.assertIn("action_error", self.monitor.history[-1])
+
+    def test_discarding_exclusions_preserves_supported_exclusions(self):
+        monitor = DagMonitor(QUERY, parsed(), {1, 2, 3}, {1, 2, 3}, ["inspect", "measure", "finish"])
+        p = plan()
+        p["nodes"][0].update(evidence_ids=["observation_1"], excluded_target_ids=[2, 3])
+        observation = {"evidence_id": "observation_1", "tool": "measure", "objects": [{"id": 1}, {"id": 2}]}
+        monitor.update(p, action(), [observation])
+        self.assertEqual(monitor.plan["nodes"][0]["excluded_target_ids"], [2])
+        self.assertEqual(monitor.active_ids(), [1, 3])
+
+    def test_malformed_graph_cannot_commit_discarded_exclusions(self):
+        self.monitor.update(plan(), action(), [])
+        before = deepcopy(self.monitor.plan)
+        p = plan()
+        p["nodes"][1]["excluded_target_ids"] = [2]
+        p["nodes"][0]["depends_on"] = ["verify"]
+        with self.assertRaisesRegex(ValueError, "cycle"):
+            self.monitor.update(p, action(), [])
+        self.assertEqual(self.monitor.plan, before)
+        self.assertEqual(len(self.monitor.history), 1)
+
+    def test_context_reports_only_usable_evidence_object_scopes(self):
+        observations = [{"tool": "render", "evidence_id": "observation_1", "focus_ids": [1, 3]},
+                        {"tool": "measure", "evidence_id": "observation_2", "objects": [{"id": 2}]},
+                        {"tool": "measure", "evidence_id": "observation_3", "focus_ids": [2],
+                         "error": "failed", "no_evidence_acquired": True},
+                        {"tool": "monitor_check", "evidence_id": "observation_4", "focus_ids": [2]}]
+        self.assertEqual(self.monitor.context(observations)["supporting_evidence_objects"],
+                         {"initial": [1, 2, 3], "observation_1": [1, 3], "observation_2": [2]})
 
     def test_initial_evidence_can_rule_out_an_unbound_rival(self):
         p = plan()
@@ -406,6 +462,26 @@ class DagGroundingTests(unittest.TestCase):
         self.assertEqual(len(history), 3)
         self.assertIn("action_error", history[1])
         self.assertEqual(result["active_trace"]["dag_monitor_budget"]["failed_checks"], 1)
+
+    def test_safe_exclusion_correction_allows_the_requested_next_tool(self):
+        first = plan()
+        first["nodes"][0].update(status="pending", evidence_ids=[], conclusion="")
+        first["current_node_id"] = "group"
+        second = plan()
+        second["nodes"][0].update(evidence_ids=["observation_1"], excluded_target_ids=[2])
+        responses = [action() | {"focus_ids": [1, 3], "monitor": first},
+                     action() | {"monitor": second},
+                     action("finish", 1) | {"monitor": self.verified_plan("observation_2")}]
+        result, calls = self.run_ground(responses, 2, repairs=0)
+        self.assertEqual(result["predicted_id"], 1)
+        state = json.loads(calls[2].args[0][1]["content"][0]["text"])
+        self.assertEqual(state["supporting_evidence_objects"]["observation_1"], [1, 3])
+        self.assertEqual(state["supporting_evidence_objects"]["observation_2"], [1, 2, 3])
+        self.assertEqual(state["discarded_exclusions"][0]["target_ids"], [2])
+        self.assertEqual(state["active_target_ids"], [1, 2])
+        budget = result["active_trace"]["dag_monitor_budget"]
+        self.assertEqual(budget["successful_tool_calls"], 2)
+        self.assertEqual(budget["failed_checks"], 0)
 
     def test_invalid_tool_request_uses_repair_allowance_not_evidence(self):
         responses = [action() | {"focus_ids": [], "monitor": plan()},

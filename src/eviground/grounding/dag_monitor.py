@@ -45,6 +45,14 @@ Excluded rivals need not remain in bound_object_ids, which may hold the winner.
 Do not exclude an unexamined rival
 merely to obtain uniqueness. Exclusion affects target eligibility, never removal
 of a physical member from a comparison group. The original target pool is fixed.
+supporting_evidence_objects lists the objects covered by each usable evidence ID.
+For exclusions based on initial geometry, explicitly cite initial; a later local
+view or measurement does not cover the entire initial scene. Exclusions from a
+pending node or outside cited evidence are discarded, keeping those targets active.
+Use the returned task_dag and discarded_exclusions instead of repeating those
+exclusions. An otherwise valid tool action may still proceed to gather evidence.
+If multiple targets remain after a correction, resolve those rivals explicitly;
+reopen the appropriate completed stage if further inspection is needed.
 
 If a prior binding or conclusion fails, put its old node ID in reopen_node_ids,
 make that stage pending and move the current stage there. Rebuild the affected
@@ -117,6 +125,9 @@ class DagMonitor:
                 "task_dag": self.plan,
                 "ready_node_ids": self.ready_ids(),
                 "active_target_ids": self.active_ids(),
+                "supporting_evidence_objects": {eid: sorted(ids) for eid, ids
+                                                in self.evidence_objects(observations).items()},
+                "discarded_exclusions": self.history[-1].get("discarded_exclusions", []) if self.history else [],
                 "supporting_evidence_ids": sorted(self.evidence_ids(observations))}
 
     def ready_ids(self, plan=None):
@@ -160,7 +171,7 @@ class DagMonitor:
             affected = expanded
 
     def update(self, proposal, action, observations):
-        """Reject malformed graphs; retain safe rollbacks even if the action fails."""
+        """Reject malformed graphs; retain safe rollbacks and conservative corrections."""
         from jsonschema import ValidationError, validate
 
         try:
@@ -177,6 +188,7 @@ class DagMonitor:
         requirements = {r["id"] for r in self.requirements}
         evidence = self.evidence_ids(observations)
         evidence_objects = self.evidence_objects(observations)
+        discarded_exclusions = []
         for n in nodes:
             if (not n["source_quotes"] or any(q.casefold() not in self.query.casefold()
                                               for q in n["source_quotes"])):
@@ -194,14 +206,15 @@ class DagMonitor:
                                  f"use existing IDs {sorted(evidence)}")
             if n["status"] == "completed" and (not n["evidence_ids"] or not n["conclusion"].strip()):
                 raise ValueError("Completed tasks need existing evidence and a conclusion")
-            if n["status"] != "completed" and n["excluded_target_ids"]:
-                raise ValueError(f"Pending tasks cannot exclude targets: {n['id']}; "
-                                 "clear its exclusions or complete it with supporting evidence")
             observed = set().union(*(evidence_objects[eid] for eid in n["evidence_ids"]))
-            unsupported = set(n["excluded_target_ids"]) - observed
+            unsupported = set(n["excluded_target_ids"])
+            if n["status"] == "completed":
+                unsupported -= observed
             if unsupported:
-                raise ValueError(f"Task {n['id']} excludes {sorted(unsupported)} outside its cited evidence; "
-                                 "inspect/measure those objects or cite supporting initial evidence")
+                n["excluded_target_ids"] = [i for i in n["excluded_target_ids"] if i not in unsupported]
+                discarded_exclusions.append({"node_id": n["id"], "target_ids": sorted(unsupported),
+                                             "reason": "outside_cited_evidence" if n["status"] == "completed"
+                                             else "node_not_completed"})
         # Kahn traversal checks acyclicity without depending on model array order.
         done = set()
         while len(done) < len(nodes):
@@ -276,13 +289,17 @@ class DagMonitor:
                  "active_target_ids": sorted(after), "plan": deepcopy(plan)}
         if normalized_binding:
             event["normalized_final_binding"] = True
+        if discarded_exclusions:
+            event["discarded_exclusions"] = discarded_exclusions
 
         def reject_action(message):
-            if invalidated:
+            if invalidated or discarded_exclusions:
                 event["action_error"] = message
                 self.plan = plan
                 self.history.append(event)
-                message = (f"Rollback accepted; reset nodes {sorted(invalidated)}. "
+                prefix = (f"Rollback accepted; reset nodes {sorted(invalidated)}." if invalidated else
+                          "Unsupported exclusions discarded; those targets remain active.")
+                message = (f"{prefix} "
                            f"Ready node IDs: {self.ready_ids()}. Action rejected: {message}")
             raise ValueError(message)
 
