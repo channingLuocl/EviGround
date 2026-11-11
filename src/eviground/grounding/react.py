@@ -271,6 +271,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         for name in parsed.get("Anchor", [])
     ]
     observations, actions, signatures, inspected = ([], [], set(), set())
+    required_inspections = set()
     best_ranks = {
         b["id"]: min(b["matched_ranks"], default=None)
         for b in payload["target_category_bindings"]
@@ -321,6 +322,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         }
         if monitor is not None:
             state.update(monitor.context(observations))
+            state["required_inspection_ids"] = sorted(required_inspections - inspected)
             state["remaining_plan_repairs"] = max(0, repair_limit - repair_failures)
         action_schema = json.loads(json.dumps(schema))
         if remaining_tools == 0 or last_decision:
@@ -386,6 +388,12 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                     and best_ranks.get(oid) in (2, 3, 4, 5) and oid not in inspected):
                 gap = "The selected target is an alternative-only category match and has not been visibly inspected. Inspect it with plausible primary matches; distance alone is not category evidence."
                 if remaining_tools > 0 and not last_decision:
+                    if monitor is not None and repair_failures < repair_limit and "inspect" in available:
+                        required_inspections.add(oid)
+                        event = monitor.require_inspection(oid, observations)
+                        trace["dag_monitor_current_node_id"] = event["current_node_id"]
+                        gap += (f" The DAG has reopened stage {event['current_node_id']} for inspection; "
+                                "use that nonterminal stage and keep final verification finish-only.")
                     observation = {"tool": "finish_check", "missing": gap}
                     observations.append(observation)
                     trace["steps"].append(

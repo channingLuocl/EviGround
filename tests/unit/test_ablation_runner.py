@@ -222,3 +222,21 @@ class AblationRunnerTests(unittest.TestCase):
                 path.write_text(json.dumps(invalid))
                 with self.subTest(variant=variant), self.assertRaisesRegex(ValueError, "DAG technical pilot failed"):
                     runner.check_pilots("E0", docs)
+
+    def test_dag_pilot_failure_reports_validation_feedback(self):
+        runner = load_runner({"EVIGROUND_ABLATION_DAG_MONITOR_ENABLED": "1"})
+        with tempfile.TemporaryDirectory() as directory:
+            runner.STUDY = Path(directory)
+            path = runner.STUDY / "prediction.json"
+            prediction = {"predicted_id": None, "decision_reasons": ["DAG validation repair budget exhausted"],
+                          "active_trace": {"dag_monitor_history": [{"revision": 1}],
+                                           "dag_monitor_budget": {"failed_checks": 7, "successful_tool_calls": 0},
+                                           "react_observations": [{"tool": "monitor_check", "error": "Final node must allow finish"}]}}
+            path.write_text(json.dumps(prediction))
+            docs = [{"summary": {"complete": True, "errors": 0},
+                     "results": [{"csv_row": 20, "correct": False, "prediction_path": str(path)}]}]
+            with self.assertRaisesRegex(ValueError, "row 20: 7 failed checks, 0 evidence tools; last: Final node must allow finish"):
+                runner.check_pilots("E0", docs)
+            diagnostic = json.loads((runner.STUDY / "technical_pilot/E0/diagnostics.json").read_text())[0]
+            self.assertEqual(diagnostic["validation_feedback"],
+                             [{"tool": "monitor_check", "message": "Final node must allow finish"}])

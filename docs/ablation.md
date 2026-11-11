@@ -85,6 +85,12 @@ Monitor 和执行器由同一次多模态模型调用共同完成，没有另训
   仅当上述完成、唯一性、无未决项检查均通过，且最终节点绑定列表为空时，使用
   显式 `predicted_id` 补齐该冗余绑定，并记录 `normalized_final_binding`；非空冲突
   绑定不会被覆盖，已有类别观察检查也不会跳过。回退导致任务失效后仍不能直接结束。
+  若类别检查要求补看，控制器会重开一个绑定该目标的非终止任务（没有匹配绑定时
+  选用现有非终止任务），并让它及受影响后继失效；最终核验仍只允许 `finish`。
+  `required_inspection_ids` 提示尚需补看的目标，`ready_node_ids` 给出可执行阶段，
+  历史中用 `transition=category_inspection_required` 标记这次控制器回退。
+  不增加节点或额外模型调用，不把这次状态转移记作实际取证；目标必须出现在实际
+  渲染的 `marked_ids` 中才算满足类别观察要求，只有请求 `focus_ids` 并不够。
 - DAG 模式按成功执行的工具调用计算取证预算；计划校验失败、无效工具请求和被驳回的
   提前结束使用独立的有限修正额度，不占用取证次数。默认取证上限仍为 5，额外修正额度
   默认为 6，总动作决策调用上限为 `取证上限 + 修正额度 + 1`。工具用完后仍可修正最终
@@ -110,7 +116,7 @@ Monitor 和执行器由同一次多模态模型调用共同完成，没有另训
 
 ```bash
 # 在仓库根目录、已安装依赖的 Python 环境中执行。
-export EVIGROUND_ABLATION_STUDY="/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_v4"
+export EVIGROUND_ABLATION_STUDY="/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_v5"
 export EVIGROUND_ABLATION_SCENES="/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs"
 export EVIGROUND_ABLATION_DAG_MONITOR_ENABLED=1
 export EVIGROUND_ABLATION_REVIEW_LIMIT=12
@@ -133,6 +139,8 @@ PYTHON_DOTENV_DISABLED=1 PYTHONPATH=src \
 不会启动 1,500 条正式评估。DAG 技术试运行还要求每条至少接受过一版任务图，且没有
 耗尽修正额度；不设置正确率门槛，合法弃答仍如实记录。检查
 `technical_pilot/E0/diagnostics.json` 后，移除 `--technical-pilot-only` 可启动正式评估。
+诊断中的 `validation_feedback` 保存逐轮计划/结束检查信息；失败报错直接给出样本行号、
+失败检查数、成功取证数和最后一条反馈，便于区别未决弃答与流程反复失败。
 若出现技术错误先查日志，不按准确率修改样本或重跑。E0 的汇总保存在
 `$EVIGROUND_ABLATION_STUDY/runs/E0/results.json`，每条
 `runs/E0/key_slot_*/q*/prediction.json` 的 `active_trace` 内有

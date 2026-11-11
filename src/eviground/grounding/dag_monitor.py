@@ -73,7 +73,12 @@ Finish with a target ONLY at the completed final verification node, after all
 nodes are completed, every requirement is covered and the program-derived active
 target pool contains exactly that ID. Explain why other targets are contradicted,
 and leave unresolved empty. Uniqueness alone is not sufficient. Existing category
-inspection requirements still apply. If the decision budget ends without a valid
+inspection requirements still apply. When finish_check requires category inspection,
+the controller reopens a nonterminal task and its descendants. Follow the returned
+ready_node_ids and inspect required_inspection_ids with plausible primary matches;
+keep the final verification node finish-only. A requested focus ID does not count
+as visibly inspected unless it appears in the rendered marked_ids.
+If the decision budget ends without a valid
 unique supported target, finish with predicted_id=null and state what is missing;
 do not force exclusions. A null finish is abstention, not successful completion.
 Invalid plans receive correction feedback and use a separate bounded repair
@@ -170,6 +175,25 @@ class DagMonitor:
                 return affected
             affected = expanded
 
+    def require_inspection(self, target_id, observations):
+        """Route an unmet category guard back to an existing evidence stage."""
+        plan = deepcopy(self.plan)
+        tasks = [n for n in plan["nodes"] if n["kind"] != "verification"]
+        relevant = [n for n in tasks if target_id in n["bound_object_ids"]]
+        stage = min(relevant or tasks,
+                    key=lambda n: len(self.descendants(plan["nodes"], {n["id"]})))
+        stage.update(status="pending", evidence_ids=[], conclusion="", excluded_target_ids=[])
+        stage["allowed_actions"] = sorted(set(stage["allowed_actions"]) | {"inspect"})
+        affected = self.descendants(plan["nodes"], {stage["id"]})
+        for n in plan["nodes"]:
+            if n["id"] in affected and not n["allowed_actions"]:
+                n["allowed_actions"] = ["inspect"]
+        plan.update(current_node_id=stage["id"], reopen_node_ids=[],
+                    revision_reason=f"Category inspection of target {target_id} required at stage {stage['id']}")
+        event = self.update(plan, {"action": "inspect"}, observations)
+        event.update(transition="category_inspection_required", required_inspection_ids=[target_id])
+        return event
+
     def update(self, proposal, action, observations):
         """Reject malformed graphs; retain safe rollbacks and conservative corrections."""
         from jsonschema import ValidationError, validate
@@ -225,7 +249,9 @@ class DagMonitor:
             done.update(ready)
         finals = [n for n in nodes if n["kind"] == "verification"]
         if len(finals) != 1 or finals[0]["allowed_actions"] != ["finish"]:
-            raise ValueError("Monitor needs one final verification task allowing only finish")
+            raise ValueError("Monitor needs one final verification task allowing only finish; "
+                             f"use a nonterminal evidence stage for inspect/measure. "
+                             f"Previously ready nodes: {self.ready_ids()}")
         final = finals[0]
         nonfinal_finish = [n["id"] for n in nodes if n is not final and "finish" in n["allowed_actions"]]
         if nonfinal_finish:

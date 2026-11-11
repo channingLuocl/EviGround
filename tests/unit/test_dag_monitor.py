@@ -317,6 +317,52 @@ class DagMonitorTests(unittest.TestCase):
         self.assertEqual(self.monitor.context(observations)["supporting_evidence_objects"],
                          {"initial": [1, 2, 3], "observation_1": [1, 3], "observation_2": [2]})
 
+    def test_required_category_inspection_reopens_a_nonterminal_stage(self):
+        p = plan()
+        for n in p["nodes"]:
+            n.update(status="completed", evidence_ids=["initial"], conclusion="supported")
+        p["nodes"][1]["excluded_target_ids"] = [2]
+        p["current_node_id"] = "verify"
+        self.monitor.update(p, action("finish", 1), [])
+        event = self.monitor.require_inspection(1, [])
+        stages = {n["id"]: n for n in self.monitor.plan["nodes"]}
+        self.assertEqual(self.monitor.plan["current_node_id"], "compare")
+        self.assertEqual(self.monitor.ready_ids(), ["compare"])
+        self.assertEqual(stages["group"]["status"], "completed")
+        self.assertEqual(stages["compare"]["status"], "pending")
+        self.assertIn("inspect", stages["compare"]["allowed_actions"])
+        self.assertEqual(stages["verify"]["status"], "pending")
+        self.assertEqual(stages["verify"]["allowed_actions"], ["finish"])
+        self.assertEqual(self.monitor.active_ids(), [1, 2])
+        self.assertEqual(event["required_inspection_ids"], [1])
+        self.assertEqual(event["transition"], "category_inspection_required")
+        self.assertEqual(self.monitor.evidence_ids([]), {"initial"})
+
+    def test_inspection_reopening_does_not_add_nodes_to_a_full_graph(self):
+        nodes = [node("group", "binding", completed=True)]
+        for i in range(10):
+            nodes.append(node(f"stage_{i}", "relation", [nodes[-1]["id"]], completed=True))
+        nodes[-1]["excluded_target_ids"] = [2]
+        nodes.append(node("verify", "verification", [nodes[-1]["id"]], completed=True))
+        p = {"nodes": nodes, "current_node_id": "verify", "reopen_node_ids": [], "revision_reason": "verify"}
+        self.monitor.update(p, action("finish", 1), [])
+        self.monitor.require_inspection(1, [])
+        self.assertEqual(len(self.monitor.plan["nodes"]), 12)
+        self.assertEqual(self.monitor.ready_ids(), ["stage_9"])
+
+    def test_inspection_reopening_keeps_reasoning_only_descendants_executable(self):
+        p = plan()
+        for n in p["nodes"]:
+            n.update(status="completed", evidence_ids=["initial"], conclusion="supported")
+        p["nodes"][0]["bound_object_ids"] = [1]
+        p["nodes"][1].update(bound_object_ids=[3], allowed_actions=[], excluded_target_ids=[2])
+        p["current_node_id"] = "verify"
+        self.monitor.update(p, action("finish", 1), [])
+        self.monitor.require_inspection(1, [])
+        self.assertEqual(self.monitor.plan["current_node_id"], "group")
+        self.assertEqual(self.monitor.plan["nodes"][1]["allowed_actions"], ["inspect"])
+        self.monitor.update(deepcopy(self.monitor.plan), action("inspect"), [])
+
     def test_initial_evidence_can_rule_out_an_unbound_rival(self):
         p = plan()
         p["nodes"][1].update(status="completed", bound_object_ids=[1],
@@ -540,3 +586,37 @@ class DagGroundingTests(unittest.TestCase):
         result, _ = self.run_ground([finished, finished], 1, alternative_category=True)
         self.assertIsNone(result["predicted_id"])
         self.assertIn("alternative-only", result["scene_evidence"]["unresolved"][0])
+
+    def test_category_guard_routes_finish_back_to_legal_inspection(self):
+        pending = plan()
+        responses = [action("finish", 1) | {"monitor": self.verified_plan("initial")},
+                     action("inspect") | {"monitor": pending},
+                     action("finish", 1) | {"monitor": self.verified_plan("observation_2")}]
+        with patch("eviground.rendering.inspection.render_action",
+                   return_value={"image": "inspected.png", "marked_ids": [1, 2, 3]}):
+            result, calls = self.run_ground(responses, 1, alternative_category=True)
+        self.assertEqual(result["predicted_id"], 1)
+        state = json.loads(calls[1].args[0][1]["content"][0]["text"])
+        self.assertEqual(state["required_inspection_ids"], [1])
+        self.assertEqual(state["task_dag"]["current_node_id"], "compare")
+        self.assertEqual(state["ready_node_ids"], ["compare"])
+        self.assertEqual(state["task_dag"]["nodes"][-1]["allowed_actions"], ["finish"])
+        self.assertEqual(state["task_dag"]["nodes"][-1]["status"], "pending")
+        after_inspect = json.loads(calls[2].args[0][1]["content"][0]["text"])
+        self.assertEqual(after_inspect["required_inspection_ids"], [])
+        budget = result["active_trace"]["dag_monitor_budget"]
+        self.assertEqual(budget["successful_tool_calls"], 1)
+        self.assertEqual(budget["failed_checks"], 1)
+        self.assertEqual(budget["decision_calls"], 3)
+
+    def test_category_reopening_does_not_treat_requested_focus_as_visible(self):
+        responses = [action("finish", 1) | {"monitor": self.verified_plan("initial")},
+                     action("inspect") | {"monitor": plan()},
+                     action("finish", 1) | {"monitor": self.verified_plan("observation_2")}]
+        with patch("eviground.rendering.inspection.render_action",
+                   return_value={"image": "inspected.png", "marked_ids": [2, 3]}):
+            result, calls = self.run_ground(responses, 1, alternative_category=True)
+        self.assertIsNone(result["predicted_id"])
+        state = json.loads(calls[2].args[0][1]["content"][0]["text"])
+        self.assertEqual(state["required_inspection_ids"], [1])
+        self.assertIn("visibly inspected", result["scene_evidence"]["unresolved"][0])

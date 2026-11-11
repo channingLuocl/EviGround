@@ -236,16 +236,27 @@ def check_pilots(variant_id, documents):
             for row in document["results"]:
                 prediction = json.loads(Path(row["prediction_path"]).read_text())
                 trace = prediction["active_trace"]
+                feedback = [{"tool": o["tool"], "message": o.get("error") or o.get("missing", "")}
+                            for o in trace.get("react_observations", [])
+                            if o.get("tool") in ("monitor_check", "finish_check")]
                 diagnostics.append({"csv_row": row["csv_row"],
                                     "answered": prediction["predicted_id"] is not None,
                                     "accepted_dag_revisions": len(trace.get("dag_monitor_history", [])),
                                     "budget": trace.get("dag_monitor_budget", {}),
+                                    "validation_feedback": feedback,
                                     "decision_reasons": prediction["decision_reasons"]})
         save(STUDY / "technical_pilot" / variant_id / "diagnostics.json", diagnostics)
-        if not diagnostics or any(not d["accepted_dag_revisions"] or
-                                  d["budget"].get("failed_checks", 0) > DAG_REPAIR_LIMIT
-                                  for d in diagnostics):
-            raise ValueError(f"DAG technical pilot failed for {variant_id}; inspect diagnostics.json before final evaluation")
+        failed = [d for d in diagnostics if not d["accepted_dag_revisions"] or
+                  d["budget"].get("failed_checks", 0) > DAG_REPAIR_LIMIT]
+        if not diagnostics or failed:
+            details = []
+            for d in failed:
+                budget = d["budget"]
+                last = d["validation_feedback"][-1]["message"] if d["validation_feedback"] else "no validation feedback"
+                details.append(f"row {d['csv_row']}: {budget.get('failed_checks', 0)} failed checks, "
+                               f"{budget.get('successful_tool_calls', 0)} evidence tools; last: {last}")
+            raise ValueError(f"DAG technical pilot failed for {variant_id}; {'; '.join(details) or 'no pilot diagnostics'}. "
+                             "Formal evaluation not started; inspect diagnostics.json")
 
 
 def read_keys(stream):
