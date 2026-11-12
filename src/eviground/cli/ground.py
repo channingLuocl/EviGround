@@ -98,6 +98,7 @@ def run_case(row, scene_root, output, top_k, review_limit):
         run = json.loads(run_path.read_text()) if run_path.exists() else {}
         from eviground.grounding.recovery import actual_attempts
         from eviground.grounding.settings import settings as policy_settings
+        from eviground.evaluation.reporting import trajectory_metrics
 
         result = {
             **row,
@@ -107,6 +108,7 @@ def run_case(row, scene_root, output, top_k, review_limit):
             "pipeline_latency_s": run.get("pipeline_latency_s"),
             "call_usage": [c.get("usage") for c in run.get("calls", [])],
             "error_stage": run.get("error_stage"),
+            **trajectory_metrics(run.get("active_trace", {})),
             "predicted_id": None,
             "correct": False,
             "iou_3d": 0.0,

@@ -5,6 +5,20 @@ from eviground.evaluation.run_storage import ensure_run_writable, write_json
 from eviground.evaluation.metrics import bbox_iou_3d
 
 
+def trajectory_metrics(trace):
+    observations = trace.get("react_observations", [])
+    return {
+        "successful_tool_calls": sum(o.get("tool") in ("render", "measure")
+                                     and not o.get("no_evidence_acquired") and not o.get("error")
+                                     for o in observations),
+        "decision_calls": trace.get("react_decision_calls", len(trace.get("react_actions", []))),
+        "repair_calls": sum(bool(o.get("no_evidence_acquired")) or o.get("tool") == "finish_check"
+                            for o in observations),
+        "budget_exhausted": trace.get("termination_cause") == "budget_exhausted",
+        "repair_exhausted": trace.get("termination_cause") == "repair_exhausted",
+    }
+
+
 def evaluate(row, prediction, log, top_k, gt_box=None):
     data = json.loads(prediction.read_text())
     if (
@@ -36,6 +50,7 @@ def evaluate(row, prediction, log, top_k, gt_box=None):
         "implementation_version": data.get("implementation_version"),
         "prediction_source": data.get("prediction_source"),
         "stop_reason": trace.get("stop_reason"),
+        **trajectory_metrics(trace),
         "prediction_path": str(prediction),
         "log": str(log),
     }

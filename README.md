@@ -52,8 +52,8 @@ scripts/        命令启动脚本
 
 - ScanRefer 清单转换与评分：`scripts/scanrefer.py`；主推理仍使用 `eviground --manifest ...`，预测实例按目标 GT 框的 3D IoU 评分，报告 Acc@0.25 / Acc@0.5。
 - ScanRefer 原始输入、预测实例、分类导出、策略与审计脚本位于 `scripts/prepare_scanrefer_*.py`、`scripts/classify_scanrefer_r8.py` 和 `scripts/audit_scanrefer.py`。
-- Nr3D 子集抽样、E0–E5 批处理与审计汇总见 [消融实验指南](docs/ablation.md)。当前抽样器和六条件批处理器仅支持 Nr3D；ScanRefer 子集消融尚未由这些脚本实现或启动。
-- 可选动态 DAG Monitor 的开关、依赖回退、独立计划修正预算及同子集 E0 对比命令见该指南的“动态 DAG Monitor 与原 ReAct 对比”；默认推理仍使用原 ReAct。
+- Nr3D 子集抽样、A0–A4 五组模块消融与统一审计见 [消融实验指南](docs/ablation.md)：完整模型、去退火、去 Monitor（含 DAG）、去按需证据获取、Top-5 改 Top-1。当前调度器仅支持 Nr3D。
+- 五组采用相同的成功工具预算、修正额度和决策上界；去 Monitor 仍保留共享轮次退火。普通推理入口默认仍使用原 ReAct，可按指南显式开启 Monitor 与退火。旧 E0–E5 不与新配置混用。
 - `scanrefer_ready.sh`、`scanrefer_gt_ready.sh`、`run_scanrefer_r18.sh` 和 `run_eviground_local.sh` 保留历史本机路径及冻结源码入口，不能视为新机器上的通用启动命令。新实验应显式传入清单、预测导出、场景和独立输出目录。
 
 `experiments/`、`output/`、`outputs/`、`tmp/`、`local_outputs/` 与 `docs/figures/` 保存本地实验快照、模型输出或论文素材，不纳入当前源码提交；已有文件保留在本机。

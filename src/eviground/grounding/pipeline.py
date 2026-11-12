@@ -129,6 +129,7 @@ def run_query(scene_dir, query, out, top_k=5, review_limit=3):
             "steps": [],
             "internal_usage": {"compute": 0, "render": 0, "visual_check": 0},
         }
+        record["active_trace"] = trace
         stage = "react_grounding"
         if candidates:
             prediction = ground(

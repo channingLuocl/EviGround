@@ -12,26 +12,29 @@ import subprocess
 import sys
 import time
 
+from eviground.grounding.annealing import SCHEDULE
+
 ROOT = Path(__file__).resolve().parents[1]
-STUDY = Path(os.getenv("EVIGROUND_ABLATION_STUDY", ROOT / "experiments/ablation_20261104"))
+STUDY = Path(os.getenv("EVIGROUND_ABLATION_STUDY", ROOT / "experiments/nr3d_module_ablation"))
 MODEL = os.getenv("EVIGROUND_ABLATION_MODEL", "gpt-6.1-sol")
 BASE_URL = os.getenv("EVIGROUND_ABLATION_BASE_URL", os.getenv("EVIGROUND_BASE_URL", "https://api.openai.com/v1"))
 SCENES = Path(os.getenv("EVIGROUND_ABLATION_SCENES", ROOT / "local_outputs"))
 EXPORT = Path(os.getenv("EVIGROUND_ABLATION_PREDICTIONS", ROOT / "local_outputs/classifier_predictions"))
-DAG_MONITOR = os.getenv("EVIGROUND_ABLATION_DAG_MONITOR_ENABLED", "0").strip()
-if DAG_MONITOR not in ("0", "1"):
-    raise ValueError("EVIGROUND_ABLATION_DAG_MONITOR_ENABLED must be 0 or 1")
-REVIEW_LIMIT = int(os.getenv("EVIGROUND_ABLATION_REVIEW_LIMIT", "5"))
+REVIEW_LIMIT = int(os.getenv("EVIGROUND_ABLATION_REVIEW_LIMIT", "12"))
 DAG_REPAIR_LIMIT = int(os.getenv("EVIGROUND_ABLATION_DAG_REPAIR_LIMIT", "6"))
 if REVIEW_LIMIT < 1 or DAG_REPAIR_LIMIT < 0:
     raise ValueError("Review limit must be positive and DAG repair limit must be nonnegative")
 VARIANTS = {
-    "E0": {"name": "Full EviGround", "inspect": 1, "measure": 1, "top_k": 5, "guard": 1},
-    "E1": {"name": "Without supplementary inspection", "inspect": 0, "measure": 1, "top_k": 5, "guard": 0},
-    "E2": {"name": "Without conditional geometry", "inspect": 1, "measure": 0, "top_k": 5, "guard": 1},
-    "E3": {"name": "Top-1 category only", "inspect": 1, "measure": 1, "top_k": 1, "guard": 0},
-    "E4": {"name": "Without alternative-category inspection check", "inspect": 1, "measure": 1, "top_k": 5, "guard": 0},
-    "E5": {"name": "Without dynamic evidence acquisition", "inspect": 0, "measure": 0, "top_k": 5, "guard": 0},
+    "A0": {"name": "Full EviGround", "monitor": 1, "annealing": 1,
+           "inspect": 1, "measure": 1, "top_k": 5, "guard": 1},
+    "A1": {"name": "Without policy annealing", "monitor": 1, "annealing": 0,
+           "inspect": 1, "measure": 1, "top_k": 5, "guard": 1},
+    "A2": {"name": "Without Monitor (including DAG organization and revision)",
+           "monitor": 0, "annealing": 1, "inspect": 1, "measure": 1, "top_k": 5, "guard": 1},
+    "A3": {"name": "Without on-demand evidence acquisition", "monitor": 1, "annealing": 1,
+           "inspect": 0, "measure": 0, "top_k": 5, "guard": 0},
+    "A4": {"name": "Without multi-category coverage (Top-1)", "monitor": 1, "annealing": 1,
+           "inspect": 1, "measure": 1, "top_k": 1, "guard": 0},
 }
 
 
@@ -64,8 +67,11 @@ def environment(key, variant, workers):
                 "EVIGROUND_INSPECT_ENABLED": str(variant["inspect"]),
                 "EVIGROUND_MEASURE_ENABLED": str(variant["measure"]),
                 "EVIGROUND_CATEGORY_INSPECTION_REQUIRED": str(variant["guard"])})
-    env["EVIGROUND_DAG_MONITOR_ENABLED"] = DAG_MONITOR
+    env["EVIGROUND_DAG_MONITOR_ENABLED"] = str(variant["monitor"])
+    env["EVIGROUND_POLICY_ANNEALING_ENABLED"] = str(variant["annealing"])
+    env["EVIGROUND_SUCCESSFUL_TOOL_BUDGET"] = "1"
     env["EVIGROUND_DAG_REPAIR_LIMIT"] = str(DAG_REPAIR_LIMIT)
+    env["EVIGROUND_DECISION_MAX_TOKENS"] = "4000"
     env.update({k: "1" for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
                                "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")})
     return env
@@ -104,24 +110,23 @@ def freeze_inputs(workers):
     protocol = {
         "dataset": "nr3d", "model": MODEL,
         "base_url": BASE_URL, "queries": 1500,
-        "conditions": VARIANTS, "nonterminal_evidence_budget": REVIEW_LIMIT,
-        "dag_monitor_enabled": DAG_MONITOR == "1",
-        "dag_monitor_repair_limit": DAG_REPAIR_LIMIT if DAG_MONITOR == "1" else 0,
-        "decision_budget_policy": ("successful evidence calls plus bounded plan/tool repairs and a final decision"
-                                   if DAG_MONITOR == "1" else "bounded nonterminal decisions plus a final decision"),
-        "controller": "dynamic_dag_monitor" if DAG_MONITOR == "1" else "react",
-        "initial_evidence": "same overview, top-down view and basic AABB geometry in all conditions",
+        "suite": "functional_modules_v1", "baseline": "A0", "conditions": VARIANTS,
+        "successful_tool_budget": REVIEW_LIMIT, "repair_allowance": DAG_REPAIR_LIMIT,
+        "max_decision_calls": REVIEW_LIMIT + DAG_REPAIR_LIMIT + 1,
+        "decision_budget_policy": "successful evidence calls plus bounded validation/tool repairs and a final decision",
+        "annealing_schedule": SCHEDULE, "decision_max_tokens": 4000,
+        "initial_evidence": "same scene inputs, overview/top-down rendering procedure and basic AABB geometry; eligible category markings follow the variant",
         "subset_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
         "sampling": subset["sampling"], "sharding": "alternating fixed csv_row order; same key slot across conditions",
         "workers_per_key": workers, "total_workers": 2 * workers,
         "thinking_enabled": True, "completion_token_floor": 8192, "temperature": 0,
-        "primary_comparisons": "E0 minus each E1-E5 on exactly the same 1500 descriptions",
-        "auxiliary_comparisons": ["E4-E1", "E4-E3"],
+        "primary_comparisons": [f"A0-A{i}" for i in range(1, 5)],
+        "auxiliary_comparisons": [],
         "evaluation_policy": "one pass; nulls and errors included; no accuracy-driven retries or sample changes",
         "transient_retry_policy": "at most one extra API attempt per trajectory",
         "pilot_csv_rows": [r["csv_row"] for r in pilot],
         "pilot_policy": "technical verification only; excluded from 1500-query evaluation",
-        "reference_policy": "Qwen full-set result is separately labeled and never substituted for GPT E0",
+        "reference_policy": "Archived main results are not substituted for the newly evaluated A0",
     }
     protocol_path = STUDY / "protocol.json"
     if protocol_path.exists():
@@ -152,7 +157,7 @@ except Exception as exc:
 '''
     def check(slot):
         process = subprocess.run([sys.executable, "-c", script, str(STUDY / f"preflight_{slot+1}.png")],
-                                 env=environment(keys[slot], VARIANTS["E0"], workers),
+                                 env=environment(keys[slot], VARIANTS["A0"], workers),
                                  capture_output=True, text=True, cwd=ROOT)
         try:
             result = json.loads(process.stdout)
@@ -230,33 +235,43 @@ def aggregate(variant_id, documents):
 def check_pilots(variant_id, documents):
     if any(not d["summary"]["complete"] or d["summary"]["errors"] for d in documents):
         raise ValueError(f"Technical pilot failed for {variant_id}; final evaluation not started")
-    if DAG_MONITOR == "1":
-        diagnostics = []
-        for document in documents:
-            for row in document["results"]:
-                prediction = json.loads(Path(row["prediction_path"]).read_text())
-                trace = prediction["active_trace"]
-                feedback = [{"tool": o["tool"], "message": o.get("error") or o.get("missing", "")}
-                            for o in trace.get("react_observations", [])
-                            if o.get("tool") in ("monitor_check", "finish_check")]
-                diagnostics.append({"csv_row": row["csv_row"],
-                                    "answered": prediction["predicted_id"] is not None,
-                                    "accepted_dag_revisions": len(trace.get("dag_monitor_history", [])),
-                                    "budget": trace.get("dag_monitor_budget", {}),
-                                    "validation_feedback": feedback,
-                                    "decision_reasons": prediction["decision_reasons"]})
-        save(STUDY / "technical_pilot" / variant_id / "diagnostics.json", diagnostics)
-        failed = [d for d in diagnostics if not d["accepted_dag_revisions"] or
-                  d["budget"].get("failed_checks", 0) > DAG_REPAIR_LIMIT]
-        if not diagnostics or failed:
-            details = []
-            for d in failed:
-                budget = d["budget"]
-                last = d["validation_feedback"][-1]["message"] if d["validation_feedback"] else "no validation feedback"
-                details.append(f"row {d['csv_row']}: {budget.get('failed_checks', 0)} failed checks, "
-                               f"{budget.get('successful_tool_calls', 0)} evidence tools; last: {last}")
-            raise ValueError(f"DAG technical pilot failed for {variant_id}; {'; '.join(details) or 'no pilot diagnostics'}. "
-                             "Formal evaluation not started; inspect diagnostics.json")
+    variant = VARIANTS[variant_id]
+    diagnostics = []
+    for document in documents:
+        for row in document["results"]:
+            prediction = json.loads(Path(row["prediction_path"]).read_text())
+            trace = prediction["active_trace"]
+            feedback = [{"tool": o["tool"], "message": o.get("error") or o.get("missing", "")}
+                        for o in trace.get("react_observations", [])
+                        if o.get("tool") in ("monitor_check", "finish_check")]
+            budget = trace.get("react_budget", {})
+            category_abstention = (prediction.get("category_target_ids") == []
+                                   and trace.get("stop_reason") == "category_abstention")
+            valid = category_abstention or (
+                budget.get("accounting") == "successful_tools"
+                and budget.get("failed_checks", 0) <= DAG_REPAIR_LIMIT
+                and budget.get("decision_calls", 0) <= REVIEW_LIMIT + DAG_REPAIR_LIMIT + 1
+                and bool(trace.get("dag_monitor_history")) == bool(variant["monitor"])
+                and trace.get("policy_annealing_enabled") == bool(variant["annealing"])
+                and bool(trace.get("policy_annealing_history")) == bool(variant["annealing"]))
+            diagnostics.append({"csv_row": row["csv_row"], "valid": valid,
+                                "answered": prediction["predicted_id"] is not None,
+                                "category_abstention": category_abstention,
+                                "accepted_dag_revisions": len(trace.get("dag_monitor_history", [])),
+                                "budget": budget, "validation_feedback": feedback,
+                                "decision_reasons": prediction["decision_reasons"]})
+    save(STUDY / "technical_pilot" / variant_id / "diagnostics.json", diagnostics)
+    failed = [d for d in diagnostics if not d["valid"]]
+    if not diagnostics or failed:
+        details = []
+        for d in failed:
+            budget = d["budget"]
+            last = d["validation_feedback"][-1]["message"] if d["validation_feedback"] else "no validation feedback"
+            details.append(f"row {d['csv_row']}: {budget.get('failed_checks', 0)} failed checks, "
+                           f"{budget.get('successful_tool_calls', 0)} evidence tools; last: {last}")
+        controller = "DAG" if variant["monitor"] else "ReAct"
+        raise ValueError(f"{controller} technical pilot failed for {variant_id}; {'; '.join(details) or 'no pilot diagnostics'}. "
+                         "Formal evaluation not started; inspect diagnostics.json")
 
 
 def read_keys(stream):
@@ -287,8 +302,8 @@ def main():
                         help="Use the two successful preflights already performed with the same keys")
     parser.add_argument("--skip-technical-pilot", action="store_true",
                         help="Reuse completed fixed technical pilots for the selected conditions")
-    parser.add_argument("--start-condition", choices=tuple(VARIANTS), default="E0")
-    parser.add_argument("--end-condition", choices=tuple(VARIANTS), default="E5")
+    parser.add_argument("--start-condition", choices=tuple(VARIANTS), default="A0")
+    parser.add_argument("--end-condition", choices=tuple(VARIANTS), default="A4")
     parser.add_argument("--detach", action="store_true",
                         help="Continue in a separate process with persistent runner.log")
     args = parser.parse_args()
@@ -323,8 +338,8 @@ def main():
         raise ValueError("start-condition must not follow end-condition")
     selected_conditions = condition_ids[first:last + 1]
     # Validate all 130 scenes before any grounding request.
-    if args.start_condition == "E0" and not args.technical_pilot_only:
-        run_pair("E0", keys, manifests, args.workers_per_key, "runs", prepare=True)
+    if args.start_condition == "A0" and not args.technical_pilot_only:
+        run_pair("A0", keys, manifests, args.workers_per_key, "runs", prepare=True)
     pilots = [STUDY / f"pilot_shard_{i+1}.json" for i in range(2)]
     for variant_id in selected_conditions:
         if args.skip_technical_pilot:
@@ -344,14 +359,14 @@ def main():
         summaries[variant_id] = aggregate(variant_id, documents)
         save(STUDY / "condition_summaries.json", summaries)
     if selected_conditions == condition_ids:
-        baseline = json.loads((STUDY / "runs/E0/results.json").read_text())["results"]
+        baseline = json.loads((STUDY / "runs/A0/results.json").read_text())["results"]
         comparisons = {}
         for variant_id in VARIANTS:
             rows = json.loads((STUDY / "runs" / variant_id / "results.json").read_text())["results"]
             comparisons[variant_id] = {
                 "accuracy": summaries[variant_id]["accuracy"],
-                "e0_minus_condition_pp": 100 * (summaries["E0"]["accuracy"] - summaries[variant_id]["accuracy"]),
-                "e0_only_correct": sum(a["correct"] and not b["correct"] for a, b in zip(baseline, rows)),
+                "a0_minus_condition_pp": 100 * (summaries["A0"]["accuracy"] - summaries[variant_id]["accuracy"]),
+                "a0_only_correct": sum(a["correct"] and not b["correct"] for a, b in zip(baseline, rows)),
                 "condition_only_correct": sum(b["correct"] and not a["correct"] for a, b in zip(baseline, rows)),
             }
         save(STUDY / "paired_comparisons.json", comparisons)

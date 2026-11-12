@@ -1,4 +1,4 @@
-"""Audit all six completed conditions before producing the comparison table."""
+"""Audit the frozen conditions before producing a paired module comparison table."""
 
 import argparse
 import csv
@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 import subprocess
 import time
+
+from eviground.evaluation.reporting import trajectory_metrics
 
 
 def read(path):
@@ -40,11 +42,26 @@ def audit_condition(study, name, variant, protocol, expected, code_hashes):
         require(manifest["models"] == {"EVIGROUND_MODEL": protocol["model"],
                                       "EVIGROUND_BASE_URL": protocol["base_url"]},
                 f"{name}/{slot}: model or endpoint mismatch")
-        require(manifest["review_limit"] == protocol["nonterminal_evidence_budget"],
+        budget = protocol.get("successful_tool_budget", protocol.get("nonterminal_evidence_budget"))
+        require(manifest["review_limit"] == budget,
                 f"{name}/{slot}: evidence budget mismatch")
         policy = {"inspect": bool(variant["inspect"]), "measure": bool(variant["measure"]),
                   "category_inspection_required": bool(variant["guard"])}
         require(manifest["policy"]["evidence_tools"] == policy, f"{name}/{slot}: policy mismatch")
+        if protocol.get("suite") == "functional_modules_v1":
+            require(manifest["policy"]["dag_monitor_enabled"] == bool(variant["monitor"]),
+                    f"{name}/{slot}: Monitor mismatch")
+            require(manifest["policy"]["policy_annealing_enabled"] == bool(variant["annealing"]),
+                    f"{name}/{slot}: annealing mismatch")
+            require(manifest["policy"]["successful_tool_budget"] is True,
+                    f"{name}/{slot}: resource accounting mismatch")
+            require(manifest["policy"]["dag_monitor_repair_limit"] == protocol["repair_allowance"],
+                    f"{name}/{slot}: repair allowance mismatch")
+            require(manifest["policy"]["decision_max_tokens"] == protocol["decision_max_tokens"],
+                    f"{name}/{slot}: output limit mismatch")
+            if variant["annealing"]:
+                require(manifest["policy"]["policy_annealing_schedule"] == protocol["annealing_schedule"],
+                        f"{name}/{slot}: annealing schedule mismatch")
         require(manifest["categories"]["gate"]["top_k"] == variant["top_k"],
                 f"{name}/{slot}: category gate mismatch")
         summary = result["summary"]
@@ -81,8 +98,25 @@ def audit_condition(study, name, variant, protocol, expected, code_hashes):
                             f"{name}/{key}: trace action set mismatch")
                     require(all(a["action"] in available for a in trace["react_actions"]),
                             f"{name}/{key}: disabled tool was requested")
+                    if protocol.get("suite") == "functional_modules_v1":
+                        require(trace["policy_annealing_enabled"] == bool(variant["annealing"]),
+                                f"{name}/{key}: trace annealing mismatch")
+                        require(bool(trace.get("policy_annealing_history")) == bool(variant["annealing"]),
+                                f"{name}/{key}: missing/unexpected annealing guidance")
+                        require((trace.get("interface") == "multimodal_react_dag_monitor") == bool(variant["monitor"]),
+                                f"{name}/{key}: trace Monitor mismatch")
+                        recorded = trace["react_budget"]
+                        require(recorded["accounting"] == "successful_tools"
+                                and recorded["evidence_limit"] == budget
+                                and recorded["repair_limit"] == protocol["repair_allowance"]
+                                and recorded["max_decision_calls"] == protocol["max_decision_calls"],
+                                f"{name}/{key}: trace budget mismatch")
                 audit["verified_predictions"] += 1
             run = read(case / "run.json")
+            if protocol.get("suite") == "functional_modules_v1":
+                source_trace = run.get("active_trace", {}) if row.get("error") else trace
+                require(all(row.get(k) == v for k, v in trajectory_metrics(source_trace).items()),
+                        f"{name}/{key}: resource metrics differ from trace")
             for call in run.get("calls", []):
                 model = call.get("response_model")
                 if model is not None:
@@ -104,6 +138,18 @@ def audit_condition(study, name, variant, protocol, expected, code_hashes):
                                 ("view_independent", "view_dep", False)):
         group = [r for r in rows.values() if field is None or r[field] == value]
         metrics[label + "_accuracy_pct"] = 100 * sum(r["correct"] for r in group) / len(group)
+    if protocol.get("suite") == "functional_modules_v1":
+        metrics.update({
+            "mean_successful_tools": sum(r["successful_tool_calls"] for r in rows.values()) / len(rows),
+            "mean_decisions": sum(r["decision_calls"] for r in rows.values()) / len(rows),
+            "mean_repairs": sum(r["repair_calls"] for r in rows.values()) / len(rows),
+            "mean_reported_tokens": metrics["reported_total_tokens"] / len(rows),
+            "budget_exhaustion_pct": 100 * sum(r["budget_exhausted"] for r in rows.values()) / len(rows),
+            "repair_exhaustion_pct": 100 * sum(r["repair_exhausted"] for r in rows.values()) / len(rows),
+            "candidate_recall_pct": 100 * sum(bool(r.get("category_candidate_recall")) for r in rows.values()) / len(rows),
+            "cases_without_candidate_recall": sum("category_candidate_recall" not in r for r in rows.values()),
+            "calls_without_token_usage": sum(not u for r in rows.values() for u in r.get("call_usage", [])),
+        })
     return rows, metrics, audit
 
 
@@ -124,36 +170,50 @@ def summarize(study):
         rows, values, audit = audit_condition(study, name, variant, protocol, expected, code_hashes)
         cases[name] = rows; metrics.append(values); audits[name] = audit
         print(f"Audited {name}: {len(rows)} queries, {audit}", flush=True)
-    comparisons = {f"E0-{name}": paired(cases["E0"], cases[name]) for name in cases if name != "E0"}
+    baseline = protocol.get("baseline", "E0")
+    delta_key = baseline.lower() + "_minus_condition_pp"
+    comparisons = {f"{baseline}-{name}": paired(cases[baseline], cases[name]) for name in cases if name != baseline}
     comparisons.update({name: paired(cases[name[:2]], cases[name[3:]])
                         for name in protocol["auxiliary_comparisons"]})
     for row in metrics:
-        row["e0_minus_condition_pp"] = paired(cases["E0"], cases[row["condition"]])["left_minus_right_pp"]
+        row[delta_key] = paired(cases[baseline], cases[row["condition"]])["left_minus_right_pp"]
     result = {"model": protocol["model"], "queries_per_condition": len(expected),
               "metrics": metrics, "paired_comparisons": comparisons, "audit": audits,
               "usage_note": "API-reported tokens, not a calculation of monetary charges"}
     (study / "verified_summary.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     with (study / "ablation_results.csv").open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(metrics[0])); writer.writeheader(); writer.writerows(metrics)
+    modules = protocol.get("suite") == "functional_modules_v1"
+    headers = ["Condition", "Overall", "Easy", "Hard", "View-dep.", "View-indep.",
+               f"{baseline} minus condition (pp)", "Errors"]
+    if modules:
+        headers += ["Mean tools", "Mean reported tokens", "Budget exhaustion (%)"]
     lines = [f"# Nr3D ablation — {protocol['model']}", "",
              f"Each condition uses the same {len(expected)} descriptions. Errors and nulls remain in the denominator.", "",
-             "| Condition | Overall | Easy | Hard | View-dep. | View-indep. | E0 minus condition (pp) | Errors |",
-             "|---|---:|---:|---:|---:|---:|---:|---:|"]
+             "| " + " | ".join(headers) + " |", "|---|" + "---:|" * (len(headers) - 1)]
     for row in metrics:
-        values = [f"{row[k + '_accuracy_pct']:.2f}" for k in
+        values = [row["condition"]] + [f"{row[k + '_accuracy_pct']:.2f}" for k in
                   ("overall", "easy", "hard", "view_dependent", "view_independent")]
-        lines.append(f"| {row['condition']} | " + " | ".join(values) +
-                     f" | {row['e0_minus_condition_pp']:+.2f} | {row['errors']} |")
-    lines.extend(["", "Positive E0-minus-condition differences favor E0; negative differences favor the ablated condition.",
-                  "", "Auxiliary paired comparisons:"])
+        values += [f"{row[delta_key]:+.2f}", str(row["errors"])]
+        if modules:
+            values += [f"{row['mean_successful_tools']:.2f}", f"{row['mean_reported_tokens']:.1f}",
+                       f"{row['budget_exhaustion_pct']:.2f}"]
+        lines.append("| " + " | ".join(values) + " |")
+    lines.extend(["", f"Positive {baseline}-minus-condition differences favor {baseline}; negative differences favor the ablated condition."])
+    if modules:
+        lines.extend(["", "Provider failures can leave token usage unreported; missing usage is counted separately in the audit.",
+                      "A3 has zero supplementary tool calls by construction; this alone is not an efficiency gain."])
+    if protocol["auxiliary_comparisons"]:
+        lines.extend(["", "Auxiliary paired comparisons:"])
     for name in protocol["auxiliary_comparisons"]:
         lines.append(f"- {name}: {comparisons[name]['left_minus_right_pp']:+.2f} pp")
+
     (study / "ablation_results.md").write_text("\n".join(lines) + "\n")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--study", type=Path, default=Path(__file__).resolve().parents[1] / "experiments/ablation_20261104")
+    parser.add_argument("--study", type=Path, default=Path(__file__).resolve().parents[1] / "experiments/nr3d_module_ablation")
     parser.add_argument("--wait-for-pid", type=int)
     args = parser.parse_args()
     if args.wait_for_pid:
@@ -161,7 +221,7 @@ def main():
             try:
                 os.kill(args.wait_for_pid, 0)
             except ProcessLookupError:
-                raise ValueError("Experiment runner exited before all six conditions completed")
+                raise ValueError("Experiment runner exited before all frozen conditions completed")
             state = subprocess.run(["ps", "-p", str(args.wait_for_pid), "-o", "state="],
                                    capture_output=True, text=True).stdout.strip()
             require(state and not state.startswith("Z"), "Experiment runner is no longer active")

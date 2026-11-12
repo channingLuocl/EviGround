@@ -1,168 +1,113 @@
 # 消融实验指南
 
-## 当前支持范围
+## 五组高层模块配置
 
-当前代码保留论文 Nr3D 消融所用的 E0–E5 条件。`prepare_ablation_subset.py` 按场景及 Easy/Hard × 视角依赖分层冻结子集；`run_nr3d_ablation.py` 固定要求 1,500 条描述、130 个场景，拆为两个交错分片，并保存源码哈希、协议与逐条输出。它们不能直接接收 ScanRefer 清单。
+当前 Nr3D 消融与论文第 4.5 节一致：A0 为完整模型，每次移除一个功能模块，共五组、一张结果表。
 
-| 条件 | supplementary inspect | conditional measure | 类别 Top-k | alternative-category check |
-| --- | --- | --- | --- | --- |
-| E0 | 开 | 开 | 5 | 开 |
-| E1 | 关 | 开 | 5 | 关（不适用） |
-| E2 | 开 | 关 | 5 | 开 |
-| E3 | 开 | 开 | 1 | 关（不适用） |
-| E4 | 开 | 开 | 5 | 关 |
-| E5 | 关 | 关 | 5 | 关（不适用） |
+| 条件 | 移除模块 | Monitor / DAG | 退火 | inspect | measure | Top-k | 备选类别检查 |
+|---|---|---|---|---|---|---|---|
+| A0 | 无（完整 EviGround） | 开 | 开 | 开 | 开 | 5 | 开 |
+| A1 | 策略退火 | 开 | 关 | 开 | 开 | 5 | 开 |
+| A2 | Monitor（含 DAG 组织与修订） | 关 | 开 | 开 | 开 | 5 | 开 |
+| A3 | 按需证据获取 | 开 | 开 | 关 | 关 | 5 | 关（无补充观察） |
+| A4 | 多类别候选覆盖 | 开 | 开 | 开 | 开 | 1 | 关（无备选类别） |
 
-推理开关为 `EVIGROUND_INSPECT_ENABLED`、`EVIGROUND_MEASURE_ENABLED`、`EVIGROUND_CATEGORY_INSPECTION_REQUIRED`，只接受 `0` 或 `1`；类别由 `--category-top-k` 控制。关闭 inspect 时，类别检查同步关闭；这些设置进入运行身份，不能混用同一输出目录。
+A2 使用普通 ReAct，不输出 Monitor/DAG，共享调度器仍提供轮次退火。
+A3 保留初始场景视图、基础 AABB 几何与 Top-5 候选，动作集合只有 finish；可依据初始证据完成、弃答或修正最终计划，不要求调用已关闭工具。
+A4 同时收缩目标及参照物的类别假设为 Top-1，实例框和工具接口不变。
+主要比较均为 A0 对 A1–A4；合并移除只能说明模块整体作用，不能分别归因于 DAG、视觉、测量或单条检查，各行差值不可相加。
 
-## Nr3D 子集复现
+旧 E0–E5 不是 A0–A4 的别名，不重命名旧结果或复用旧源码快照。
+本调度器只接受新编号；归档 E 系列须使用相应旧 Git 版本与冻结协议复现。
+汇总器保留读取旧 E 系列协议的能力，历史跨模型比较脚本也独立保留。
 
-先按 README 安装依赖，并使用新的实验目录。下列场景、分类导出和 API 地址必须替换为实际输入；不要覆盖已有实验快照。
+## 共享预算与策略退火
+
+五组统一按**成功工具调用**计预算，默认 B=12；无效计划、无效工具请求及被拒绝的提前结束使用修正额度，默认 R=6。
+总动作决策上界 T=B+R+1=19；修复也推进轮次。解析和客户端有限重试另行记录。
+A2 与 Monitor 配置使用相同口径、修正额度和输出上限。
+A3 的工具可用额度为 0，但共享决策上界仍为 T；零工具调用是配置定义，不能单独视为效率提升。
+所有组均可提前结束，无需用满预算；证据不足时返回 null，不强制选择目标。
+
+退火按 `lambda_t=t/max(T-1,1)` 改变每轮策略提示，固定阶段为：
+
+| 进度 | 策略优先级 |
+|---|---|
+| lambda < 1/3 | 比较合理的候选与解释，补充能区分它们的证据。 |
+| 1/3 <= lambda < 2/3 | 聚焦合理竞争者及未决条件，减少无关扩展和重复观察。 |
+| lambda >= 2/3 | 优先最终核验，仅为可能改变选择的关键缺口继续取证。 |
+| 工具用尽或最后一次决策 | 动作 schema 只允许 finish；证据不足则弃答。 |
+
+这是**阶段条件化提示的策略退火**，不改变采样温度，也不自动按轮次裁掉候选。
+阶段内的语义取证范围由策略提示约束，资源截止由程序强制执行。
+关键反证始终允许改选、重开任务和恢复候选；A1 仅去掉阶段提示，其预算、采样温度和结束检查不变。
+阶段边界及指导文字进入源码快照和 `protocol.json`，不能看过确认性结果后修改并续跑同一目录。
+
+直接推理仍默认不开启 Monitor 或退火；调度器按上表显式覆盖各组开关，旧的全局 Monitor 变量不能改写新矩阵。
+
+- `EVIGROUND_DAG_MONITOR_ENABLED=0|1`、`EVIGROUND_POLICY_ANNEALING_ENABLED=0|1`。
+- `EVIGROUND_SUCCESSFUL_TOOL_BUDGET=1`：普通 ReAct 也按成功工具计预算；Monitor 始终采用该口径。
+- `EVIGROUND_DAG_REPAIR_LIMIT=6`：该口径下的通用修正额度。
+- `EVIGROUND_DECISION_MAX_TOKENS=4000`：五组统一的动作请求参数，runner 同时统一设置 thinking floor=8192。
+- `EVIGROUND_INSPECT_ENABLED`、`EVIGROUND_MEASURE_ENABLED`、`EVIGROUND_CATEGORY_INSPECTION_REQUIRED`：工具与检查，均为 `0|1`。
+- `--category-top-k 1|5`、`--review-limit B`：类别与取证上限。
+
+## Nr3D 运行
+
+按 README 安装依赖，使用**全新实验目录**并设置实际路径和 API 配置。
+调度器固定使用覆盖 130 个场景的 1,500 条描述，按场景及 Easy/Hard × 视角依赖分层冻结。
 
 ```bash
-export EVIGROUND_ABLATION_STUDY="$PWD/experiments/nr3d_ablation_new"
+export EVIGROUND_ABLATION_STUDY="$PWD/experiments/nr3d_module_ablation"
 export EVIGROUND_ABLATION_SCENES=/absolute/path/to/nr3d_prepared_scenes
 export EVIGROUND_ABLATION_PREDICTIONS=/absolute/path/to/verified_classifier_export
 export EVIGROUND_ABLATION_MODEL=your_model_name
 export EVIGROUND_ABLATION_BASE_URL=https://your-provider.example/v1
+export EVIGROUND_ABLATION_REVIEW_LIMIT=12
+export EVIGROUND_ABLATION_DAG_REPAIR_LIMIT=6
 
 python scripts/prepare_ablation_subset.py \
   --manifest data/queries/nr3d_val.json \
   --output "$EVIGROUND_ABLATION_STUDY/nr3d_subset_1500.json" \
   --size 1500 --seed 20261104
 
-PYTHON_DOTENV_DISABLED=1 PYTHONPATH=src \
-  python scripts/run_nr3d_ablation.py --workers-per-key 3
-```
-
-批处理启动后从标准输入读取一行 JSON：一个共享 API key 或两个分片各自的 API key 组成的数组。密钥不写入命令参数、源码或结果文件。脚本会先进行模型/视觉/结构化输出预检和技术试运行，再开始 E0–E5 正式调用；本命令会产生实际 API 请求。不要在日志或可共享的终端记录中粘贴密钥。
-
-看到等待输入提示后，粘贴 `["你的完整API_KEY"]`（使用英文双引号和方括号），再按回车。
-误按回车产生的空行会被跳过并继续等待；格式错误或标准输入关闭会给出不含密钥的明确提示。
-
-输入场景与分类导出路径可通过上述环境变量配置。API 地址优先取 `EVIGROUND_ABLATION_BASE_URL`，其次取 `EVIGROUND_BASE_URL`，均未设置时使用 `https://api.openai.com/v1`；不会自动使用历史私有转发地址。
-
-两个分片共享同一 key 时，模型预检顺序执行，两次均通过才继续；两个不同 key 仍并行预检。
-预检失败会在 `preflight_key_*.json` 保存脱敏的 HTTP 状态、服务端错误响应和 request ID，
-不会因另一个槽位成功而忽略 401。顺序预检用于排除预检请求相互影响，不能据此认定
-供应商有并发限制，也不改变正式推理的并发配置。
-
-完整运行后，用 `python scripts/summarize_nr3d_ablation.py --help` 查看审计汇总参数。`summarize_mixed_nr3d_ablation.py` 仅用于如实记录不同条件使用不同模型的历史比较；跨模型差异不能单独解释为模块贡献。错误、弃答和缺失均不能从固定样本分母中剔除。
-
-## 动态 DAG Monitor 与原 ReAct 对比
-
-原 ReAct 仍为默认。直接调用推理入口时，用 `EVIGROUND_DAG_MONITOR_ENABLED=1`
-开启；使用本页消融调度器时，必须设置
-`EVIGROUND_ABLATION_DAG_MONITOR_ENABLED=1`，由调度器显式传给冻结源码的 worker。
-两个开关只接受 `0`、`1`，设置会进入运行身份及新实验协议。
-
-Monitor 和执行器由同一次多模态模型调用共同完成，没有另训练一个模型，也不额外
-增加一轮独立 critic 调用。每轮除原动作外，模型输出完整任务 DAG、当前节点、
-要重开的旧节点及修订理由。程序校验无环依赖、语言条件覆盖、已有证据引用、
-当前任务是否就绪以及动作是否属于该任务。
-
-`bound_object_ids` 表示当前绑定结果，工具的 `focus_ids` 可包含尚未绑定的候选、
-参照物和比较成员。排除记录按该节点引用的实际观察范围检查，不要求被排除的竞争者
-仍在绑定结果里。`initial` 覆盖已提供的初始视图与全场景基础几何；工具观察只覆盖
-实际查看或测量的对象。证据范围检查不等于证明视觉结论正确。
-每轮 `supporting_evidence_objects` 明确列出各可用证据 ID 覆盖的对象。
-
-- 节点可表达参照物绑定、属性、空间关系、候选组比较和最终核验，支持并行分支。
-- 回退或修改已完成节点的语义/绑定时，该节点及受影响后继自动失效；旧结论、
-  证据关联和排除记录清空，原始观察继续保留，相关目标自动恢复比较资格。
-  结构合法的回退即使附带了尚不能执行的动作，也会保留失效后的图，并通过
-  `ready_node_ids` 告知下一轮可重核的节点；无环、条件覆盖、证据引用等结构检查
-  未通过的提案仍整体拒绝。历史中的 `action_error` 表示安全图状态已保留、动作被拒绝。
-- 排除只改变目标资格，不删除用于判断“中间”等关系的物理比较成员。
-  未完成节点的排除、以及超出该节点引用证据范围的排除，会被保守撤销，并记录为
-  `discarded_exclusions`；相应候选继续有效，其余合法取证动作仍可执行。程序不会
-  自动补上 `initial` 引用或猜测排除理由。这种直接撤销不产生额外模型调用，也不计为
-  一次失败修正；证据 ID 无效、缺少结论或结构错误仍会拒绝整个提案。
-  若撤销后目标不再唯一，finish 仍被拒绝，但保留安全修正后的图供下一轮继续处理。
-- 选择目标须位于最终核验节点、全部任务完成、条件覆盖且活动目标唯一，并通过原有
-  类别观察检查；有未决项则不能作为成功完成。无效 DAG 会返回具体缺失条件或证据 ID，
-  修正额度耗尽后仍无法通过则输出 null，不强行制造唯一候选。
-  仅当上述完成、唯一性、无未决项检查均通过，且最终节点绑定列表为空时，使用
-  显式 `predicted_id` 补齐该冗余绑定，并记录 `normalized_final_binding`；非空冲突
-  绑定不会被覆盖，已有类别观察检查也不会跳过。回退导致任务失效后仍不能直接结束。
-  若类别检查要求补看，控制器会重开一个绑定该目标的非终止任务（没有匹配绑定时
-  选用现有非终止任务），并让它及受影响后继失效；最终核验仍只允许 `finish`。
-  `required_inspection_ids` 提示尚需补看的目标，`ready_node_ids` 给出可执行阶段，
-  历史中用 `transition=category_inspection_required` 标记这次控制器回退。
-  不增加节点或额外模型调用，不把这次状态转移记作实际取证；目标必须出现在实际
-  渲染的 `marked_ids` 中才算满足类别观察要求，只有请求 `focus_ids` 并不够。
-- DAG 模式按成功执行的工具调用计算取证预算；计划校验失败、无效工具请求和被驳回的
-  提前结束使用独立的有限修正额度，不占用取证次数。默认取证上限仍为 5，额外修正额度
-  默认为 6，总动作决策调用上限为 `取证上限 + 修正额度 + 1`。工具用完后仍可修正最终
-  核验，但不能继续取证。关闭 DAG 的原 ReAct 仍按原有非终止决策轮数计费。
-  DAG 模式单次请求输出上限从 1,600 调至 4,000 tokens；现有 runner 统一使用的
-  thinking floor 仍是 8,192。
-  图和历史会增加上下文成本，对比时同时报告实际 tokens、时延、弃答和准确率。
-
-直接推理用 `--review-limit` 设置取证上限，`EVIGROUND_DAG_REPAIR_LIMIT` 设置额外
-修正额度；消融调度器对应使用 `EVIGROUND_ABLATION_REVIEW_LIMIT` 和
-`EVIGROUND_ABLATION_DAG_REPAIR_LIMIT`，显式传给 worker 并写入实验协议及运行身份。
-以下新实验使用 12 次取证和 6 次修正，至多 19 次动作决策；解析及客户端重试另计。
-与历史 5 轮结果的差异同时包含预算变化，不能单独解释为 DAG 的贡献；公平对比须
-另设相同预算的 baseline，或同时报告成本。
-
-程序只能检查结构和证据关联，不能保证视觉结论或语义解释正确。本实现没有新增
-“between/on/middle”确定性几何判定器，也没有把分类分数当概率设置动态阈值。
-本轮要验证的是整体计划、阶段状态及依赖回退机制。
-
-先只跑同一子集的 E0，无需重跑 E1–E5。沿用原消融的场景、预测分类、模型与 API
-设置，但使用**全新的实验目录**；不要复用或改写旧 source 快照。已有冻结子集时
-原样复制；如果只拿到了源码，可用前面的抽样命令和相同 seed 重建，并核对选中行。
-
-```bash
-# 在仓库根目录、已安装依赖的 Python 环境中执行。
-export EVIGROUND_ABLATION_STUDY="/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_v5"
-export EVIGROUND_ABLATION_SCENES="/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs"
-export EVIGROUND_ABLATION_DAG_MONITOR_ENABLED=1
-export EVIGROUND_ABLATION_REVIEW_LIMIT=12
-export EVIGROUND_ABLATION_DAG_REPAIR_LIMIT=6
-# 沿用原消融的分类预测导出、模型和 API 配置；勿指向按 query 保存的推理结果。
-: "${EVIGROUND_ABLATION_PREDICTIONS:?请设置为原消融使用的已验证分类导出目录或 ZIP}"
-mkdir -p "$EVIGROUND_ABLATION_STUDY"
-cp /Volumes/KESU/EviGround/experiments/ablation_20261104/nr3d_subset_1500.json \
-   "$EVIGROUND_ABLATION_STUDY/nr3d_subset_1500.json"
-
+# 仅预检及五组固定的子集外技术样本。
 PYTHON_DOTENV_DISABLED=1 PYTHONPATH=src \
   python scripts/run_nr3d_ablation.py \
-  --start-condition E0 --end-condition E0 --workers-per-key 3 --technical-pilot-only
+  --start-condition A0 --end-condition A4 --workers-per-key 3 --technical-pilot-only
+
+# 技术样本通过后复用它们，运行五组正式评估。
+PYTHON_DOTENV_DISABLED=1 PYTHONPATH=src \
+  python scripts/run_nr3d_ablation.py \
+  --start-condition A0 --end-condition A4 --workers-per-key 3 --skip-technical-pilot
+
+PYTHON_DOTENV_DISABLED=1 PYTHONPATH=src \
+  python scripts/summarize_nr3d_ablation.py --study "$EVIGROUND_ABLATION_STUDY"
 ```
 
-这里的场景、子集和新输出路径是本机已挂载的 KESU 路径，未搬移或覆盖旧数据。
-换机器运行时修改相应路径。外盘可用空间需覆盖新增渲染图与日志；不要将数据提交 Git。
+运行命令会产生实际 API 请求。密钥在等待提示后经标准输入提供一行 JSON 数组：一个共享 key 或两个分片 key，不写入命令参数、源码、协议和结果。
+共享 key 的两次预检顺序执行，必须全部通过。API 地址优先取 `EVIGROUND_ABLATION_BASE_URL`，其次 `EVIGROUND_BASE_URL`，最后才是公共默认地址。
 
-按原方式从标准输入提供 API key 数组；上述命令只预检并运行两条固定的子集外技术样本，
-不会启动 1,500 条正式评估。DAG 技术试运行还要求每条至少接受过一版任务图，且没有
-耗尽修正额度；不设置正确率门槛，合法弃答仍如实记录。检查
-`technical_pilot/E0/diagnostics.json` 后，移除 `--technical-pilot-only` 可启动正式评估。
-诊断中的 `validation_feedback` 保存逐轮计划/结束检查信息；失败报错直接给出样本行号、
-失败检查数、成功取证数和最后一条反馈，便于区别未决弃答与流程反复失败。
-若出现技术错误先查日志，不按准确率修改样本或重跑。E0 的汇总保存在
-`$EVIGROUND_ABLATION_STUDY/runs/E0/results.json`，每条
-`runs/E0/key_slot_*/q*/prediction.json` 的 `active_trace` 内有
-`dag_monitor_history`、`dag_monitor_current_node_id`、`dag_monitor_final_plan` 和
-`dag_monitor_active_target_ids`，可检查回退、失效节点及恢复的目标；`dag_monitor_budget`
-另记实际工具次数、失败检查数与决策调用数。
-原始请求、响应和 token 用量仍在同目录 `run.json`。
+直接运行调度器默认完成预检、技术样本及 A0–A4。可用 `--start-condition A2 --end-condition A2` 单独执行一组。
+技术样本不按正确率放行；类别候选为空的合法弃答保留，不当作技术故障。已冻结目录只续跑缓存，不挑选正确答案重跑。
 
-若要在本次源码下重新跑原 ReAct 对照，改成另一个新目录
-`nr3d_react_baseline_v1`，设置 `EVIGROUND_ABLATION_DAG_MONITOR_ENABLED=0`，
-复制**同一份**冻结子集，再执行相同 E0 命令。保持模型、输入、工具开关和预算一致。
-本节只运行单条件 E0，不要对该目录使用要求 E0–E5 全部完成的六条件汇总器。
+## 输出与审计
 
-## 后续 ScanRefer 子集消融
+- `protocol.json`：矩阵、共享预算、输出限制、退火阶段、固定清单哈希与比较对象。
+- `source_identity.json` 与 `source/`：推理源码及哈希；更改设置或源码后另开目录。
+- `technical_pilot/A*/diagnostics.json`：是否回答、已接受 DAG、预算和校验反馈。
+- `runs/A*/key_slot_*/q*/prediction.json`：动作、证据、DAG 修订、退火进度与阶段。
+- `react_budget`：五组统一记录工具、修正、决策次数及上限；Monitor 同时保留兼容字段 `dag_monitor_budget`。
+- `termination_cause`：正常结束、弃答、预算截止或修正耗尽；技术错误另列。
+- `run.json`：请求用量、实际模型及执行轨迹，包括失败前已完成的工具操作，避免自动把技术错误样本开销记零。
+- `verified_summary.json`、`ablation_results.csv`、`ablation_results.md`：完整五组审计后生成统一表，包含准确率、配对差值、平均工具/词元和耗尽率。
 
-本轮整理没有启动新的 ScanRefer 模型调用。现有 `scripts/scanrefer.py` 可生成官方格式的验证清单并按 Unique / Multiple / Overall 汇总 Acc@0.25 与 Acc@0.5；主批处理 `eviground --manifest ...` 已支持 ScanRefer 的 IoU 评估。
+错误与空预测保留在固定分母。API 失败可能缺少用量，汇总另记缺失用量调用数；未上报 tokens 不代表实际免费。
+候选召回另报缺失统计，技术失败不解释为已证实的候选遗漏。不同模型结果不能单独解释为模块作用，跨运行稳定性需重复实验。
+程序可校验依赖、引用与对象范围，不能保证视觉和语言判断正确。
 
-迁移 E0–E5 时，还需要实现 ScanRefer 专用或通用的子集抽样、六条件调度与汇总：
+## ScanRefer 与既有结果
 
-1. 首次模型调用前固定样本数量、种子和场景/Unique–Multiple 分层，保留来源哈希；不得按模型结果挑选样本。原 `prepare_scanrefer_splits.py` 是历史诊断划分，不能冒充新冻结的消融子集。
-2. 所有条件使用同一份子集、模型、预测实例及分类导出、去重策略、初始视图和工具预算，分别保存源码及配置身份。
-3. 明确采用 Mask3D 预测实例或 GT 实例。预测实例 ID 与 GT 目标 ID 不可直接比较；GT-proposal 实验须单独标注，不能混入 Mask3D 协议。
-4. 用预测框与目标 GT 框的 IoU 汇总两个阈值及三个分组，保留错误/弃答在分母中，并给出相对 E0 的配对差异。旧 Nr3D 汇总器的 `correct` 统计不能替代这些指标。
-
-外部数据、权重、完整实验输出与论文文件不随当前源码仓库分发，论文中的既有数字也不代表本次代码整理后的重新评测。
+五组调度、抽样及统一审计目前仅支持 Nr3D。ScanRefer 需冻结相应 Unique/Multiple 子集、预测实例和去重策略，
+按目标框 IoU 报告 Acc@0.25 / Acc@0.5，不能复用 Nr3D 实例 ID 正确率。
+论文既有主结果与旧 E 系列数值不代表新 A0–A4 的结果。本次代码修改未启动模型评估。

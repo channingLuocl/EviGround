@@ -3,6 +3,27 @@
 import os
 
 
+def policy_annealing_enabled():
+    raw = os.getenv("EVIGROUND_POLICY_ANNEALING_ENABLED", "0").strip()
+    if raw not in ("0", "1"):
+        raise ValueError("EVIGROUND_POLICY_ANNEALING_ENABLED must be 0 or 1")
+    return raw == "1"
+
+
+def successful_tool_budget_enabled():
+    raw = os.getenv("EVIGROUND_SUCCESSFUL_TOOL_BUDGET", "0").strip()
+    if raw not in ("0", "1"):
+        raise ValueError("EVIGROUND_SUCCESSFUL_TOOL_BUDGET must be 0 or 1")
+    return raw == "1" or dag_monitor_enabled()
+
+
+def decision_max_tokens():
+    value = int(os.getenv("EVIGROUND_DECISION_MAX_TOKENS", "4000" if dag_monitor_enabled() else "1600"))
+    if value < 1:
+        raise ValueError("EVIGROUND_DECISION_MAX_TOKENS must be positive")
+    return value
+
+
 def dag_monitor_enabled():
     raw = os.getenv("EVIGROUND_DAG_MONITOR_ENABLED", "0").strip()
     if raw not in ("0", "1"):
@@ -44,9 +65,16 @@ def settings():
         "context_text_upper_bound": int(os.getenv("EVIGROUND_CONTEXT_LIMIT", "131072")),
         "evidence_tools": evidence_policy(),
         "dag_monitor_enabled": dag_monitor_enabled(),
+        "policy_annealing_enabled": policy_annealing_enabled(),
+        "successful_tool_budget": successful_tool_budget_enabled(),
+        "decision_max_tokens": decision_max_tokens(),
     }
-    if policy["dag_monitor_enabled"]:
+    if policy["successful_tool_budget"]:
         policy["dag_monitor_repair_limit"] = dag_repair_limit()
+    if policy["policy_annealing_enabled"]:
+        from eviground.grounding.annealing import SCHEDULE
+
+        policy["policy_annealing_schedule"] = SCHEDULE
     return policy
 
 

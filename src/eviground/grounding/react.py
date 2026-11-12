@@ -17,7 +17,11 @@ from eviground.api.response_schemas import (
     REASON,
     schema_kwargs,
 )
-from eviground.grounding.settings import dag_monitor_enabled, dag_repair_limit, evidence_policy, settings
+from eviground.grounding.settings import (
+    dag_monitor_enabled, dag_repair_limit, evidence_policy, settings,
+    policy_annealing_enabled, successful_tool_budget_enabled, decision_max_tokens,
+)
+from eviground.grounding.annealing import policy_state
 
 INSTRUCTIONS = "Locate the object described by the original utterance. You control evidence acquisition.\nRead the scene, compare the plausible target instances, and request the next observation that can\ndistinguish them. Then reconsider the alternatives using the returned evidence. There is no fixed\nsequence of tools. Every request and final choice must be grounded in the original description.\n\nActions:\n- inspect: render 1-12 focus_ids in panels of at most 6, including targets AND references. Use isolated to compare\n  category, shape, texture or color without contamination. Use scene to see their physical context.\n  Choose azimuth_deg in [0,360) and elevation_deg in [10,75] to expose the unresolved property.\n  Null camera angles use the tool's documented defaults: azimuth=315, elevation=30 degrees.\n  Isolated tiles have separate cameras and scales; their placement/size is not a spatial relation.\n- measure: supply focus_ids for the objects to compare. Returns measured dimensions, pair distances,\n  overlap and sorted size orders. For observer-relative order supply frame: origin_ids=[] means room\n  center, otherwise the mean center of those instances; facing_ids defines the group being faced.\n  For 'from A facing B', origin_ids is A and facing_ids is B. For 'room center facing B', use\n  origin_ids=[] and facing_ids=B. An object being faced is NOT the observer origin. For 'looking\n  at both targets', use the visually bound target group as facing_ids. Never use identical origin\n  and facing groups. Without a directional clause use frame=null; distances need no observer frame.\n  Both groups must follow the description and visible layout. Use frame=null for other measurements.\n  The returned selected_observer_frame is conditional on YOUR chosen groups. Bind the described\n  references and comparison group first. Include all plausible comparison members, not just a guess.\n  Measurements are observations, not proof that a reference/category interpretation is correct.\n- finish: choose one allowed_target_id, or null if essential evidence is unavailable. Give compact\n  evidence, name the actual reference IDs, and state unresolved assumptions. Return one final choice.\n\nUse inspect when category alternatives, a reference's color, an object's visible part or facing\ndirection are unresolved. Use measure when distance, support, height, order or grouping separates\nthe plausible objects. Inspect references as needed; a convenient reference ID is not a bound noun.\nPrefer a discriminating observation to repeating an unchanged view or merely confirming a guess.\nAll clauses must refer to a compatible assignment of target and reference instances. Keep negation,\nthe exact comparison group, and noun attachment. The original utterance outranks the parser summary.\nClassifier ranks are fallible priors. A rank-2 category can win with visible support; rank-1 gets\npreference only if the remaining evidence is comparable. Never use image left as speaker left.\ngap_from_top1 is the difference between uncalibrated classifier scores, NOT a probability. Within\none instance, a small gap denotes a closer classifier alternative than a large gap. It does not\nestablish the category, and should not be compared using a probability cutoff.\nTop-5 recall expands the pool; it does not make all five names true. Before choosing an alternative-only\ntarget category, inspect that instance and plausible primary-category rivals. Geometry alone cannot\nturn a monitor stand into a monitor, or a toilet into a stool. A finish without that inspection is\ndeferred while a tool call remains. Check reference categories and their qualifiers independently;\ndo not select whichever door, desk or shelf happens to make a convenient distance minimum.\nFor a nested relation such as an object ON a desk, first bind the object to its actual support desk\nusing overlap and vertical surface gap; only then compare targets relative to that SAME desk.\nPreserve every clause: color, visible part, group, negation and relative order cannot be replaced by\nnearest, largest or highest. If one clause distinguishes the current best two candidates, acquire\nevidence for that clause before finishing. State what distinguishes the winner from its best rival.\nWhen no observer is given, explicitly state any assumed frame; do not reverse numeric order to\nsupport a preferred ID. AABB dimensions alone do not identify the head or foot of a bed.\nAn unobserved attribute stays unknown. Return the best supported target despite minor uncertainty,\nbut do not invent appearance, references or evidence. Unknown does not eliminate an alternative.\n\nKeep reason within 60 words, evidence within 4 entries, and each observation within 35 words.\nEvery evidence source_quote must be the COMPLETE original description verbatim. For inspect or\nmeasure, use predicted_id=null and evidence=[]. For inspect and finish use frame=null. For finish use\nfocus_ids=[], context=null, azimuth_deg=null and elevation_deg=null. Return a single top-level JSON\nOBJECT with the schema keys, never an array containing an object.\n"
 
@@ -290,12 +294,18 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
     if monitor is not None:
         trace.update(policy="model-revised task DAG with monitored dependencies and reversible exclusions",
                      interface="multimodal_react_dag_monitor", dag_monitor_history=monitor.history)
-    repair_limit = dag_repair_limit() if monitor is not None else 0
-    decision_limit = tool_limit + repair_limit + 1
+    successful_budget = successful_tool_budget_enabled()
+    annealing = policy_annealing_enabled()
+    repair_limit = dag_repair_limit() if successful_budget else 0
+    decision_limit = (limit if successful_budget else tool_limit) + repair_limit + 1
+    trace["policy_annealing_enabled"] = annealing
+    trace["policy_annealing_history"] = []
     tool_calls_used, repair_failures = 0, 0
     decision = None
+    termination_reason = None
+    repair_reason = "DAG validation repair budget exhausted" if monitor is not None else "ReAct validation repair budget exhausted"
     for step in range(decision_limit):
-        remaining_tools = tool_limit - (tool_calls_used if monitor is not None else step)
+        remaining_tools = max(0, tool_limit - (tool_calls_used if successful_budget else step))
         last_decision = step == decision_limit - 1
         state = {
             **payload,
@@ -323,7 +333,15 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         if monitor is not None:
             state.update(monitor.context(observations))
             state["required_inspection_ids"] = sorted(required_inspections - inspected)
+        if successful_budget:
             state["remaining_plan_repairs"] = max(0, repair_limit - repair_failures)
+        round_instructions = instructions + CATEGORY_INSTRUCTIONS
+        if annealing:
+            guidance = policy_state(step, decision_limit, remaining_tools, last_decision)
+            state["policy_annealing"] = guidance
+            trace["policy_annealing_history"].append({"step": step, **guidance})
+            round_instructions += ("\nRound-aware policy constraint (sampling temperature is unchanged): "
+                                   + guidance["guidance"] + " " + guidance["correction_policy"])
         action_schema = json.loads(json.dumps(schema))
         if remaining_tools == 0 or last_decision:
             action_schema["properties"]["action"] = enum("finish")
@@ -336,9 +354,10 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         if monitor is not None:
             call["role"] = "multimodal_dag_monitor_and_executor"
         calls.append(call)
+        trace["react_decision_calls"] = step + 1
         response = chat(
             [
-                {"role": "system", "content": instructions + CATEGORY_INSTRUCTIONS},
+                {"role": "system", "content": round_instructions},
                 {
                     "role": "user",
                     "content": [
@@ -347,7 +366,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                     ],
                 },
             ],
-            max_tokens=4000 if monitor is not None else 1600,
+            max_tokens=decision_max_tokens(),
             json_mode=True,
             **schema_kwargs("react_action", action_schema),
         )
@@ -362,23 +381,25 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         actions.append(action)
         if action.get("action") not in available:
             raise ValueError("ReAct returned an unavailable action")
-        if monitor is not None:
+        if monitor is not None or successful_budget:
             try:
                 if action["action"] == "finish":
                     validate_decision(action, query, allowed, known)
-                event = monitor.update(action.get("monitor"), action, observations)
-                trace["dag_monitor_current_node_id"] = event["current_node_id"]
+                if monitor is not None:
+                    event = monitor.update(action.get("monitor"), action, observations)
+                    trace["dag_monitor_current_node_id"] = event["current_node_id"]
             except ValueError as exc:
                 repair_failures += 1
-                if monitor.plan is not None:
+                if monitor is not None and monitor.plan is not None:
                     trace["dag_monitor_current_node_id"] = monitor.plan["current_node_id"]
-                observation = {"tool": "monitor_check", "error": str(exc),
+                observation = {"tool": "monitor_check" if monitor is not None else "finish_check", "error": str(exc),
                                "no_evidence_acquired": True}
                 observations.append(observation)
                 trace["steps"].append({"action": action, "observation": observation})
                 if last_decision or repair_failures > repair_limit:
-                    decision = {"predicted_id": None, "reason": "DAG validation repair budget exhausted",
+                    decision = {"predicted_id": None, "reason": repair_reason,
                                 "evidence": [], "unresolved": [str(exc)]}
+                    termination_reason = "repair_exhausted"
                     break
                 continue
         if action.get("action") == "finish":
@@ -399,16 +420,19 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                     trace["steps"].append(
                         {"action": action, "observation": observation}
                     )
-                    if monitor is not None:
+                    if successful_budget:
                         repair_failures += 1
                         if repair_failures > repair_limit:
-                            decision = {"predicted_id": None, "reason": "DAG validation repair budget exhausted",
+                            decision = {"predicted_id": None, "reason": repair_reason,
                                         "evidence": [], "unresolved": [gap]}
+                            termination_reason = "repair_exhausted"
                             break
                     continue
                 decision.setdefault("unresolved", []).append(gap)
-                if monitor is not None:
+                if monitor is not None or successful_budget:
                     decision["predicted_id"] = None
+            if last_decision or (remaining_tools == 0 and len(available) > 1):
+                termination_reason = "budget_exhausted"
             break
         if remaining_tools == 0 or last_decision:
             raise ValueError("ReAct must finish when the evidence budget is exhausted")
@@ -497,15 +521,16 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         if monitor is not None:
             observation["evidence_id"] = f"observation_{step + 1}"
             observation["monitor_node_id"] = monitor.plan["current_node_id"]
-            if not observation.get("no_evidence_acquired"):
-                tool_calls_used += 1
-            else:
-                repair_failures += 1
+        if not observation.get("no_evidence_acquired"):
+            tool_calls_used += 1
+        elif successful_budget:
+            repair_failures += 1
         observations.append(observation)
         trace["steps"].append({"action": action, "observation": observation})
-        if monitor is not None and repair_failures > repair_limit:
-            decision = {"predicted_id": None, "reason": "DAG validation repair budget exhausted",
+        if successful_budget and repair_failures > repair_limit:
+            decision = {"predicted_id": None, "reason": repair_reason,
                         "evidence": [], "unresolved": [observation["error"]]}
+            termination_reason = "repair_exhausted"
             break
     oid = decision["predicted_id"]
     selected = next((o for o in candidates if o["bbox_id"] == oid), None)
@@ -523,11 +548,15 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                      dag_monitor_final_plan=monitor.plan,
                      dag_monitor_active_target_ids=monitor.active_ids(),
                      final_candidate_ids=monitor.active_ids())
-        trace["dag_monitor_budget"] = {
-            "evidence_limit": tool_limit, "repair_limit": repair_limit,
-            "max_decision_calls": decision_limit, "successful_tool_calls": tool_calls_used,
-            "failed_checks": repair_failures, "decision_calls": len(actions),
-        }
+    trace["react_budget"] = {
+        "accounting": "successful_tools" if successful_budget else "nonterminal_decisions",
+        "evidence_limit": limit, "available_tool_limit": tool_limit, "repair_limit": repair_limit,
+        "max_decision_calls": decision_limit, "successful_tool_calls": tool_calls_used,
+        "failed_checks": repair_failures, "decision_calls": len(actions),
+    }
+    if monitor is not None:
+        trace["dag_monitor_budget"] = trace["react_budget"]
+    trace["termination_cause"] = termination_reason or ("supported_finish" if oid is not None else "abstained")
     trace["steps"].append({"action": "finish", "decision": decision})
     trace["internal_usage"]["render"] += len(overview)
     trace["internal_usage"]["visual_check"] += len(actions)
