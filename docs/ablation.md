@@ -29,19 +29,18 @@ A2 与 Monitor 配置使用相同口径、修正额度和输出上限。
 A3 的工具可用额度为 0，但共享决策上界仍为 T；零工具调用是配置定义，不能单独视为效率提升。
 所有组均可提前结束，无需用满预算；证据不足时返回 null，不强制选择目标。
 
-退火按 `lambda_t=t/max(T-1,1)` 改变每轮策略提示，固定阶段为：
+退火按 `lambda_t=t/max(T-1,1)` 连续更新两项互补权重：探索优先级为 `1-lambda_t`，最终核验优先级为 `lambda_t`。
+每次决策（包括修复）使用同一个策略提示模板，将当前权重同时写入系统提示和结构化输入的 `policy_annealing`。
+探索侧重比较合理的目标／参照物解释、补充判别证据；最终核验侧重最有支持的目标、最强竞争者及未决条件。
+随着核验权重增加，后续取证逐步聚焦可能改变最终选择的关键缺口，减少无关扩展和重复观察。
+例如在 T=19 时，决策 t=0、9、18 的探索／核验权重分别为 1/0、0.5/0.5、0/1。
 
-| 进度 | 策略优先级 |
-|---|---|
-| lambda < 1/3 | 比较合理的候选与解释，补充能区分它们的证据。 |
-| 1/3 <= lambda < 2/3 | 聚焦合理竞争者及未决条件，减少无关扩展和重复观察。 |
-| lambda >= 2/3 | 优先最终核验，仅为可能改变选择的关键缺口继续取证。 |
-| 工具用尽或最后一次决策 | 动作 schema 只允许 finish；证据不足则弃答。 |
-
-这是**阶段条件化提示的策略退火**，不改变采样温度，也不自动按轮次裁掉候选。
-阶段内的语义取证范围由策略提示约束，资源截止由程序强制执行。
-关键反证始终允许改选、重开任务和恢复候选；A1 仅去掉阶段提示，其预算、采样温度和结束检查不变。
-阶段边界及指导文字进入源码快照和 `protocol.json`，不能看过确认性结果后修改并续跑同一目录。
+权重是**通过提示词传达的相对行动优先级**，由模型结合已有证据决定动作和参数；它们不是动作概率或置信度，采样温度保持固定。
+候选排除和恢复依据证据进行，关键反证始终允许改选、重开任务和恢复候选；满足核验要求时可提前结束。
+工具用尽或最后一次决策时，程序将动作 schema 限制为 finish；证据不足则弃答。
+A1 仅去掉连续权重提示，其预算、采样温度和结束检查不变。
+调度版本 `continuous_linear_v2`、权重公式和指导文字进入源码快照及 `protocol.json`。
+新版本必须另开实验目录，不能与先前分段版本的结果混合或续跑同一冻结目录。
 
 直接推理仍默认不开启 Monitor 或退火；调度器按上表显式覆盖各组开关，旧的全局 Monitor 变量不能改写新矩阵。
 
@@ -58,7 +57,7 @@ A3 的工具可用额度为 0，但共享决策上界仍为 T；零工具调用�
 调度器固定使用覆盖 130 个场景的 1,500 条描述，按场景及 Easy/Hard × 视角依赖分层冻结。
 
 ```bash
-export EVIGROUND_ABLATION_STUDY="$PWD/experiments/nr3d_module_ablation"
+export EVIGROUND_ABLATION_STUDY="$PWD/experiments/nr3d_module_ablation_continuous_v2"
 export EVIGROUND_ABLATION_SCENES=/absolute/path/to/nr3d_prepared_scenes
 export EVIGROUND_ABLATION_PREDICTIONS=/absolute/path/to/verified_classifier_export
 export EVIGROUND_ABLATION_MODEL=your_model_name
@@ -93,10 +92,10 @@ PYTHON_DOTENV_DISABLED=1 PYTHONPATH=src \
 
 ## 输出与审计
 
-- `protocol.json`：矩阵、共享预算、输出限制、退火阶段、固定清单哈希与比较对象。
+- `protocol.json`：矩阵、共享预算、输出限制、连续退火调度、固定清单哈希与比较对象。
 - `source_identity.json` 与 `source/`：推理源码及哈希；更改设置或源码后另开目录。
 - `technical_pilot/A*/diagnostics.json`：是否回答、已接受 DAG、预算和校验反馈。
-- `runs/A*/key_slot_*/q*/prediction.json`：动作、证据、DAG 修订、退火进度与阶段。
+- `runs/A*/key_slot_*/q*/prediction.json`：动作、证据、DAG 修订、退火进度、两项权重、实际提示与截止状态。
 - `react_budget`：五组统一记录工具、修正、决策次数及上限；Monitor 同时保留兼容字段 `dag_monitor_budget`。
 - `termination_cause`：正常结束、弃答、预算截止或修正耗尽；技术错误另列。
 - `run.json`：请求用量、实际模型及执行轨迹，包括失败前已完成的工具操作，避免自动把技术错误样本开销记零。

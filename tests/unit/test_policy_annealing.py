@@ -62,13 +62,34 @@ class PolicyAnnealingTests(unittest.TestCase):
                                   Path(out), [], trace, budget)
             return result, chat.call_args_list, render.call_count
 
-    def test_progress_boundaries_and_early_tool_deadline(self):
-        states = [policy_state(t, 4, 3 - t) for t in range(4)]
-        self.assertEqual([s["stage"] for s in states], ["explore", "focus", "verify", "deadline"])
-        self.assertEqual([s["progress"] for s in states], [0, 1 / 3, 2 / 3, 1])
+    def test_continuous_priorities_and_early_tool_deadline(self):
+        states = [policy_state(t, 19, 12, last_decision=t == 18) for t in range(19)]
+        self.assertEqual([s["stage"] for s in states], ["continuous"] * 18 + ["deadline"])
+        self.assertEqual(states[0]["exploration_weight"], 1)
+        self.assertEqual(states[0]["verification_weight"], 0)
+        self.assertEqual(states[-1]["exploration_weight"], 0)
+        self.assertEqual(states[-1]["verification_weight"], 1)
+        for previous, current in zip(states, states[1:]):
+            self.assertAlmostEqual(current["exploration_weight"] + current["verification_weight"], 1)
+            self.assertAlmostEqual(current["verification_weight"] - previous["verification_weight"], 1 / 18)
+            self.assertAlmostEqual(previous["exploration_weight"] - current["exploration_weight"], 1 / 18)
         self.assertEqual(policy_state(0, 19, 0)["stage"], "deadline")
-        self.assertEqual(policy_state(0, 1, 12, last_decision=True)["stage"], "deadline")
+        last = policy_state(0, 1, 12, last_decision=True)
+        self.assertEqual(last["stage"], "deadline")
+        self.assertEqual(last["progress"], 0)
+        self.assertIn("No further evidence actions", last["guidance"])
         self.assertIn("counterevidence", states[2]["correction_policy"])
+
+    def test_old_third_boundaries_do_not_switch_prompt_templates(self):
+        templates = []
+        for step in (999, 1000, 1001, 1999, 2000, 2001):
+            state = policy_state(step, 3001, 12)
+            self.assertEqual(state["stage"], "continuous")
+            prefix = (f"Exploration priority={state['exploration_weight']:.6f}; "
+                      f"final-verification priority={state['verification_weight']:.6f}. ")
+            self.assertTrue(state["guidance"].startswith(prefix))
+            templates.append(state["guidance"][len(prefix):])
+        self.assertTrue(all(template == templates[0] for template in templates))
 
     def test_all_five_variants_can_finish_early_with_matched_limits(self):
         initial = []
@@ -88,6 +109,8 @@ class PolicyAnnealingTests(unittest.TestCase):
                 self.assertEqual(bool(trace["policy_annealing_history"]), name != "A1")
                 state = json.loads(calls[0].args[0][1]["content"][0]["text"])
                 self.assertEqual("policy_annealing" in state, name != "A1")
+                if name == "A1":
+                    self.assertNotIn("Exploration priority=", calls[0].args[0][0]["content"])
                 initial.append(trace["react_initial_input"])
                 if name == "A3":
                     schema = calls[0].kwargs["response_schema"]["schema"]
@@ -115,6 +138,14 @@ class PolicyAnnealingTests(unittest.TestCase):
         states = [json.loads(c.args[0][1]["content"][0]["text"]) for c in calls]
         self.assertEqual([s["remaining_tool_calls"] for s in states], [1, 1, 0])
         self.assertEqual([s["policy_annealing"]["progress"] for s in states], [0, .5, 1])
+        for call, state in zip(calls[:-1], states[:-1]):
+            guidance = state["policy_annealing"]
+            system_prompt = call.args[0][0]["content"]
+            self.assertIn(guidance["guidance"], system_prompt)
+            self.assertIn(f"Exploration priority={guidance['exploration_weight']:.6f}", system_prompt)
+            self.assertIn(f"final-verification priority={guidance['verification_weight']:.6f}", system_prompt)
+        self.assertEqual(states[1]["policy_annealing"]["exploration_weight"], .5)
+        self.assertEqual(states[1]["policy_annealing"]["verification_weight"], .5)
         self.assertEqual(calls[-1].kwargs["response_schema"]["schema"]["properties"]["action"]["enum"], ["finish"])
         self.assertEqual(trajectory_metrics(trace), {"successful_tool_calls": 1, "decision_calls": 3,
                          "repair_calls": 1, "budget_exhausted": True, "repair_exhausted": False})
