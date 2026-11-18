@@ -87,16 +87,11 @@ def sample_cost(run):
         values = [r.get(field) for r in [*previous, result]]
         result[field] = sum(values) if all(v is not None for v in values) else None
     result['execution_attempts'] = 1 + len(previous)
-    result['cumulative_tool_stage_timings_s'] = {}
-    for cost in [*previous, result]:
-        for field, value in cost.get('tool_stage_timings_s', {}).items():
-            result['cumulative_tool_stage_timings_s'][field] = (
-                result['cumulative_tool_stage_timings_s'].get(field, 0) + value)
-    result['cumulative_stage_timings_s'] = {}
-    for cost in [*previous, result]:
-        for field, value in cost.get('stage_timings_s', {}).items():
-            result['cumulative_stage_timings_s'][field] = (
-                result['cumulative_stage_timings_s'].get(field, 0) + value)
+    for timings in ('tool_stage_timings_s', 'stage_timings_s'):
+        cumulative = result['cumulative_' + timings] = {}
+        for cost in [*previous, result]:
+            for field, value in cost.get(timings, {}).items():
+                cumulative[field] = cumulative.get(field, 0) + value
     result['online_latency_observed_s'] = run.get('online_latency_observed_s', result['online_latency_s'])
     result['online_latency_complete'] = run.get('execution_complete', True) and all(
         r.get('online_latency_complete') for r in previous)

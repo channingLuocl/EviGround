@@ -1995,22 +1995,12 @@ def validate_structure(query, parsed):
     parsed["condition_records"] = _condition_records(
         query, parsed, raw_relations, raw_attrs
     )
-    from eviground.query.query_graph import structure
-
-    previous = parsed.get("query_structure", {}).get("conditions", [])
-    parsed["query_structure"] = structure(query, parsed)
-    present = {
-        (c.get("condition_type"), c.get("source_quote"))
-        for c in parsed["query_structure"]["conditions"]
-    }
-    parsed["query_structure"]["conditions"] += [
+    previous = [
         c
-        for c in previous
+        for c in parsed.get("query_structure", {}).get("conditions", [])
         if c.get("polarity") != "positive"
-        and (c.get("condition_type"), c.get("source_quote")) not in present
     ]
-    for index, condition in enumerate(parsed["query_structure"]["conditions"]):
-        condition["condition_id"] = f"c{index}"
+    _refresh_query_structure(query, parsed, previous)
     parsed["diagnostic_missing"].extend(
         (
             "query modifier not represented: " + quote
@@ -2020,14 +2010,9 @@ def validate_structure(query, parsed):
     return parsed
 
 
-def refresh_condition_records(query, parsed):
-    """Rebuild the audit ledger after another parser operation updates diagnostics."""
-    parsed["condition_records"] = _condition_records(
-        query, parsed, parsed.get("Relations") or [], parsed.get("Attributes") or []
-    )
+def _refresh_query_structure(query, parsed, previous):
     from eviground.query.query_graph import structure
 
-    previous = parsed.get("query_structure", {}).get("conditions", [])
     parsed["query_structure"] = structure(query, parsed)
     present = {
         (c.get("condition_type"), c.get("source_quote"))
@@ -2040,6 +2025,14 @@ def refresh_condition_records(query, parsed):
     ]
     for index, condition in enumerate(parsed["query_structure"]["conditions"]):
         condition["condition_id"] = f"c{index}"
+
+
+def refresh_condition_records(query, parsed):
+    """Rebuild the audit ledger after another parser operation updates diagnostics."""
+    parsed["condition_records"] = _condition_records(
+        query, parsed, parsed.get("Relations") or [], parsed.get("Attributes") or []
+    )
+    _refresh_query_structure(query, parsed, parsed.get("query_structure", {}).get("conditions", []))
     return parsed
 
 

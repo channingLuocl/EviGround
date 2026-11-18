@@ -132,6 +132,17 @@ class CostTests(unittest.TestCase):
         self.assertEqual(value['total_tokens']['mean'], 100)
         self.assertEqual(value['failure_rate'], .5)
 
+    def test_restart_timings_accumulate_each_stage_without_changing_history(self):
+        previous = dict(stage_timings_s=dict(load_scene=2, parse_query=3),
+                        tool_stage_timings_s=dict(measure=4))
+        cost = sample_cost(dict(previous_execution_costs=[previous, {}],
+            stage_timings_s=dict(load_scene=5), active_trace=dict(
+                stage_timings_s=dict(measure=6, render=7))))
+        self.assertEqual(cost['cumulative_stage_timings_s'], dict(load_scene=7, parse_query=3))
+        self.assertEqual(cost['cumulative_tool_stage_timings_s'], dict(measure=10, render=7))
+        self.assertEqual(previous, dict(stage_timings_s=dict(load_scene=2, parse_query=3),
+                                       tool_stage_timings_s=dict(measure=4)))
+
     def test_resumed_extra_corrections_and_finish_are_counted(self):
         first = dict(repair_calls=2, failed_checks=3, final_submissions=1,
                      stage_timings_s=dict(load_scene=2))

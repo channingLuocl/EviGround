@@ -1,4 +1,6 @@
 import unittest
+from copy import deepcopy
+from unittest.mock import patch
 from eviground.query.validation import (
     recover_vertical_relations,
     refresh_condition_records,
@@ -11,6 +13,21 @@ class VerticalRecoveryTests(unittest.TestCase):
 
     def parsed(self, relations):
         return {"Target": ["shelf"], "Anchor": ["shelf"], "Relations": relations}
+
+    def test_condition_refresh_preserves_each_callers_retention_policy(self):
+        existing = dict(condition_type="category", source_quote="shelf", polarity="positive")
+        positive = dict(condition_type="appearance", source_quote="red", polarity="positive")
+        negative = dict(condition_type="appearance", source_quote="not blue", polarity="exclude")
+        raw = dict(Target=["shelf"], Anchor=[], Relations=[], Attributes=[], Observer={},
+                   Unhandled=[], query_structure=dict(conditions=[existing, positive, negative]))
+        structure = dict(conditions=[existing], uncovered_modifiers=[])
+        for refresh, retained in ((False, [existing, negative]),
+                                  (True, [existing, positive, negative])):
+            with self.subTest(refresh=refresh), patch(
+                    "eviground.query.query_graph.structure", side_effect=lambda *args: deepcopy(structure)):
+                result = (refresh_condition_records if refresh else validate_structure)("the shelf", deepcopy(raw))
+                expected = [{**item, "condition_id": f"c{i}"} for i, item in enumerate(retained)]
+                self.assertEqual(result["query_structure"]["conditions"], expected)
 
     def test_embedded_reference_above_target_is_inverted(self):
         query = "The largest shelf with a shelf above it."
