@@ -373,6 +373,10 @@ class DagMonitorTests(unittest.TestCase):
         # Even a stale completed downstream node is reset by the program.
         event = self.monitor.update(revised, action("inspect"), [])
         self.assertEqual(event["reactivated_target_ids"], [2])
+        from eviground.evaluation.costs import revision_metrics
+
+        self.assertEqual(revision_metrics(dict(dag_monitor_history=self.monitor.history)),
+                         dict(dag_reopened=True, candidates_restored=True, revision_triggered=True))
         by_id = {n["id"]: n for n in self.monitor.plan["nodes"]}
         self.assertEqual(by_id["appearance"]["status"], "completed")
         self.assertEqual(by_id["compare"]["status"], "pending")

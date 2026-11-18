@@ -3,6 +3,7 @@
 import json
 from eviground.evaluation.run_storage import ensure_run_writable, write_json
 from eviground.evaluation.metrics import bbox_iou_3d
+from eviground.evaluation.costs import summarize_revisions
 
 
 def trajectory_metrics(trace):
@@ -92,6 +93,7 @@ def summarize(results, total=None):
                  and r.get("iou_3d", 0) >= 0.5 for r in results)) / total if total and results else None
         ),
         "evaluation_policy": "single_pass",
+        "judgment_revision": summarize_revisions(results),
     }
 
 

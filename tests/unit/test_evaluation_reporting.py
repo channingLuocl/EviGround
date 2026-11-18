@@ -46,6 +46,18 @@ class EvaluationReportingTests(unittest.TestCase):
         self.assertIsNone(data['summary']['acc50'])
         self.assertIsNone(data['groups']['unique']['True']['accuracy'])
 
+    def test_revision_rates_reach_progress_and_cost_reports(self):
+        flags = dict(dag_reopened=True, candidates_restored=True, revision_triggered=True)
+        self.results[0]['cost'] = flags
+        self.results[1]['cost'] = flags
+        summary = report(self.output, self.results, 6, selection=self.selection)
+        cost = json.loads((self.output / 'cost_summary.json').read_text())
+        self.assertEqual(summary['judgment_revision'], cost['judgment_revision'])
+        value = summary['judgment_revision']['revision_triggered']
+        self.assertEqual(value['triggered_samples'], 2)
+        self.assertEqual(value['missing_history_samples'], 1)
+        self.assertEqual(value['correction_success_rate'], .5)
+
     def test_unselected_results_and_changed_group_labels_are_rejected(self):
         for changed in (dict(self.results[0], csv_row=99),
                         dict(self.results[0], unique=False)):

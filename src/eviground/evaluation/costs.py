@@ -3,6 +3,44 @@
 import numpy as np
 
 
+def revision_metrics(trace, previous=()):
+    """Count actual completed-to-pending transitions, not requested reopen IDs."""
+    history = trace.get('dag_monitor_history')
+    flags = dict(dag_reopened=None, candidates_restored=None)
+    if history is not None:
+        old = {}
+        flags = dict(dag_reopened=False, candidates_restored=False)
+        for event in history:
+            nodes = {n['id']: n for n in event['plan']['nodes']}
+            flags['dag_reopened'] |= any(
+                old.get(node_id, {}).get('status') == 'completed' and node_id in nodes
+                for node_id in event['invalidated_node_ids'])
+            flags['candidates_restored'] |= bool(event['reactivated_target_ids'])
+            old = nodes
+    # Histories replay after a restart: sample triggers are ORed, never added.
+    for field in flags:
+        values = [flags[field], *(cost.get(field) for cost in previous)]
+        flags[field] = True if True in values else None if None in values else False
+    values = list(flags.values())
+    flags['revision_triggered'] = True if True in values else None if None in values else False
+    return flags
+
+
+def summarize_revisions(rows):
+    """Post-trigger correctness uses evaluator outcomes, never Monitor acceptance."""
+    summary = dict(success_definition='final evaluator correctness after a trigger; not causal improvement')
+    for field in ('dag_reopened', 'candidates_restored', 'revision_triggered'):
+        observed = [r for r in rows if type((r.get('cost') or {}).get(field)) is bool]
+        triggered = [r for r in observed if r['cost'][field]]
+        evaluated = [r for r in triggered if type(r.get('correct')) is bool or r.get('error')]
+        correct = sum(r.get('correct') is True and not r.get('error') for r in evaluated)
+        summary[field] = dict(observed_samples=len(observed), missing_history_samples=len(rows) - len(observed),
+            triggered_samples=len(triggered), trigger_rate=len(triggered) / len(observed) if observed else None,
+            evaluated_triggered_samples=len(evaluated), unknown_outcome_samples=len(triggered) - len(evaluated),
+            correct_after_trigger=correct, correction_success_rate=correct / len(evaluated) if evaluated else None)
+    return summary
+
+
 def sample_cost(run):
     calls = run.get('calls', [])
     attempts, seen = [], set()
@@ -97,6 +135,7 @@ def sample_cost(run):
         r.get('online_latency_complete') for r in previous)
     if not result['online_latency_complete']:
         result['online_latency_s'] = None
+    result.update(revision_metrics(trace, previous))
     return result
 
 
@@ -104,6 +143,7 @@ def summarize_costs(rows, selected_total):
     costs = [r['cost'] for r in rows if r.get('cost')]
     result = dict(selected_total=selected_total, processed=len(rows), cost_records=len(costs),
         pending=selected_total - len(rows), statistics_denominator='attempted samples with observed field')
+    result['judgment_revision'] = summarize_revisions(rows)
     for field in ('actual_http_attempts', 'parse_http_attempts', 'decision_http_attempts',
                   'parse_calls', 'decision_calls', 'actual_parse_calls', 'actual_decision_calls',
                   'final_submissions', 'logical_final_submissions',

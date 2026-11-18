@@ -76,6 +76,14 @@ Qwen2-VL 脚本同时开启 `EVIGROUND_ACTION_NO_REPEAT=1` 和 `EVIGROUND_GUIDED
 
 2026-11-17 08:44 最新核对：函数标记接口独立候选通过 242 项核心测试、4 项适配测试和两套 tokenizer 共 12 项路径检查；真实固定四条开发诊断中，72B／2B 分别返回 7／5 个 schema 合格动作，但都因连续重复取证止损，完整预测均为 0，准确率不可计算。原始 HTTP 请求确认新增图像、观测和最新 DAG 已传入，尚未恢复可靠状态推进。该候选未推广至默认流程，未启动新全量；188 个证据文件已归档，服务停止，实例已确认无卡。详见 `outputs/qwen2_vl_20261116/improvement/函数接口试跑与当前阻塞-20261117.md`。
 
+## 推理开销与修正统计
+
+`results.json` 的总览／分组和 `cost_summary.json` 自动记录 `judgment_revision`：分别统计 `dag_reopened`、`candidates_restored` 及两者并集 `revision_triggered` 的样本触发率与触发后正确率。重开仅计已完成节点实际回退，不计请求重开仍为 pending 的节点或删除节点；候选恢复使用 Monitor 已接受事件中的 `reactivated_target_ids`。同一样本多次触发或断点重放只计一次。
+
+触发率分母为有对应监控记录的已运行样本；`missing_history_samples` 显式报告缺失记录。`correction_success_rate` 是触发后最终由独立 evaluator 判为正确的样本数／已有评估结论的触发样本数，错误与弃答计失败；未评估结果列为 `unknown_outcome_samples`。它不证明“原先错误被纠正”的因果收益。正确性沿用原评估规则（Nr3D 实例 ID；ScanRefer IoU≥0.25），不把合法 JSON 或节点完成当正确。
+
+可用 `python scripts/summarize_inference_costs.py --run /absolute/path/to/run` 从已有 `run.json` 的完整 Monitor 历史重算，并按 `csv_row`、场景和描述关联 `results.json` 的独立评估，导出 `cost_samples.json/.csv`、`cost_summary.json/.md`。没有历史或评估结论时保留未知，不补零或假定成功。
+
 ## 目录
 
 ```text
