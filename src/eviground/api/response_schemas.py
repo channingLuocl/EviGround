@@ -23,7 +23,8 @@ def nullable(schema):
 
 
 TEXT = {"type": "string"}
-REASON = {"type": "string", "minLength": 1, "pattern": "\\S"}
+# Local validation only; client strips this pattern from the decoding grammar.
+REASON = {"type": "string", "minLength": 1, "pattern": "[\\s\\S]*\\S[\\s\\S]*"}
 ROLE = enum("target", "reference")
 ATTRIBUTE = obj({"category": TEXT, "role": ROLE, "phrase": TEXT})
 RELATION = obj(
@@ -63,8 +64,8 @@ OBSERVER = obj(
 )
 
 
-def parser_schema():
-    return obj(
+def parser_schema(*, compact=False):
+    schema = obj(
         {
             "Target": array(TEXT),
             "Anchor": array(TEXT),
@@ -75,6 +76,19 @@ def parser_schema():
             "Unhandled": array(TEXT),
         }
     )
+    if compact:
+        from copy import deepcopy
+
+        schema = deepcopy(schema)
+        def bound(node):
+            if node.get("type") == "array":
+                node["maxItems"] = 8
+                bound(node["items"])
+            for child in node.get("properties", {}).values():
+                bound(child)
+        bound(schema)
+        schema["properties"]["Target"]["maxItems"] = 1
+    return schema
 
 
 ATTRIBUTES = obj({"Attributes": array(ATTRIBUTE)})

@@ -7,7 +7,13 @@ import numpy as np
 
 VERSION = "eviground-category-hypotheses-v1"
 SCORE_TYPE = "weighted_standardized_3d_rgb_fusion_not_probability"
-CATEGORY_INSTRUCTIONS = " Category labels are uncertain, mutually exclusive hypotheses per object ID. category is the frozen top-1 display label only; use category_hypotheses for eligible bindings. Read category_score_type: scores are standardized 3D/RGB fusion scores; they are not probabilities. Rank 1 is the classifier primary hypothesis; lower ranks are alternatives, not equally confident labels. Use rank and gap_from_top1 as classifier evidence, not proof or a calibrated confidence threshold. A lower-ranked category can win when the complete description and visual/spatial evidence support it. Match target and reference categories to retained hypotheses, then verify with visual/spatial evidence. Do not assign incompatible categories to the same object in one interpretation. A retained category is not proof; a rejected category is not proof of physical absence. Return uncertainty when essential category evidence is missing."
+MASK3D_SCORE_TYPE = "mask3d_foreground_softmax_probability"
+SEEGROUND_SCORE_TYPE = "frozen_pointnext_clip_similarity_times_10_not_probability"
+NATIVE_SCORE_TYPES = {
+    "seeground_mask3d_scannet200": MASK3D_SCORE_TYPE,
+    "seeground_pointnext_clip_reproduction": SEEGROUND_SCORE_TYPE,
+}
+CATEGORY_INSTRUCTIONS = " Category labels are uncertain, mutually exclusive hypotheses per object ID. category is the frozen top-1 display label only; use category_hypotheses for eligible bindings. Read category_source and category_score_type for the original score meaning; scores from different frontends are not comparable or calibrated evidence of physical truth. Rank 1 is the classifier primary hypothesis; lower ranks are alternatives, not equally confident labels. Use rank and gap_from_top1 as classifier evidence, not proof or a calibrated confidence threshold. A lower-ranked category can win when the complete description and visual/spatial evidence support it. Match target and reference categories to retained hypotheses, then verify with visual/spatial evidence. Do not assign incompatible categories to the same object in one interpretation. A retained category is not proof; a rejected category is not proof of physical absence. Return uncertainty when essential category evidence is missing."
 
 
 def category_names(obj):
@@ -25,8 +31,8 @@ def sha256(path):
 
 
 def gate_categories(top5, top_k=5, score_type=SCORE_TYPE):
-    if score_type != SCORE_TYPE or top_k not in (1, 5):
-        raise ValueError("Expected fusion scores and top_k=1|5")
+    if score_type not in (SCORE_TYPE, *NATIVE_SCORE_TYPES.values()) or top_k not in (1, 5):
+        raise ValueError("Expected a supported original score type and top_k=1|5")
     if (
         len(top5) != 5
         or len({r["category"] for r in top5}) != 5
@@ -41,6 +47,9 @@ def gate_categories(top5, top_k=5, score_type=SCORE_TYPE):
     scores = np.asarray([r["score"] for r in top5], dtype=float)
     if not np.isfinite(scores).all() or np.any(scores[:-1] < scores[1:]):
         raise ValueError("Category scores must be finite and sorted descending")
+    if score_type == MASK3D_SCORE_TYPE and (np.any(scores < 0) or np.any(scores > 1)
+                                           or scores.sum() > 1 + 1e-6):
+        raise ValueError("Invalid original Mask3D foreground probabilities")
     if any(("rank" in row and row["rank"] != rank for rank, row in enumerate(top5, 1))):
         raise ValueError("Category ranks disagree with score order")
     accepted, audit = ([], [])
@@ -66,8 +75,10 @@ def load_category_objects(path):
     if data.get("version") != VERSION:
         raise ValueError("Expected a prepared EviGround category table")
     score_type = data["gate"].get("score_type", SCORE_TYPE)
-    if score_type != SCORE_TYPE:
+    if score_type not in (SCORE_TYPE, *NATIVE_SCORE_TYPES.values()):
         raise ValueError("Category table version disagrees with score type")
+    if score_type != SCORE_TYPE and NATIVE_SCORE_TYPES.get(data.get("category_source")) != score_type:
+        raise ValueError("Native scores need their explicit corresponding prediction source")
     result = []
     for item in data["objects"]:
         box = np.asarray(item["bbox_3d"], dtype=float)
@@ -97,6 +108,8 @@ def load_category_objects(path):
             }
         )
         result[-1]["category_score_type"] = score_type
+        if "category_source" in data:
+            result[-1]["category_source"] = data["category_source"]
         if "proposal_detection_score" in item:
             score = item["proposal_detection_score"]
             if isinstance(score, bool) or not isinstance(score, (float, int)) or not 0 <= score <= 1:

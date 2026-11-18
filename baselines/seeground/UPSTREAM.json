@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/iris0329/SeeGround",
+  "commit": "928d827b18345454c6083cf49c9a7348cc04f6c1",
+  "files": {
+    "LICENSE": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+    "prepare_data/object_lookup_table_scanrefer.py": "fe8d253fedb97b02a9ef2314b3dbb49e2704ed5c0fe1849e8fa27da577c0f063",
+    "data/scannet200_constants.py": "28a365821a1d9a5db1adf4873d87e740b8dcbc89f9ae68e03591815d666f216f"
+  },
+  "mask3d": {
+    "repository": "https://github.com/JonasSchult/Mask3D",
+    "commit": "11bd5ff94477ff7194e9a7c52e9fae54d73ac3b5",
+    "recipe": "scripts/scannet200/scannet200_val.sh",
+    "checkpoint_sha256": "6a0c4347616a27348bed32ff1ae225cab0087e0a0148f36d1023ca2d46f82534",
+    "checkpoint_split": "ScanNet200 validation"
+  },
+  "minkowski": {
+    "repository": "https://github.com/NVIDIA/MinkowskiEngine",
+    "commit": "02fc608bea4c0549b0a7b00ca1bf15dee4a0b228"
+  }
+}

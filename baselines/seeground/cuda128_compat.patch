@@ -1,0 +1,49 @@
+--- a/src/3rdparty/concurrent_unordered_map.cuh
++++ b/src/3rdparty/concurrent_unordered_map.cuh
+@@ -17,7 +17,9 @@
+ #ifndef CONCURRENT_UNORDERED_MAP_CUH
+ #define CONCURRENT_UNORDERED_MAP_CUH
+ 
+-#include <cudf/detail/nvtx/ranges.hpp>
++// NVTX tracing only; conflicts with the newer NVTX bundled with PyTorch.
++#define CUDF_FUNC_RANGE()
++#include <thrust/execution_policy.h>
+ #include <hash/hash_allocator.cuh>
+ #include <hash/helper_functions.cuh>
+ #include <hash/managed.cuh>
+--- a/src/coordinate_map_gpu.cu
++++ b/src/coordinate_map_gpu.cu
+@@ -32,6 +32,8 @@
+ #include "sharedmem.cuh"
+ 
+ #include <thrust/copy.h>
++#include <thrust/remove.h>
++#include <thrust/unique.h>
+ #include <thrust/execution_policy.h>
+ #include <thrust/iterator/counting_iterator.h>
+ #include <thrust/iterator/transform_iterator.h>
+--- a/src/coordinate_map_gpu.cuh
++++ b/src/coordinate_map_gpu.cuh
+@@ -136,9 +136,10 @@
+       LOG_DEBUG("Reserve map of",
+                 compute_hash_table_size(size, m_hashtable_occupancy),
+                 "for concurrent_unordered_map of size", size);
+-      m_map = map_type::create(
++      auto new_map = map_type::create(
+           compute_hash_table_size(size, m_hashtable_occupancy),
+           m_unused_element, m_unused_key, m_hasher, m_equal, m_map_allocator);
++      m_map.reset(new_map.release(), new_map.get_deleter());
+       LOG_DEBUG("Done concurrent_unordered_map creation");
+       CUDA_TRY(cudaStreamSynchronize(0));
+       m_capacity = size;
+--- a/src/spmm.cu
++++ b/src/spmm.cu
+@@ -28,6 +28,8 @@
+ #include "math_functions.cuh"
+ 
+ #include <cusparse.h>
++#include <thrust/sort.h>
++#include <thrust/execution_policy.h>
+ 
+ #include <ATen/core/Tensor.h>
+ #include <ATen/cuda/CUDAContext.h>

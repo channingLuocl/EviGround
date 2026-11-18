@@ -8,12 +8,15 @@ import numpy as np
 from eviground.categories.hypotheses import (
     VERSION,
     SCORE_TYPE,
+    MASK3D_SCORE_TYPE,
+    NATIVE_SCORE_TYPES,
     gate_categories,
     load_category_objects,
     sha256,
 )
 
 EXPORT_VERSION = "pointnext-sampling-vote-r8-export-v1"
+NATIVE_EXPORT_VERSION = "eviground-native-category-export-v1"
 
 
 def load_export(source):
@@ -53,16 +56,20 @@ def load_export(source):
         if archive is not None:
             archive.close()
     data, config = (payloads["predictions.json"], payloads["config.json"])
+    native = config.get("version") == NATIVE_EXPORT_VERSION
+    score_type = NATIVE_SCORE_TYPES.get(config.get("category_source")) if native else SCORE_TYPE
+    version = NATIVE_EXPORT_VERSION if native else EXPORT_VERSION
     if (
-        data.get("version") != EXPORT_VERSION
-        or config.get("version") != EXPORT_VERSION
-        or data["summary"].get("score_type") != SCORE_TYPE
-        or (config.get("score_type") != SCORE_TYPE)
+        data.get("version") != version
+        or config.get("version") != version
+        or data["summary"].get("score_type") != score_type
+        or config.get("score_type") != score_type
+        or (native and score_type is None)
         or (not data["summary"].get("complete"))
         or (data["summary"].get("errors") != 0)
     ):
         raise ValueError(
-            "Need a complete classifier export with standardized fusion scores"
+            "Need a complete verified export with its original category score type"
         )
     rows = data["results"]
     sources = {r["scene"]: r["cloud_sha256"] for r in config["sources"]}
@@ -79,20 +86,23 @@ def load_export(source):
     for row in rows:
         if (
             row.get("status") != "completed"
-            or row.get("score_type") != SCORE_TYPE
+            or row.get("score_type") != score_type
             or type(row["bbox_id"]) is not int
             or (row["predicted_object"] != row["top5"][0]["category"])
         ):
             raise ValueError("Invalid classifier prediction row")
-        gate_categories(row["top5"], score_type=SCORE_TYPE)
-    return (rows, sources, marker["files"])
+        gate_categories(row["top5"], score_type=score_type)
+    return (rows, sources, marker["files"], config)
 
 
 def prepare_tables(source, scene_root, output, scenes, top_k, proposal_policy=None):
-    rows, sources, hashes = load_export(source)
-    gate = {"top_k": top_k, "score_type": SCORE_TYPE}
+    rows, sources, hashes, config = load_export(source)
+    native = config["version"] == NATIVE_EXPORT_VERSION
+    gate = {"top_k": top_k, "score_type": config["score_type"]}
     files, counts = ({}, [])
     policy = json.loads(Path(proposal_policy).read_text()) if proposal_policy is not None else None
+    if native and policy is not None:
+        raise ValueError("Native frontend already defines its proposals; do not apply an old proposal policy")
     if policy is not None and (policy.get("version") != "mask-nms-proposal-policy-v1"
                               or sha256(scene_root / "protocol.json") != policy["source_protocol_sha256"]):
         raise ValueError("Proposal policy belongs to a different scene frontend")
@@ -104,6 +114,30 @@ def prepare_tables(source, scene_root, output, scenes, top_k, proposal_policy=No
             raise ValueError(f"Point cloud differs from classifier input: {scene}")
         with np.load(cloud_path, allow_pickle=False) as cloud:
             known = set(map(int, np.unique(cloud["ids"])))
+        if native:
+            source_record = next(row for row in config["sources"] if row["scene"] == scene)
+            instances_path = scene_root / scene / "scene_instances.json"
+            if sha256(instances_path) != source_record["instances_sha256"]:
+                raise ValueError(f"Native instance geometry changed: {scene}")
+            if "masks_sha256" in source_record:
+                if sha256(scene_root / scene / "masks.npz") != source_record["masks_sha256"]:
+                    raise ValueError(f"Native prediction masks changed: {scene}")
+            geometry = {o["bbox_id"]: o["bbox_3d"] for o in json.loads(instances_path.read_text())}
+            classified = {r["bbox_id"]: r["bbox_3d"] for r in rows if r["scene"] == scene}
+            if config["score_type"] == MASK3D_SCORE_TYPE:
+                expected = known - {-1}
+            else:
+                expected = set(source_record["candidate_ids"])
+                if len(expected) != len(source_record["candidate_ids"]) or not expected <= known:
+                    raise ValueError(f"Invalid original SeeGround candidate set: {scene}")
+                candidate_path = scene_root / scene / 'objects.json'
+                if sha256(candidate_path) != source_record['candidate_geometry_sha256']:
+                    raise ValueError(f'Original SeeGround candidate geometry changed: {scene}')
+                geometry = {o['bbox_id']: o['bbox_3d'] for o in json.loads(candidate_path.read_text())}
+                if set(geometry) != expected:
+                    raise ValueError(f'Original SeeGround candidate coverage changed: {scene}')
+            if set(classified) != expected or any(geometry.get(i) != box for i, box in classified.items()):
+                raise ValueError(f"Native categories must cover every aligned instance: {scene}")
         objects = []
         selection = policy["scenes"][scene] if policy is not None else None
         if selection is not None:
@@ -144,6 +178,8 @@ def prepare_tables(source, scene_root, output, scenes, top_k, proposal_policy=No
                     ),
                 }
             )
+            if native and "proposal_detection_score" in row:
+                objects[-1]["proposal_detection_score"] = row["proposal_detection_score"]
             if selection is not None and "proposal_scores" in selection:
                 objects[-1]["proposal_detection_score"] = selection["proposal_scores"][str(row["bbox_id"])]
             counts.append(len(retained))
@@ -156,6 +192,14 @@ def prepare_tables(source, scene_root, output, scenes, top_k, proposal_policy=No
             "cloud_sha256": sources[scene],
             "objects": objects,
         }
+        if native:
+            value["category_source"] = config["category_source"]
+            value["frontend_protocol_sha256"] = config["frontend_protocol_sha256"]
+            value["instances_sha256"] = source_record["instances_sha256"]
+            if "masks_sha256" in source_record:
+                value["masks_sha256"] = source_record["masks_sha256"]
+            if 'candidate_geometry_sha256' in source_record:
+                value['candidate_geometry_sha256'] = source_record['candidate_geometry_sha256']
         if selection is not None:
             value["proposal_policy_sha256"] = sha256(proposal_policy)
             value["suppressed_instance_ids"] = sorted(classified - set(selection["kept_ids"]))
@@ -169,7 +213,9 @@ def prepare_tables(source, scene_root, output, scenes, top_k, proposal_policy=No
         files[scene] = sha256(path)
     return {
         "version": VERSION,
-        "source_version": EXPORT_VERSION,
+        "source_version": config["version"],
+        **({"category_source": config["category_source"],
+            "frontend_protocol_sha256": config["frontend_protocol_sha256"]} if native else {}),
         "gate": gate,
         "files": files,
         "source_predictions_sha256": hashes["predictions.json"],

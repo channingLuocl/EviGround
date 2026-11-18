@@ -107,6 +107,7 @@ def run_case(row, scene_root, output, top_k, review_limit):
             "api_attempts": sum((actual_attempts(c) for c in run.get("calls", []))),
             "pipeline_latency_s": run.get("pipeline_latency_s"),
             "call_usage": [c.get("usage") for c in run.get("calls", [])],
+            "cost": run.get("cost", {}),
             "error_stage": run.get("error_stage"),
             **trajectory_metrics(run.get("active_trace", {})),
             "predicted_id": None,
@@ -135,6 +136,10 @@ def main():
     parser.add_argument("--api-concurrency", type=int, default=8)
     parser.add_argument("--review-limit", type=int, default=3)
     parser.add_argument("--prepare-only", action="store_true")
+    parser.add_argument("--category-cache", type=Path,
+                        help="Shared immutable prepared category tables for both model runs")
+    parser.add_argument("--expected-category-source",
+                        help="Fail closed if the verified export is from a different frontend")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--scene-dir", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--query", help=argparse.SUPPRESS)
@@ -164,7 +169,8 @@ def main():
     output = args.output.resolve()
     ensure_run_writable(output)
     output.mkdir(parents=True, exist_ok=True)
-    os.environ["EVIGROUND_CATEGORY_ROOT"] = str(output / "category_inputs")
+    category_cache = args.category_cache or output / "category_inputs"
+    os.environ["EVIGROUND_CATEGORY_ROOT"] = str(category_cache)
     os.environ["EVIGROUND_API_CONCURRENCY"] = str(args.api_concurrency)
     os.environ["EVIGROUND_API_SLOT_DIR"] = str(output / ".api_slots")
     scenes = {r["scene"] for r in rows}
@@ -175,11 +181,13 @@ def main():
     categories = prepare_tables(
         args.predictions,
         args.scene_root,
-        output / "category_inputs",
+        category_cache,
         scenes,
         args.category_top_k,
         proposal_policy=args.proposal_policy,
     )
+    if args.expected_category_source and categories.get("category_source") != args.expected_category_source:
+        raise ValueError("Category export does not match the required prediction frontend")
     from eviground.api.client import api_config_summary
     from eviground.query.query_syntax import syntax_settings
     from eviground.grounding.recovery import file_identity
@@ -206,6 +214,8 @@ def main():
         "workers": args.workers,
         "query_syntax": syntax_settings(),
         "api": api_config_summary(),
+        "service_record": json.loads(Path(os.environ['EVIGROUND_SERVICE_RECORD']).read_text())
+            if os.getenv('EVIGROUND_SERVICE_RECORD') else None,
         "models": {
             key: os.getenv(key, "") for key in ("EVIGROUND_MODEL", "EVIGROUND_BASE_URL")
         },
@@ -229,7 +239,7 @@ def main():
             )
         else:
             pending.append(row)
-    report(output, results, len(rows))
+    report(output, results, len(rows), selection=rows)
     if args.prepare_only:
         print(
             f"Prepared {len(rows)} cases: {len(results)} cached, {len(pending)} pending; no inference started.",
@@ -240,7 +250,9 @@ def main():
     progress = BatchProgress(len(rows), initial_results=results,
                              metric_label="IoU@0.25" if selection.get("dataset") == "scanrefer" else "True")
     last_report = time.monotonic()
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+    from eviground.evaluation.runtime import observe_batch
+
+    with observe_batch(output, lambda: len(results)), ThreadPoolExecutor(max_workers=args.workers) as pool:
         jobs = [
             pool.submit(
                 run_case,
@@ -256,10 +268,10 @@ def main():
             result = future.result()
             results.append(result)
             if time.monotonic() - last_report >= 30:
-                report(output, results, len(rows))
+                report(output, results, len(rows), selection=rows)
                 last_report = time.monotonic()
             progress.update(result)
-    summary = report(output, results, len(rows))
+    summary = report(output, results, len(rows), selection=rows)
     summary["evaluation_policy"] = settings["evaluation_policy"]
     summary["category_candidate_recall"] = sum(
         (r.get("category_candidate_recall", False) for r in results)

@@ -36,6 +36,24 @@ class EvidenceTests(unittest.TestCase):
             match_retrieval_categories(["front doors"], objects), [objects[1]]
         )
 
+    def test_entrance_door_retrieves_door_hypotheses_without_changing_query(self):
+        objects = [
+            {"bbox_id": 1, "target": "door"},
+            {"bbox_id": 2, "target": "doorframe"},
+            {"bbox_id": 3, "target": "cabinet"},
+            {"bbox_id": 4, "category_hypotheses": [{"category": "door", "rank": 2}]},
+        ]
+        parsed = {"References": [{"category": "entrance door"}]}
+        for name in ("entrance door", "entrance doors"):
+            with self.subTest(name=name):
+                self.assertEqual(canonical_category(name), "door")
+                self.assertEqual(
+                    [o["bbox_id"] for o in match_retrieval_categories(name, objects)],
+                    [1, 4],
+                )
+        match_retrieval_categories(parsed["References"][0]["category"], objects)
+        self.assertEqual(parsed["References"][0]["category"], "entrance door")
+
     def test_category_normalization_is_idempotent_for_supported_aliases(self):
         names = list(ALIASES) + ["double doors", "carts", "photocopier", "photocopiers"]
         for name in names:

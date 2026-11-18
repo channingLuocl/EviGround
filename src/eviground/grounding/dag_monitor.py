@@ -1,6 +1,8 @@
 """Model-revised task DAG with evidence-backed state and reversible exclusions."""
 
 from copy import deepcopy
+from itertools import permutations
+import re
 
 from eviground.api.response_schemas import TEXT, REASON, array, enum, obj
 from eviground.grounding.settings import evidence_inventory
@@ -89,6 +91,120 @@ return action=finish, including during a plan repair. Keep node conclusions and
 revision_reason concise; prefer small task graphs.
 """
 
+COMPACT_INSTRUCTIONS = """
+Return monitor as a complete task DAG on every action. nodes contains 1-11
+evidence tasks with IDs n0 through n10. verification is a separate REQUIRED
+final task with ID n11; never put it in nodes. Together they form 2-12 nodes.
+requirement_nodes maps EVERY language requirement
+q0, q1, ... to the node IDs that resolve it. Fill every required key, including
+q0; do not omit the detailed conditions. depends_on and
+current_node_id contain NODE IDs, never q IDs or prerequisite descriptions.
+prerequisite_descriptions describes needed reasoning, not node references.
+q0 is the complete-description verification requirement: assign it to n11.
+Use evidence tasks to resolve the individual clauses and bindings before that
+final check; do not make full-description verification a prerequisite binding.
+
+Plan evidence tasks (binding/attribute/relation/comparison) followed by exactly
+one verification task. Only verification allows ["finish"]. It depends
+transitively on every other node. Evidence tasks allow inspect and/or measure;
+completed reasoning-only tasks may allow []. The current node for a tool action
+is pending, allows that tool, and has completed dependencies. For example, an
+evidence node n0 can have depends_on=[] and verification n11 depends_on=["n0"].
+Choose the actual tasks and their order from the description and observations.
+
+source_quotes are exact substrings of description. bound_object_ids records
+actual bindings, not every alternative inspected. Completed nodes need existing
+supporting_evidence_ids and an observed conclusion; initial means supplied views
+and basic geometry. Never cite future tools, feedback, or errors as evidence.
+Pending nodes have empty evidence_ids, conclusion, and excluded_target_ids.
+ID and action lists are sets: never repeat an entry.
+Keep unresolved conditions pending. Do not copy the query as if it were observed.
+
+Exclude a target only in a completed node whose cited evidence covers that ID
+and contradicts it; explain the contradiction. Unknown is not false. Do not
+exclude rivals to manufacture uniqueness. Check actual references, comparison
+members, viewpoint assumptions, negation, and every original clause.
+
+Use task_dag and ready_node_ids after feedback. Copy unchanged completed nodes
+verbatim. If evidence overturns a binding/conclusion, reopen its old node ID in
+reopen_node_ids and revise descendants: they reset to pending and excluded
+targets reactivate. Do not repeat a rejected graph unchanged. A required category
+inspection reopens an evidence node; keep final verification finish-only.
+
+For a non-null finish, current_node_id is the completed verification node, all
+nodes are completed, all requirements covered, unresolved=[], and evidence-backed
+exclusions leave exactly predicted_id active. Explain why its strongest rivals
+fail. With missing essential evidence, finish with predicted_id=null instead.
+Do not force exclusions at the deadline. Keep the graph and conclusions concise.
+
+Wire-shape example ONLY, not a plan or evidence for the current scene. This shows
+one unresolved task; choose the actual number, goals and dependencies from the
+query. Do not fill all 11 slots. Unused nodes do not appear. In particular, a
+first task has no dependencies; never make tasks mutually depend on each other.
+{"nodes":[{"id":"n0","goal":"resolve the described conditions","kind":"binding",
+"source_quotes":["<exact description substring>"],"depends_on":[],
+"allowed_actions":["inspect","measure"],"status":"pending","bound_object_ids":[],
+"evidence_ids":[],"conclusion":"","excluded_target_ids":[]}],
+"current_node_id":"n0","reopen_node_ids":[],"revision_reason":"start evidence acquisition",
+"verification":{"id":"n11","goal":"verify the supported unique target","kind":"verification",
+"source_quotes":["<exact description substring>"],"depends_on":["n0"],
+"allowed_actions":["finish"],"status":"pending","bound_object_ids":[],
+"evidence_ids":[],"conclusion":"","excluded_target_ids":[]},"requirement_nodes":{"q0":["n11"]}}
+Replace quoted placeholders with actual source text and assign ALL actual q IDs,
+not just q0. Later turns must update this pending shape using returned evidence:
+complete a task only with its observed conclusion and existing evidence IDs;
+move to another ready task or completed verification instead of repeating it.
+"""
+
+DELTA_INSTRUCTIONS = """
+For this turn ONLY, the following serialization replaces the complete-DAG output
+shape above; all planning, evidence and completion semantics remain unchanged.
+The current task_dag is the complete authoritative plan. On this turn, return
+monitor as node_updates, current_node_id, reopen_node_ids and revision_reason.
+Follow the field order enforced by the decoder. The entire proposal is still
+validated before any tool or finish executes.
+Besides the required checkpoint described below, node_updates contains only
+nodes whose state changes; omit other unchanged nodes.
+For each changed node give its id, status, bound_object_ids, evidence_ids,
+conclusion and excluded_target_ids. Keep its goal, dependencies, source quotes
+and requirement assignments: the controller retains those exact definitions.
+Read the acquired observations and update supported tasks before choosing the
+next action. A completed comparison and final verification may be recorded in
+the same response if all clauses are supported. A non-null finish still needs
+every task completed and current_node_id=n11; pending tasks cannot finish.
+For a non-null finish, node_updates must explicitly start with the completed
+n11 verification checkpoint, followed by any other changed completed tasks.
+Supply its actual binding, existing evidence IDs and observed conclusion even
+if its state is unchanged. When finishing with a delta, also include a completed
+update for EVERY task that is still pending in task_dag; omitted tasks stay pending.
+For a tool action, node_updates starts with its current
+evidence node as pending, even if unchanged. Only later updates may complete
+other evidence tasks; verification remains pending while a tool is requested.
+Never request a tool from a completed node. A tool must not use n11.
+To add/remove tasks, change dependencies, goals or requirement assignments,
+return monitor={"replace_plan": <complete revised compact DAG>} instead.
+This replaces the whole proposal, not just the changed nodes. For rollback,
+use reopen_node_ids as before; downstream states and exclusions reset under
+the same rules. Never mark a task completed just because its tool was called.
+Existing evidence, coverage, unique-target and final-verification checks apply.
+"""
+
+def compact_delta_instructions():
+    """Retain planning rules without also asking for the obsolete snapshot shape."""
+    rules = COMPACT_INSTRUCTIONS.split("\nWire-shape example ONLY,", 1)[0]
+    rules = rules.replace("Return monitor as a complete task DAG on every action. ",
+                          "The supplied task_dag is the complete accepted plan. ", 1)
+    wire = DELTA_INSTRUCTIONS.replace(
+        "For this turn ONLY, the following serialization replaces the complete-DAG output\n"
+        "shape above; all planning, evidence and completion semantics remain unchanged.",
+        "Use the following delta serialization for this turn; all planning, evidence\n"
+        "and completion semantics remain unchanged.", 1)
+    return rules + wire
+
+
+NODE_STATE_FIELDS = ("id", "status", "bound_object_ids", "evidence_ids",
+                     "conclusion", "excluded_target_ids")
+
 
 def monitor_schema(known, allowed, available, requirements):
     node = obj({
@@ -121,9 +237,133 @@ class DagMonitor:
             self.requirements.append({**row, "id": f"q{len(self.requirements)}"})
         self.plan, self.history = None, []
 
-    def schema(self):
-        return monitor_schema(self.known, self.allowed, self.available,
-                              [r["id"] for r in self.requirements])
+    def schema(self, compact=False, evidence_ids=None):
+        schema = monitor_schema(self.known, self.allowed, self.available,
+                                [r["id"] for r in self.requirements])
+        if compact:
+            node_ids = enum(*(f"n{i}" for i in range(12)))
+            task_ids = enum(*(f"n{i}" for i in range(11)))
+            nodes = schema["properties"]["nodes"]
+            nodes.update(minItems=1, maxItems=11)
+            node = nodes["items"]
+            del node["properties"]["condition_ids"]
+            node["required"].remove("condition_ids")
+            node["properties"]["id"] = task_ids
+            node["properties"]["depends_on"] = {**array(task_ids), "maxItems": 11}
+            node["properties"]["bound_object_ids"]["maxItems"] = len(self.known)
+            node["properties"]["excluded_target_ids"]["maxItems"] = len(self.allowed)
+            quotes = sorted({r["source_quote"] for r in self.requirements
+                             if r.get("source_quote") and r["source_quote"].casefold() in self.query.casefold()})
+            node["properties"]["source_quotes"] = {
+                **array(enum(*quotes)), "minItems": 1, "maxItems": len(quotes)}
+            evidence_task, verification = deepcopy(node), deepcopy(node)
+            evidence_task["properties"]["kind"] = enum("binding", "attribute", "relation", "comparison")
+            tools = sorted(self.available - {"finish"})
+            evidence_task["properties"]["allowed_actions"] = {
+                "type": "array", "enum": [[]] + [
+                    list(group) for size in range(1, len(tools) + 1)
+                    for group in permutations(tools, size)
+                ]}
+            verification["properties"]["kind"] = enum("verification")
+            verification["properties"]["id"] = enum("n11")
+            verification["properties"]["depends_on"]["minItems"] = 1
+            verification["properties"]["allowed_actions"] = {**array(enum("finish")), "minItems": 1, "maxItems": 1}
+            def status_branches(task):
+                pending, completed = deepcopy(task), deepcopy(task)
+                pending["properties"]["status"] = enum("pending")
+                if "enum" in pending["properties"]["allowed_actions"] and tools:
+                    pending["properties"]["allowed_actions"]["enum"].remove([])
+                for name in ("evidence_ids", "excluded_target_ids"):
+                    pending["properties"][name]["maxItems"] = 0
+                pending["properties"]["conclusion"] = enum("")
+                completed["properties"]["status"] = enum("completed")
+                completed["properties"]["conclusion"] = REASON
+                completed["properties"]["evidence_ids"]["minItems"] = 1
+                if evidence_ids is not None:
+                    completed["properties"]["evidence_ids"].update(
+                        items=enum(*sorted(evidence_ids)), maxItems=len(evidence_ids))
+                return {"anyOf": [pending, completed]}
+            nodes["items"] = status_branches(evidence_task)
+            schema["properties"]["verification"] = status_branches(verification)
+            schema["required"].append("verification")
+            schema["properties"]["current_node_id"] = node_ids
+            schema["properties"]["reopen_node_ids"] = {**array(node_ids), "maxItems": 12}
+            schema["properties"]["requirement_nodes"] = obj({
+                r["id"]: {**array(node_ids), "minItems": 1, "maxItems": 12}
+                for r in self.requirements
+            })
+            schema["required"].append("requirement_nodes")
+        return schema
+
+    def delta_schema(self, evidence_ids=None):
+        """Short state edits plus an explicit full-plan replacement escape hatch."""
+        if self.plan is None:
+            raise ValueError("A delta needs an accepted task DAG")
+        full = self.schema(compact=True, evidence_ids=evidence_ids)
+        node_ids = [node["id"] for node in self.plan["nodes"]]
+        branches = deepcopy(full["properties"]["nodes"]["items"]["anyOf"])
+        for branch in branches:
+            branch["properties"] = {key: branch["properties"][key] for key in NODE_STATE_FIELDS}
+            branch["properties"]["id"] = enum(*node_ids)
+            branch["required"] = list(NODE_STATE_FIELDS)
+        delta = obj({
+            "node_updates": {**array({"anyOf": branches}), "maxItems": len(node_ids)},
+            "current_node_id": enum(*node_ids),
+            "reopen_node_ids": {**array(enum(*node_ids)), "maxItems": len(node_ids)},
+            "revision_reason": REASON,
+        })
+        return {"anyOf": [delta, obj({"replace_plan": full})]}
+
+    def decode(self, proposal):
+        """Expand compact requirement assignments into the existing DAG contract."""
+        if "node_updates" in proposal or "replace_plan" in proposal:
+            from jsonschema import validate
+
+            validate(proposal, self.delta_schema())
+            if "replace_plan" in proposal:
+                return self.decode(proposal["replace_plan"])
+            updates = proposal["node_updates"]
+            if len({node["id"] for node in updates}) != len(updates):
+                raise ValueError("Duplicate node IDs in monitor delta")
+            plan = deepcopy(self.plan)
+            by_id = {node["id"]: node for node in plan["nodes"]}
+            for node in updates:
+                by_id[node["id"]].update(deepcopy(node))
+            for key in ("current_node_id", "reopen_node_ids", "revision_reason"):
+                plan[key] = deepcopy(proposal[key])
+            return plan
+        if "requirement_nodes" not in proposal:
+            return proposal
+        from jsonschema import validate
+
+        validate(proposal, self.schema(compact=True))
+        plan = deepcopy(proposal)
+        assignments = plan.pop("requirement_nodes")
+        plan["nodes"].append(plan.pop("verification"))
+        known_nodes = {node["id"] for node in plan["nodes"]}
+        if any(node_id not in known_nodes for group in assignments.values() for node_id in group):
+            raise ValueError("Requirement assignment references an absent DAG node")
+        for node in plan["nodes"]:
+            node["condition_ids"] = [key for key, group in assignments.items() if node["id"] in group]
+        return plan
+
+    def encode(self, plan):
+        """Keep prior plans in the same wire format requested on the next turn."""
+        if plan is None or any(key in plan for key in ("requirement_nodes", "node_updates", "replace_plan")):
+            return deepcopy(plan)
+        wire = deepcopy(plan)
+        verification = [n for n in wire["nodes"] if n["kind"] == "verification"]
+        if len(verification) != 1:
+            raise ValueError("Internal DAG needs exactly one verification node")
+        wire["requirement_nodes"] = {
+            r["id"]: [n["id"] for n in wire["nodes"] if r["id"] in n["condition_ids"]]
+            for r in self.requirements
+        }
+        for node in wire["nodes"]:
+            del node["condition_ids"]
+        wire["verification"] = verification[0]
+        wire["nodes"] = [n for n in wire["nodes"] if n["kind"] != "verification"]
+        return wire
 
     def context(self, observations):
         return {"monitor_requirements": self.requirements,
@@ -264,7 +504,9 @@ class DagMonitor:
                 break
             ancestors = expanded
         if ancestors != set(by_id):
-            raise ValueError("Final verification must depend on every planned task")
+            missing = sorted(set(by_id) - ancestors)
+            raise ValueError("Final verification must depend on every planned task; "
+                             f"missing node IDs {missing}. Add dependency paths from final verification to these tasks")
         covered = {c for n in nodes for c in n["condition_ids"]}
         if covered != requirements:
             raise ValueError("Monitor DAG must cover all language requirements; "
@@ -305,6 +547,14 @@ class DagMonitor:
             if n["status"] == "completed" and any(by_id[d]["status"] != "completed"
                                                    for d in n["depends_on"]):
                 raise ValueError("A completed task has an incomplete prerequisite")
+        unresolved = {" ".join(text.split()).casefold() for text in action.get("unresolved", [])}
+        for n in nodes:
+            goal = re.escape(" ".join(n["goal"].split()).casefold())
+            label = re.escape(n["id"].casefold())
+            if n["status"] == "completed" and any(re.fullmatch(
+                    goal + r"(?:\s*\(\s*" + label + r"\s*\))?", text) for text in unresolved):
+                raise ValueError(f"Completed task {n['id']} is still listed in unresolved; "
+                                 "keep it pending or resolve the conflicting assessment")
         current = by_id.get(plan["current_node_id"])
         if current is None:
             raise ValueError("Current monitor stage is absent")
@@ -352,6 +602,9 @@ class DagMonitor:
                               f"predicted_id {action['predicted_id']}")
             if action.get("unresolved"):
                 reject_action("Finish cannot select a target while conditions remain unresolved")
+        elif not any(text.strip() for text in action.get("unresolved", [])):
+            reject_action("Abstention must state missing evidence in unresolved; "
+                          f"pending task IDs: {[n['id'] for n in nodes if n['status'] != 'completed']}")
         self.plan = plan
         self.history.append(event)
         return event

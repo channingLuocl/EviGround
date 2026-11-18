@@ -63,9 +63,19 @@ class ScanReferTests(unittest.TestCase):
         value = self.report([row])
         self.assertEqual(value["overall"]["acc50"], 0.25)
         self.assertEqual(value["multiple"]["acc50"], 1 / 3)
-        self.assertEqual(value["unique"]["acc50"], 0)
+        self.assertIsNone(value["unique"]["acc50"])
         self.assertEqual(value["pending"], 3)
         self.assertFalse(value["complete"])
+        self.assertEqual(value["overall"]["completion_ratio"], 0.25)
+        self.assertEqual(value["overall"]["answered"], 1)
+
+    def test_unstarted_report_has_unknown_accuracy(self):
+        value = self.report([])
+        for group in ('unique', 'multiple', 'overall'):
+            self.assertIsNone(value[group]['acc25'])
+            self.assertIsNone(value[group]['acc50'])
+            self.assertEqual(value[group]['processed'], 0)
+            self.assertEqual(value[group]['completion_ratio'], 0)
 
     def test_error_and_null_predictions_do_not_count_as_hits(self):
         results = [
@@ -77,6 +87,10 @@ class ScanReferTests(unittest.TestCase):
         self.assertTrue(value["complete"])
         self.assertEqual(value["overall"]["acc25"], 0.5)
         self.assertEqual(value["errors"], 1)
+        self.assertEqual(value["overall"]["completion_ratio"], 1.0)
+        self.assertEqual(value["overall"]["abstained"], 1)
+        self.assertEqual(value["overall"]["errors"], 1)
+        self.assertEqual(value["overall"]["answered"], 2)
 
     def test_mismatched_or_duplicate_results_are_rejected(self):
         row = {**self.rows[0], "predicted_id": 99, "iou_3d": 0.4}

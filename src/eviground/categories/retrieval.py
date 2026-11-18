@@ -24,6 +24,8 @@ ALIASES = {
     "refrigerators": "refrigerator",
     "front doors": "door",
     "front door": "door",
+    "entrance doors": "door",
+    "entrance door": "door",
     "double doors": "door",
     "double door": "door",
     "doors": "door",

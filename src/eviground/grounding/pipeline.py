@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 from time import perf_counter
+import uuid
 import numpy as np
 from eviground.api.client import _redact, api_config_summary, api_provider
 from eviground.categories.hypotheses import (
@@ -38,31 +39,75 @@ def structural_objects(scene_dir, objects, excluded_ids=()):
 
 
 def run_query(scene_dir, query, out, top_k=5, review_limit=3):
+    started = perf_counter()
     scene_dir, out = (Path(scene_dir), Path(out))
     ensure_run_writable(out)
     if top_k not in (1, 5) or review_limit < 1:
         raise ValueError("Expected top_k=1|5 and a positive tool budget")
-    category_root = os.getenv("EVIGROUND_CATEGORY_ROOT")
-    if not category_root:
-        raise ValueError("Prepared classifier category root is required")
-    objects_path = Path(category_root) / scene_dir.name / f"objects_top{top_k}.json"
-    objects = load_category_objects(objects_path)
-    table = json.loads(objects_path.read_text())
-    supplemental = structural_objects(scene_dir, objects, table.get("suppressed_instance_ids", ()))
-    geometry_objects = objects + supplemental
     out.mkdir(parents=True, exist_ok=True)
-    started, calls = (perf_counter(), [])
-    token = sample_recovery.set({"used": False, "attempts": []})
+    old_run = json.loads((out / 'run.json').read_text()) if (out / 'run.json').exists() else {}
+    previous = old_run.get('previous_execution_costs', [])
+    if old_run:
+        previous = [*previous, old_run.get('execution_cost', {
+            'online_latency_complete': False, 'online_latency_observed_s': old_run.get('pipeline_latency_s', 0)})]
+    calls = []
+    execution_id = uuid.uuid4().hex
+    token = sample_recovery.set({"used": False, "attempts": [], 'execution_id': execution_id})
     record = {
         "query": query,
         "calls": calls,
         "category_top_k": top_k,
-        "api_config": api_config_summary(),
         "gt_categories_supplied_to_model": False,
         "query_target_id_supplied_to_model": False,
+        "model": os.getenv("EVIGROUND_MODEL"),
+        "category_cache_root": os.getenv("EVIGROUND_CATEGORY_ROOT"),
+        "stage_timings_s": {},
+        "execution_id": execution_id,
+        "execution_complete": False,
+        "previous_execution_costs": previous,
     }
-    stage = "load_scene"
+    stage, stage_started = "load_categories", perf_counter()
+
+    def begin_stage(name):
+        nonlocal stage, stage_started
+        now = perf_counter()
+        record["stage_timings_s"][stage] = now - stage_started
+        stage, stage_started = name, now
+
+    def save_progress(complete=False):
+        from eviground.api.usage_log import read_attempts
+        from eviground.evaluation.costs import sample_cost
+
+        elapsed = perf_counter() - started
+        record['stage_timings_s'][stage] = perf_counter() - stage_started
+        record['execution_complete'] = complete
+        record['online_latency_observed_s'] = elapsed + sum(
+            c.get('online_latency_observed_s') or 0 for c in previous)
+        record['online_latency_s'] = record['online_latency_observed_s']
+        record['http_attempt_records'] = read_attempts(out / 'http_attempts.jsonl')
+        record['execution_cost'] = sample_cost({**record, 'previous_execution_costs': [],
+            'online_latency_s': elapsed, 'online_latency_observed_s': elapsed})
+        record['cost'] = sample_cost(record)
+        record['online_latency_s'] = record['cost']['online_latency_s']
+        write_json(out / 'run.json', _redact(record, limit=None))
+
+    sample_recovery.get()['save_progress'] = save_progress
     try:
+        save_progress()
+        record['api_config'] = api_config_summary()
+        category_root = os.getenv("EVIGROUND_CATEGORY_ROOT")
+        if not category_root:
+            raise ValueError("Prepared classifier category root is required")
+        objects_path = Path(category_root) / scene_dir.name / f"objects_top{top_k}.json"
+        objects = load_category_objects(objects_path)
+        table = json.loads(objects_path.read_text())
+        record["category_input"] = {key: table[key] for key in (
+            "version", "gate", "source_predictions_sha256", "cloud_sha256", "category_source",
+            "frontend_protocol_sha256") if key in table}
+        record["category_input"]["table_sha256"] = sha256(objects_path)
+        supplemental = structural_objects(scene_dir, objects, table.get("suppressed_instance_ids", ()))
+        geometry_objects = objects + supplemental
+        begin_stage("load_scene")
         if api_provider() != "openai":
             raise ValueError("EviGround requires the OpenAI-compatible multimodal API")
         with np.load(scene_dir / "scene.npz", allow_pickle=False) as cloud:
@@ -83,6 +128,13 @@ def run_query(scene_dir, query, out, top_k=5, review_limit=3):
                 )
             ),
         }
+        if config['scene_sha256']['scene.npz'] != table['cloud_sha256']:
+            raise ValueError('Category cache belongs to a different scene point cloud')
+        if table.get('category_source') in ('seeground_mask3d_scannet200', 'seeground_pointnext_clip_reproduction'):
+            for name, field in (('scene_instances.json', 'instances_sha256'), ('masks.npz', 'masks_sha256'),
+                                ('objects.json', 'candidate_geometry_sha256')):
+                if field in table and sha256(scene_dir / name) != table[field]:
+                    raise ValueError(f'Native category geometry changed: {name}')
         identity = input_identity(query, geometry_objects, config)
         pending = out / "pending_inference.json"
         if (
@@ -107,13 +159,15 @@ def run_query(scene_dir, query, out, top_k=5, review_limit=3):
                 )
             budget.update(saved, resuming=True, manual_resume_pending=True)
         save_checkpoint(pending, {"checkpoint_identity": identity})
-        stage = "parse_query"
+        begin_stage("parse_query")
+        budget['call_stage'] = 'parse_query'
+        save_progress()
         parsed = parse_query(
             query,
             calls=calls,
             scene_categories=[name for o in objects for name in category_names(o)],
         )
-        stage = "retrieve_objects"
+        begin_stage("retrieve_objects")
         candidates = match_retrieval_categories(parsed["Target"], objects)
         if generic_target_pool(parsed["Target"]):
             candidates = list(objects)
@@ -130,7 +184,7 @@ def run_query(scene_dir, query, out, top_k=5, review_limit=3):
             "internal_usage": {"compute": 0, "render": 0, "visual_check": 0},
         }
         record["active_trace"] = trace
-        stage = "react_grounding"
+        begin_stage("react_grounding")
         if candidates:
             prediction = ground(
                 query,
@@ -166,6 +220,9 @@ def run_query(scene_dir, query, out, top_k=5, review_limit=3):
             for key in ("version", "gate", "source_predictions_sha256", "cloud_sha256")
         }
         prediction["category_input"]["table_sha256"] = sha256(objects_path)
+        for key in ("category_source", "frontend_protocol_sha256"):
+            if key in table:
+                prediction["category_input"][key] = table[key]
         prediction["category_target_ids"] = [o["bbox_id"] for o in candidates]
         prediction["category_anchor_ids"] = [o["bbox_id"] for o in references]
         prediction["category_bindings"] = {
@@ -198,11 +255,12 @@ def run_query(scene_dir, query, out, top_k=5, review_limit=3):
             recovery_attempts=budget["attempts"],
         )
         record["parsed_query"] = parsed
+        begin_stage("save_results")
         write_json(out / "prediction.json", prediction)
         for name in ("pending_inference.json", "api_recovery.json"):
             (out / name).unlink(missing_ok=True)
         return prediction
-    except (ValueError, OSError, KeyError, IndexError) as exc:
+    except BaseException as exc:
         diagnostic = getattr(exc, "diagnostic", None)
         if diagnostic:
             if (
@@ -221,9 +279,14 @@ def run_query(scene_dir, query, out, top_k=5, review_limit=3):
         (out / "prediction.json").unlink(missing_ok=True)
         raise
     finally:
+        record["stage_timings_s"][stage] = perf_counter() - stage_started
         record.update(
             pipeline_latency_s=round(perf_counter() - started, 4),
             recovery_attempts=sample_recovery.get()["attempts"],
         )
-        sample_recovery.reset(token)
-        write_json(out / "run.json", _redact(record, limit=None))
+        try:
+            save_progress(complete=True)
+            # Include result/failure persistence, before the metrics-only rewrite.
+            save_progress(complete=True)
+        finally:
+            sample_recovery.reset(token)

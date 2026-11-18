@@ -31,6 +31,76 @@ from tests.helpers import make_export, parsed, response
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_measure_scopes_frames_without_changing_global_room_coordinates(self):
+        from eviground.geometry.measurements import precision_evidence
+
+        objects = [{"bbox_id": i, "target": category, "bbox_3d": [i * 2, i, 1, 1, 1, 1],
+                    "category_hypotheses": [{"category": category, "rank": 1, "gap_from_top1": 0}]}
+                   for i, category in [(1, "chair"), (2, "chair"), (3, "table"), (4, "table")]]
+        description = parsed()
+        description.update(Target=["chair"], Anchor=["table"])
+        original = precision_evidence("the chair near a table", description, objects, objects[:2])["observer_frames"]
+        measured = react.measure([1, 3], objects, description, objects[:2], "the chair near a table")
+        frames = measured["conditional_observer_frames"]
+        self.assertEqual([f["reference_id"] for f in frames], [3])
+        expected = next(f for f in original if f["reference_id"] == 3)
+        self.assertEqual(frames[0]["origin_xy_m"], expected["origin_xy_m"])
+        self.assertEqual(frames[0]["rows_left_to_right"], [r for r in expected["rows_left_to_right"] if r[0] == 1])
+
+    def test_compact_measurements_preserve_directed_geometry_and_trace(self):
+        from copy import deepcopy
+
+        objects = [{"bbox_id": i, "target": "chair", "bbox_3d": [i, 0, i / 2, 1, 1, 1]}
+                   for i in range(1, 7)]
+        measured = react.measure(list(range(1, 7)), objects, parsed(), objects, "the chair")
+        state = {"objects": measured["objects"], "observations": [measured], "remaining_tool_calls": 1}
+        original = deepcopy(state)
+        compact = react.compact_state(state)
+        table = compact["observations"][0]["directed_pair_measurements"]
+        restored = [dict(zip(table["columns"], row)) for row in table["rows"]]
+        self.assertEqual(restored, measured["directed_pair_measurements"])
+        for table in [compact["objects"], compact["observations"][0]["objects"]]:
+            self.assertEqual([dict(zip(table["columns"], row)) for row in table["rows"]], measured["objects"])
+        self.assertEqual(state, original)
+        self.assertLess(len(json.dumps(compact)), len(json.dumps(state)) * .75)
+
+    def test_repeated_measurement_fields_resolve_without_losing_frames_or_evidence(self):
+        objects = [{"bbox_id": i, "target": "chair", "bbox_3d": [i, 0, i / 2, 1, 1, 1]}
+                   for i in range(1, 7)]
+        first = react.measure(list(range(1, 7)), objects, parsed(), objects, "the chair")
+        first.update(evidence_id="observation_1", monitor_node_id="n0")
+        second = deepcopy(first)
+        second.update(evidence_id="observation_2", monitor_node_id="n1",
+                      selected_observer_frame={"origin_ids": [], "facing_ids": [2]})
+        third = deepcopy(second)
+        third.update(evidence_id="observation_3")
+        third["directed_pair_measurements"][0]["xy_center_m"] += .01
+        state = {"observations": [first, second, third]}
+        original = deepcopy(state)
+        compact = react.compact_state(state)
+        self.assertEqual(compact["observations"][1]["objects"], {"same_as": "observation_1"})
+        self.assertEqual(compact["observations"][2]["objects"], {"same_as": "observation_1"})
+        self.assertNotIn("same_as", compact["observations"][2]["directed_pair_measurements"])
+        resolved = []
+        by_id = {}
+        for observation in compact["observations"]:
+            restored = deepcopy(observation)
+            for key, value in restored.items():
+                if isinstance(value, dict) and set(value) == {"same_as"}:
+                    restored[key] = deepcopy(by_id[value["same_as"]][key])
+            by_id[restored["evidence_id"]] = restored
+            resolved.append(restored)
+        expected = [react.compact_state({"observations": [o]})["observations"][0]
+                    for o in original["observations"]]
+        self.assertEqual(resolved, expected)
+        self.assertEqual(state, original)
+
+    def test_measurements_without_evidence_ids_are_not_reference_targets(self):
+        measured = {"tool": "measure", "objects": [{"id": i, "long_field": "x" * 150} for i in range(2)]}
+        compact = react.compact_state({"observations": [measured,
+            {**deepcopy(measured), "evidence_id": "observation_1"}]})
+        self.assertEqual(compact["observations"][0]["objects"], compact["observations"][1]["objects"])
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
@@ -264,6 +334,44 @@ class WorkflowTests(unittest.TestCase):
             )
         model.assert_not_called()
         self.assertIsNone(result["predicted_id"])
+
+    def test_config_failure_is_saved_before_any_http_request(self):
+        with (patch('eviground.grounding.pipeline.api_config_summary', side_effect=ValueError('bad config')),
+              self.assertRaisesRegex(ValueError, 'bad config')):
+            pipeline.run_query(self.scenes / 'synthetic', 'the chair', self.out)
+        record = json.loads((self.out / 'run.json').read_text())
+        self.assertTrue(record['cost']['error'])
+        self.assertEqual(record['cost']['actual_http_attempts'], 0)
+        self.assertTrue(record['cost']['online_latency_complete'])
+        self.assertGreater(record['online_latency_s'], 0)
+        self.assertIsNone(sample_recovery.get())
+
+    def test_progress_is_persisted_before_interruption_and_restarts_keep_cost(self):
+        self.prepare()
+
+        def interrupted(*args, **kwargs):
+            from eviground.api.usage_log import log_attempt
+
+            log_attempt('interrupted-request', 'started', model='synthetic')
+            live = json.loads((self.out / 'run.json').read_text())
+            self.assertFalse(live['execution_complete'])
+            self.assertEqual(live['cost']['actual_http_attempts'], 1)
+            self.assertIsNone(live['cost']['total_tokens'])
+            raise KeyboardInterrupt('test interruption')
+
+        with (patch('eviground.grounding.pipeline.parse_query', side_effect=interrupted),
+              self.assertRaises(KeyboardInterrupt)):
+            pipeline.run_query(self.scenes / 'synthetic', 'the chair', self.out)
+        first = json.loads((self.out / 'run.json').read_text())
+        self.assertEqual(first['error_type'], 'KeyboardInterrupt')
+        with patch('eviground.grounding.pipeline.parse_query', return_value=parsed('zeppelin')):
+            pipeline.run_query(self.scenes / 'synthetic', 'the chair', self.out)
+        resumed = json.loads((self.out / 'run.json').read_text())
+        self.assertEqual(resumed['cost']['execution_attempts'], 2)
+        self.assertEqual(resumed['cost']['actual_http_attempts'], 1)
+        self.assertGreater(resumed['online_latency_s'], first['online_latency_s'])
+        self.assertIsNone(resumed['cost']['total_tokens'])
+        self.assertIsNone(sample_recovery.get())
 
     def test_api_failure_keeps_diagnostic_and_restores_context(self):
         self.prepare()

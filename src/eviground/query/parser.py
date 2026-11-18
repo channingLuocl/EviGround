@@ -27,6 +27,11 @@ def parse_query(query, calls=None, scene_categories=None):
 
     head_hint = target_head_hint(query, scene_categories or [])
     prompt += " Resolve the requested noun before parsing subordinate objects: in a description of a desk with a box on it, the desk is Target and the box is Anchor. A source_bound_target_head identifies the leading noun phrase, not an instance ID. Preserve attributes and relations of both nouns with their correct roles."
+    from eviground.api.prompts import PARSER, prompt_profile
+
+    if prompt_profile() == "compact":
+        prompt = PARSER
+        syntax = {key: syntax[key] for key in ("backend", "comparisons", "noun_phrases") if key in syntax}
     messages = [
         {"role": "system", "content": prompt},
         {
@@ -40,7 +45,7 @@ def parse_query(query, calls=None, scene_categories=None):
                     ),
                     **(
                         {"scene_categories": sorted(set(scene_categories))}
-                        if scene_categories
+                        if scene_categories and prompt_profile() != "compact"
                         else {}
                     ),
                 },
@@ -49,7 +54,7 @@ def parse_query(query, calls=None, scene_categories=None):
         },
     ]
     max_tokens = 1600
-    output_schema = schema_kwargs("query_parser", parser_schema())
+    output_schema = schema_kwargs("query_parser", parser_schema(compact=prompt_profile() == "compact"))
     data = chat(messages, max_tokens=max_tokens, json_mode=True, **output_schema)
     if calls is not None:
         calls.append(

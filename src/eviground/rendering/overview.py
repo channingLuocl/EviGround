@@ -1,4 +1,4 @@
-"""Initial classifier-covered scene views and final evidence validation."""
+"""Initial cutaway and geometry-context views and final evidence validation."""
 
 import numpy as np
 from pathlib import Path
@@ -8,9 +8,8 @@ from eviground.categories.retrieval import match_retrieval_categories
 
 def scene_views(parsed, objects, candidates, xyz, rgb, ids, out):
     covered_ids = [o["bbox_id"] for o in objects if "category_hypotheses" in o]
-    keep = np.isin(ids, covered_ids)
+    supplemental_ids = [o["bbox_id"] for o in objects if "category_hypotheses" not in o]
     shell_ids = []
-    points, colors, instance_ids = (xyz[keep], rgb[keep], ids[keep])
     references = match_retrieval_categories(parsed.get("Anchor", []), objects)
     focus = list({o["bbox_id"]: o for o in candidates + references}.values())
     relevant_ids = {o["bbox_id"] for o in candidates + references}
@@ -18,6 +17,11 @@ def scene_views(parsed, objects, candidates, xyz, rgb, ids, out):
     views = []
     angles = ((45, 50), (225, 40), (0, 89))
     for index, (azimuth, elevation) in enumerate(angles):
+        # Keep cutaways unobstructed, but retain unlabeled room geometry in
+        # the top-down context so structural references can be inspected.
+        context_ids = covered_ids + supplemental_ids if index == 2 else covered_ids
+        keep = np.isin(ids, context_ids)
+        points, colors, instance_ids = (xyz[keep], rgb[keep], ids[keep])
         region = np.ones(len(points), dtype=bool)
         lo, hi = (points.min(0), points.max(0))
         if index == 1 and len(bounds):
@@ -35,7 +39,8 @@ def scene_views(parsed, objects, candidates, xyz, rgb, ids, out):
 
         eye, at = camera_eye(lo, hi, eye - at)
         labels = np.where(
-            np.isin(instance_ids[region], list(relevant_ids)), instance_ids[region], -1
+            np.isin(instance_ids[region], list(relevant_ids) + (supplemental_ids if index == 2 else [])),
+            instance_ids[region], -1
         )
         path = Path(out) / f"scene_{index + 1}.png"
         stats = render(
@@ -60,11 +65,10 @@ def scene_views(parsed, objects, candidates, xyz, rgb, ids, out):
             kind=(
                 "predicted_instance_overview",
                 "target_reference_context",
-                "top_down_geometry_context",
+                "all_instance_geometry_context",
             )[index],
-            hidden_supplemental_instance_ids=[
-                o["bbox_id"] for o in objects if "category_hypotheses" not in o
-            ],
+            hidden_supplemental_instance_ids=supplemental_ids if index != 2 else [],
+            supplemental_geometry_instance_ids=supplemental_ids if index == 2 else [],
         )
     return views
 

@@ -118,11 +118,17 @@ def report(args):
 
     def metrics(selection):
         total = len(selection)
+        selected_ids = {r["csv_row"] for r in selection}
+        processed = [r for r in results if r["csv_row"] in selected_ids]
         return {
             "total": total,
-            "processed": sum(r["csv_row"] in observed for r in selection),
-            "acc25": sum(observed.get(r["csv_row"], 0) >= 0.25 for r in selection) / total if total else None,
-            "acc50": sum(observed.get(r["csv_row"], 0) >= 0.5 for r in selection) / total if total else None,
+            "processed": len(processed),
+            "completion_ratio": len(processed) / total if total else None,
+            "answered": sum(r.get("predicted_id") is not None and not r.get("error") for r in processed),
+            "abstained": sum(r.get("predicted_id") is None and not r.get("error") for r in processed),
+            "errors": sum(bool(r.get("error")) for r in processed),
+            "acc25": sum(observed.get(r["csv_row"], 0) >= 0.25 for r in selection) / total if processed else None,
+            "acc50": sum(observed.get(r["csv_row"], 0) >= 0.5 for r in selection) / total if processed else None,
         }
 
     value = {

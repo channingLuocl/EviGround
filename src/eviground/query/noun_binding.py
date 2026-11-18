@@ -64,8 +64,9 @@ def recover_part_category(query, parsed):
 def bind_negative_attributes(query, parsed, exclusions):
     from eviground.query.query_graph import polarity
     from eviground.query.attributes import attribute_units
+    from eviground.query.validation import _source_attribute_bindings
 
-    rows = []
+    rows, resolved = [], set()
     for attribute in parsed.get("Attributes", []):
         for phrase in attribute_units(attribute.get("phrase", "")):
             value = polarity(query, phrase, exclusions, attribute=True)
@@ -73,6 +74,14 @@ def bind_negative_attributes(query, parsed, exclusions):
                 value == "exclude" and phrase.casefold() in COLORS
             ):
                 row = {**attribute, "phrase": phrase, "polarity": value}
+                if phrase != attribute.get("phrase"):
+                    bindings = _source_attribute_bindings(query, parsed, phrase)
+                    if len(bindings) == 1:
+                        category, role = next(iter(bindings))
+                        if (retrieval_category(row.get("category", "")), row.get("role")) != (category, role):
+                            row.update(reported_category=row.get("category"),
+                                       reported_role=row.get("role"), category=category,
+                                       role=role, binding_source="direct quoted noun attachment")
                 clause = next(
                     (
                         c
@@ -108,6 +117,11 @@ def bind_negative_attributes(query, parsed, exclusions):
                         )
                 if row not in rows:
                     rows.append(row)
+                if phrase != attribute.get("phrase") and len(bindings) == 1:
+                    resolved.update((
+                        "appearance condition not represented: " + phrase,
+                        f"appearance condition role not represented: {phrase} ({role} {category})",
+                    ))
     for match in re.finditer(
         "\\b(?:not|except)\\s+(?:the\\s+)?(" + "|".join(sorted(COLORS)) + ")\\s+one\\b",
         query,
@@ -133,6 +147,10 @@ def bind_negative_attributes(query, parsed, exclusions):
                 }
             )
     parsed["Attributes"] = rows
+    if resolved:
+        parsed["diagnostic_missing"] = [
+            item for item in parsed.get("diagnostic_missing", []) if item not in resolved
+        ]
     covered = {r["negation_quote"] for r in rows if r.get("negation_quote")}
     parsed["_executed_negations"] = sorted(covered)
     parsed["Unhandled"] = [

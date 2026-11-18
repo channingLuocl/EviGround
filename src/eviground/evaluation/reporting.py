@@ -12,8 +12,10 @@ def trajectory_metrics(trace):
                                      and not o.get("no_evidence_acquired") and not o.get("error")
                                      for o in observations),
         "decision_calls": trace.get("react_decision_calls", len(trace.get("react_actions", []))),
-        "repair_calls": sum(bool(o.get("no_evidence_acquired")) or o.get("tool") == "finish_check"
-                            for o in observations),
+        "repair_calls": trace.get('react_budget', {}).get('repair_calls', sum(
+            (bool(o.get('no_evidence_acquired')) or bool(o.get('error')) or o.get('tool') == 'finish_check')
+            and i + 1 < trace.get('react_decision_calls', len(trace.get('react_actions', [])))
+            for i, o in enumerate(observations))),
         "budget_exhausted": trace.get("termination_cause") == "budget_exhausted",
         "repair_exhausted": trace.get("termination_cause") == "repair_exhausted",
     }
@@ -21,6 +23,8 @@ def trajectory_metrics(trace):
 
 def evaluate(row, prediction, log, top_k, gt_box=None):
     data = json.loads(prediction.read_text())
+    run_path = prediction.parent / 'run.json'
+    local_run = json.loads(run_path.read_text()) if run_path.exists() else {}
     if (
         data["query"] != row["query"]
         or data.get("category_top_k") != top_k
@@ -45,6 +49,7 @@ def evaluate(row, prediction, log, top_k, gt_box=None):
         "api_calls": data.get("api_calls", 0),
         "api_attempts": data.get("api_attempts", 0),
         "call_usage": data.get("call_usage", []),
+        "cost": local_run.get("cost", {}),
         "recovery_attempts": data.get("recovery_attempts", []),
         "pipeline_latency_s": data.get("pipeline_latency_s"),
         "implementation_version": data.get("implementation_version"),
@@ -65,8 +70,9 @@ def summarize(results, total=None):
         "processed": len(results),
         "pending": total - len(results),
         "complete": len(results) == total,
+        "completion_ratio": len(results) / total if total else None,
         "correct": correct,
-        "accuracy": correct / total if total else None,
+        "accuracy": correct / total if total and results else None,
         "processed_accuracy": correct / len(results) if results else None,
         "answered": answered,
         "null_count": len(results) - answered,
@@ -78,28 +84,40 @@ def summarize(results, total=None):
         "acc25": (
             sum((not r.get("error") and r.get("predicted_id") is not None
                  and r.get("iou_3d", 0) >= 0.25 for r in results)) / total
-            if total
+            if total and results
             else None
         ),
         "acc50": (
             sum((not r.get("error") and r.get("predicted_id") is not None
-                 and r.get("iou_3d", 0) >= 0.5 for r in results)) / total if total else None
+                 and r.get("iou_3d", 0) >= 0.5 for r in results)) / total if total and results else None
         ),
         "evaluation_policy": "single_pass",
     }
 
 
-def report(output, results, total):
+def report(output, results, total, *, selection=None):
     ensure_run_writable(output)
     if len({r["csv_row"] for r in results}) != len(results) or len(results) > total:
         raise ValueError("Results must be unique and fit the fixed query selection")
+    selected = results if selection is None else selection
+    if selection is not None:
+        expected = {r["csv_row"]: r for r in selection}
+        if len(selection) != total or len(expected) != total:
+            raise ValueError("Frozen selection must be unique and match the total")
+        for row in results:
+            original = expected.get(row["csv_row"])
+            if original is None or any(row.get(key) != original.get(key)
+                                       for key in ("easy", "view_dep", "unique")):
+                raise ValueError("Result groups disagree with the frozen selection")
     summary = summarize(results, total)
     groups = {
         key: {
-            str(value): summarize([r for r in results if r.get(key) == value])
-            for value in sorted({r.get(key) for r in results}, key=str)
+            str(value): summarize([r for r in results if r.get(key) == value],
+                                  sum(r.get(key) == value for r in selected))
+            for value in sorted({r.get(key) for r in selected}, key=str)
         }
-        for key in ("easy", "view_dep")
+        for key in ("easy", "view_dep", "unique")
+        if key != "unique" or any(key in row for row in selected)
     }
     write_json(
         output / "results.json",
@@ -109,4 +127,6 @@ def report(output, results, total):
             "results": sorted(results, key=lambda r: r["csv_row"]),
         },
     )
+    from eviground.evaluation.costs import summarize_costs
+    write_json(output / 'cost_summary.json', summarize_costs(results, total))
     return summary

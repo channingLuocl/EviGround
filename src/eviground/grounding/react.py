@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from time import perf_counter
 import numpy as np
 from eviground.categories.hypotheses import CATEGORY_INSTRUCTIONS
 from eviground.categories.retrieval import distance_pair_metrics
@@ -20,6 +21,7 @@ from eviground.api.response_schemas import (
 from eviground.grounding.settings import (
     dag_monitor_enabled, dag_repair_limit, evidence_policy, settings,
     policy_annealing_enabled, successful_tool_budget_enabled, decision_max_tokens,
+    dialogue_history_enabled, dag_wire_format, action_no_repeat_enabled,
 )
 from eviground.grounding.annealing import policy_state
 
@@ -166,6 +168,16 @@ def measure(focus_ids, objects, parsed, candidates, query, frame=None):
             "observed_footprint_m2",
         )
     }
+    # Keep global room coordinates, but return only the requested comparison
+    # participants. Unrequested reference frames can otherwise dominate context.
+    focus_set = set(focus_ids)
+    conditional_frames = []
+    for row in precision_evidence(query, parsed, objects, candidates)["observer_frames"]:
+        if row.get("reference_id", row.get("origin_id")) in focus_set:
+            conditional_frames.append({
+                **row,
+                "rows_left_to_right": [r for r in row["rows_left_to_right"] if r[0] in focus_set],
+            })
     return {
         "tool": "measure",
         "objects": rows,
@@ -173,16 +185,370 @@ def measure(focus_ids, objects, parsed, candidates, query, frame=None):
         "sorted_object_orders": orders,
         "selected_observer_frame": selected_frame,
         "observer_frame_error": frame_error,
-        "conditional_observer_frames": precision_evidence(
-            query, parsed, objects, candidates
-        )["observer_frames"],
+        "conditional_observer_frames": conditional_frames,
         "policy": "Observed geometry; comparison pools and frames require language/visual binding.",
     }
+
+
+OBSERVATION_REFERENCE_INSTRUCTIONS = (
+    '\nIn observations, a field {"same_as":"observation_N"} has exactly '
+    'the same full value as that field in the earlier observation_N. '
+    'Resolve that reference before using the evidence. Each observation '
+    'keeps its own evidence_id, frame and Monitor stage. A view field '
+    '{"same_as_view":["observation_N",V]} equals that same field in '
+    'observation_N.views[V] (zero-based view index).\n'
+)
+
+HISTORY_REFERENCE_INSTRUCTIONS = (
+    '\nIn previous_actions, a monitor field {"same_as_action":N} has exactly '
+    'the same full value as that monitor field in previous_actions[N] '
+    '(zero-based index). Resolve the reference when reading history. '
+    'A monitor field {"same_as_task_dag":K} has exactly the value of '
+    'task_dag[K]. task_dag is the complete current accepted plan.\n'
+)
+
+
+TABLE_INSTRUCTIONS = (
+    '\nAn object array encoded as {"columns":[...],"rows":[[...],...]} '
+    'contains one object per row: pair each column name with that row value. '
+    'Merge any table constants into EVERY row. This encoding may be nested; '
+    'preserve all values and row order.\n'
+)
+
+
+def compact_prompt_tables(value):
+    """Losslessly encode homogeneous object arrays when the JSON is shorter."""
+    if isinstance(value, dict):
+        return {key: compact_prompt_tables(child) for key, child in value.items()}
+    if not isinstance(value, list):
+        return value
+    rows = [compact_prompt_tables(child) for child in value]
+    if len(rows) < 2 or not all(isinstance(row, dict) for row in rows):
+        return rows
+    columns = list(rows[0])
+    if not columns or any(set(row) != set(columns) for row in rows):
+        return rows
+    def encoded(item):
+        return json.dumps(item, ensure_ascii=False, separators=(",", ":"))
+    table = {"columns": columns, "rows": [[row[key] for key in columns] for row in rows]}
+    constants = {key: rows[0][key] for key in columns
+                 if all(encoded(row[key]) == encoded(rows[0][key]) for row in rows)}
+    variable_columns = [key for key in columns if key not in constants]
+    factored = {"columns": variable_columns,
+                "rows": [[row[key] for key in variable_columns] for row in rows],
+                "constants": constants}
+    return min((rows, table, factored), key=lambda item: len(encoded(item)))
+
+
+def compact_state(state, monitor=None):
+    """Encode repeated evidence and history fields without changing their values."""
+    def table(rows):
+        if not rows:
+            return rows
+        columns = list(rows[0])
+        if any(list(row) != columns for row in rows):
+            return rows
+        return {"columns": columns, "rows": [[row[column] for column in columns] for row in rows]}
+
+    result = {**state, "observations": []}
+    if monitor is not None:
+        result["task_dag"] = monitor.encode(state.get("task_dag"))
+        result["previous_actions"] = [
+            {**action, "monitor": monitor.encode(action["monitor"])}
+            if "monitor" in action else dict(action)
+            for action in state.get("previous_actions", [])
+        ]
+    if "previous_actions" in result:
+        history_values = {}
+        history = []
+        for index, action in enumerate(result["previous_actions"]):
+            action = dict(action)
+            if isinstance(action.get("monitor"), dict):
+                action["monitor"] = dict(action["monitor"])
+                for key in ("nodes", "verification", "requirement_nodes", "node_updates"):
+                    if key not in action["monitor"]:
+                        continue
+                    encoded = json.dumps(action["monitor"][key], separators=(",", ":"))
+                    identity = (key, encoded)
+                    if (key in (result.get("task_dag") or {}) and
+                            action["monitor"][key] == result["task_dag"][key]):
+                        reference = {"same_as_task_dag": key}
+                    elif identity in history_values:
+                        reference = {"same_as_action": history_values[identity]}
+                    else:
+                        history_values[identity] = index
+                        continue
+                    if len(json.dumps(reference, separators=(",", ":"))) < len(encoded):
+                        action["monitor"][key] = reference
+            history.append(action)
+        result["previous_actions"] = history
+    if "monitor_requirements" in state:
+        result["monitor_requirements"] = [
+            {("prerequisite_descriptions" if key == "dependencies" else key): value
+             for key, value in requirement.items()}
+            for requirement in state["monitor_requirements"]
+        ]
+    if "objects" in state:
+        result["objects"] = table(state["objects"])
+    measured_fields = ("objects", "directed_pair_measurements", "sorted_object_orders",
+                       "conditional_observer_frames")
+    measured_values = {}
+    view_values = {}
+    for observation in state["observations"]:
+        observation = dict(observation)
+        pairs = observation.get("directed_pair_measurements")
+        if pairs:
+            observation["directed_pair_measurements"] = table(pairs)
+        if "objects" in observation:
+            observation["objects"] = table(observation["objects"])
+        if observation.get("tool") == "measure" and observation.get("evidence_id"):
+            for key in measured_fields:
+                if key not in observation:
+                    continue
+                encoded = json.dumps(observation[key], separators=(",", ":"))
+                if len(encoded) <= 120:
+                    continue
+                identity = (key, encoded)
+                if identity in measured_values:
+                    observation[key] = {"same_as": measured_values[identity]}
+                else:
+                    measured_values[identity] = observation["evidence_id"]
+        if observation.get("evidence_id") and observation.get("views"):
+            observation["views"] = [dict(view) for view in observation["views"]]
+            for view_index, view in enumerate(observation["views"]):
+                for key, value in view.items():
+                    encoded = json.dumps(value, separators=(",", ":"))
+                    identity = (key, encoded)
+                    if identity in view_values:
+                        reference = {"same_as_view": view_values[identity]}
+                        if len(json.dumps(reference, separators=(",", ":"))) < len(encoded):
+                            view[key] = reference
+                    else:
+                        view_values[identity] = [observation["evidence_id"], view_index]
+        result["observations"].append(observation)
+    return result
+
+
+def evidence_action_key(action):
+    """Identify the observation, independently of reasoning or DAG bookkeeping."""
+    key = {"action": action["action"], "focus_ids": sorted(action["focus_ids"])}
+    if action["action"] == "inspect":
+        key["context"] = action["context"]
+        for name, default in (("azimuth_deg", 315), ("elevation_deg", 30)):
+            value = float(action[name] if action.get(name) is not None else default)
+            # Floating-point tails do not produce a new camera observation.
+            key[name] = round(value, 6) if value else 0.0
+    else:
+        frame = action.get("frame")
+        key["frame"] = {name: sorted(frame[name]) for name in ("origin_ids", "facing_ids")} if frame is not None else None
+    return key
+
+
+def constrained_delta_monitor_schema(schema, action, shared, selected=False, pending_node_ids=()):
+    """Compile existing action/stage invariants without supplying node states."""
+    def reuse(node, original):
+        # The textual contract must not repeat the entire DAG per action branch.
+        if node == original and len(json.dumps(node)) > 120:
+            name = next((k for k, value in shared.items() if value == node), None)
+            if name is None:
+                name = "monitor_part_" + str(len(shared))
+                shared[name] = node
+            return {"$ref": "#/$defs/" + name}
+        for name, child in node.get("properties", {}).items():
+            if name in original.get("properties", {}):
+                node["properties"][name] = reuse(child, original["properties"][name])
+        if isinstance(node.get("items"), dict) and isinstance(original.get("items"), dict):
+            node["items"] = reuse(node["items"], original["items"])
+        for key in ("anyOf", "prefixItems"):
+            for i in range(min(len(node.get(key, [])), len(original.get(key, [])))):
+                node[key][i] = reuse(node[key][i], original[key][i])
+        return node
+
+    result = json.loads(json.dumps(schema))
+    delta, replacement = result["anyOf"]
+    p = delta["properties"]
+    full = replacement["properties"]["replace_plan"]["properties"]
+    # Keep arbitrary replacement ID/edge order, but mask the runtime-invalid
+    # self-dependency observed in a real replacement proposal.
+    for task in full["nodes"]["items"]["anyOf"]:
+        ids = task["properties"]["id"]["enum"]
+        task["allOf"] = [*task.get("allOf", []), {"anyOf": [{"properties": {
+            "id": enum(node_id),
+            "depends_on": array(enum(*(other for other in ids if other != node_id))),
+        }} for node_id in ids]}]
+    if action != "finish":
+        ids = [i for i in p["current_node_id"]["enum"] if i != "n11"]
+        full["current_node_id"]["enum"].remove("n11")
+        pending = p["node_updates"]["items"]["anyOf"][0]
+        remaining = json.loads(json.dumps(p["node_updates"]["items"]))
+        remaining["anyOf"][1]["properties"]["id"] = enum(*ids)
+        remaining = reuse(remaining, p["node_updates"]["items"])
+        remaining = reuse(remaining, remaining)
+        variants = []
+        for current in ids:
+            branch = json.loads(json.dumps(delta))
+            fields = branch["properties"]
+            checkpoint = json.loads(json.dumps(pending))
+            checkpoint["properties"]["id"] = enum(current)
+            fields["node_updates"].update(
+                prefixItems=[reuse(checkpoint, pending)], items=remaining, minItems=1)
+            fields["current_node_id"] = enum(current)
+            variants.append(reuse(branch, delta))
+        # Full replanning still passes through the original semantic validator.
+        return {"anyOf": [*variants, reuse(replacement, schema["anyOf"][1])]}
+    p["current_node_id"] = enum("n11")
+    full["current_node_id"] = enum("n11")
+    if selected:
+        # Explicitly emit the verification checkpoint first. The model must still
+        # supply its binding, existing evidence and conclusion; nothing is filled.
+        completed = json.loads(json.dumps(p["node_updates"]["items"]["anyOf"][1]))
+        verification = json.loads(json.dumps(completed))
+        verification["properties"]["id"] = enum("n11")
+        completed["properties"]["id"]["enum"].remove("n11")
+        checkpoints = [verification]
+        for node_id in pending_node_ids:
+            if node_id != "n11":
+                checkpoint = json.loads(json.dumps(completed))
+                checkpoint["properties"]["id"] = enum(node_id)
+                checkpoints.append(checkpoint)
+        p["node_updates"].update(
+            prefixItems=checkpoints, items=completed, minItems=len(checkpoints))
+        p["reopen_node_ids"]["maxItems"] = 0
+        full["nodes"]["items"] = full["nodes"]["items"]["anyOf"][1]
+        full["verification"] = full["verification"]["anyOf"][1]
+        full["reopen_node_ids"]["maxItems"] = 0
+    return reuse(result, schema)
+
+
+def constrained_initial_monitor_schema(schema):
+    """Encode any initial DAG in topological ID order, within one generation."""
+    original = schema["properties"]
+    definitions = {"initial_task_base": original["nodes"]["items"],
+                   "initial_verification_base": original["verification"]}
+    choices = []
+    maximum = original["nodes"]["maxItems"]
+    for index in range(maximum):
+        dependencies = ({"type": "array", "maxItems": 0} if index == 0 else
+                        {**array(enum(*(f"n{i}" for i in range(index)))), "maxItems": index})
+        definitions[f"initial_task_{index}"] = {"allOf": [
+            {"$ref": "#/$defs/initial_task_base"},
+            {"properties": {"id": enum(f"n{index}"), "depends_on": dependencies}}]}
+    for count in range(1, maximum + 1):
+        node_ids = [f"n{i}" for i in range(count)]
+        branch = json.loads(json.dumps(schema))
+        fields = branch["properties"]
+        fields["nodes"] = {"type": "array", "minItems": count, "maxItems": count,
+                           "prefixItems": [{"$ref": f"#/$defs/initial_task_{i}"}
+                                           for i in range(count)], "items": False}
+        definitions[f"initial_verification_{count}"] = {"allOf": [
+            {"$ref": "#/$defs/initial_verification_base"},
+            {"properties": {"depends_on": {"enum": [node_ids]}}}]}
+        fields["verification"] = {"$ref": f"#/$defs/initial_verification_{count}"}
+        fields["current_node_id"] = enum(*node_ids, "n11")
+        fields["reopen_node_ids"]["maxItems"] = 0
+        definitions[f"initial_assignment_{count}"] = {
+            **array(enum(*node_ids, "n11")), "minItems": 1, "maxItems": count + 1}
+        fields["requirement_nodes"]["properties"] = {
+            key: {"$ref": f"#/$defs/initial_assignment_{count}"}
+            for key in fields["requirement_nodes"]["properties"]}
+        choices.append(branch)
+    return {"anyOf": choices}, definitions
+
+
+def constrained_action_schema(schema, available, pending_node_ids=()):
+    """Make action-specific field requirements executable for small models."""
+    variants = []
+    monitor = schema["properties"].get("monitor")
+    definitions = {**schema.get("$defs", {}), **({"monitor": monitor} if monitor is not None else {})}
+    delta = (monitor is not None and "anyOf" in monitor
+             and "node_updates" in monitor["anyOf"][0].get("properties", {}))
+    shared = {}
+    if delta:
+        definitions = {}
+    for action in available:
+        variant = json.loads(json.dumps(schema))
+        variant.pop("$defs", None)
+        p = variant["properties"]
+        if monitor is not None:
+            # Delta chooses its action branch before emitting compatible states.
+            name = "monitor"
+            if delta:
+                name = "monitor_finish" if action == "finish" else "monitor_tool"
+                if name not in definitions:
+                    definitions[name] = constrained_delta_monitor_schema(monitor, action, shared)
+            variant["properties"] = p = {
+                "monitor": {"$ref": "#/$defs/" + name},
+                **{key: value for key, value in p.items() if key != "monitor"},
+            }
+            variant["required"] = ["monitor"] + [
+                key for key in variant["required"] if key != "monitor"
+            ]
+            if delta:
+                variant["properties"] = p = {
+                    "action": p["action"], "predicted_id": p["predicted_id"],
+                    **{key: value for key, value in p.items()
+                       if key not in ("action", "predicted_id")},
+                }
+                variant["required"] = ["action", "predicted_id"] + [
+                    key for key in variant["required"] if key not in ("action", "predicted_id")]
+        # Explain the acquired evidence before committing to another tool or ID.
+        if "reason" in p:
+            variant["properties"] = p = {
+                "reason": p["reason"], "action": p["action"], "predicted_id": p["predicted_id"],
+                **{key: value for key, value in p.items() if key not in ("reason", "action", "predicted_id")},
+            }
+            variant["required"] = ["reason", "action", "predicted_id"] + [
+                key for key in variant["required"] if key not in ("reason", "action", "predicted_id")]
+        p["action"] = enum(action)
+        if action == "finish":
+            p["focus_ids"]["maxItems"] = 0
+            for key in ("context", "azimuth_deg", "elevation_deg", "frame"):
+                p[key] = {"type": "null"}
+            abstention = json.loads(json.dumps(variant))
+            abstention["properties"]["predicted_id"] = {"type": "null"}
+            if monitor is not None:
+                abstention["properties"]["unresolved"]["minItems"] = 1
+                abstention["properties"]["unresolved"]["items"] = REASON
+            variants.append(abstention)
+            allowed = [i for i in p["predicted_id"]["enum"] if i is not None]
+            if not allowed:
+                continue
+            p["predicted_id"] = {"type": "integer", "enum": allowed}
+            p["evidence"]["minItems"] = 1
+            p["evidence"]["items"]["properties"]["object_ids"]["minItems"] = 1
+            if delta:
+                definitions["monitor_finish_target"] = constrained_delta_monitor_schema(
+                    monitor, action, shared, selected=True, pending_node_ids=pending_node_ids)
+                p["monitor"] = {"$ref": "#/$defs/monitor_finish_target"}
+                p["unresolved"]["maxItems"] = 0
+        else:
+            p["focus_ids"]["minItems"] = 1
+            p["predicted_id"] = {"type": "null"}
+            p["evidence"]["maxItems"] = 0
+            if action == "inspect":
+                p["context"] = enum("scene", "isolated")
+                p["frame"] = {"type": "null"}
+            else:
+                for key in ("context", "azimuth_deg", "elevation_deg"):
+                    p[key] = {"type": "null"}
+        variants.append(variant)
+    result = {"anyOf": variants}
+    if monitor is not None:
+        result["$defs"] = {**definitions, **shared}
+    return result
 
 
 def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace, limit):
     from eviground.rendering.inspection import render_action
     from eviground.rendering.overview import scene_views, validate_decision
+    from eviground.grounding.action_repetition import exclude_acquired_actions
+
+    no_repeat = action_no_repeat_enabled()
+    if no_repeat:
+        from eviground.api.client import request_options
+
+        if request_options(1, None, True).get("guided_decoding_backend") != "guidance":
+            raise ValueError("EVIGROUND_ACTION_NO_REPEAT requires the Guidance decoding backend")
 
     known = {o["bbox_id"] for o in objects}
     allowed = sorted((o["bbox_id"] for o in candidates))
@@ -194,10 +560,10 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         {
             "action": enum(*available),
             "reason": REASON,
-            "focus_ids": array({"type": "integer", "enum": sorted(known)}),
+            "focus_ids": {**array({"type": "integer", "enum": sorted(known)}), "maxItems": 8},
             "context": nullable(enum("scene", "isolated")),
-            "azimuth_deg": nullable({"type": "number"}),
-            "elevation_deg": nullable({"type": "number"}),
+            "azimuth_deg": nullable({"type": "number", "minimum": 0, "exclusiveMaximum": 360}),
+            "elevation_deg": nullable({"type": "number", "minimum": 10, "maximum": 75}),
             "frame": nullable(
                 obj(
                     {
@@ -211,7 +577,8 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                 obj(
                     {
                         "source_quote": {"type": "string", "enum": [query]},
-                        "object_ids": array({"type": "integer", "enum": sorted(known)}),
+                        "object_ids": {**array({"type": "integer", "enum": sorted(known)}),
+                                       "minItems": 1, "maxItems": len(known)},
                         "observation": REASON,
                     }
                 )
@@ -219,19 +586,55 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             "unresolved": array(TEXT),
         }
     )
+    from eviground.api.prompts import PLANNER, prompt_profile
+
+    compact = prompt_profile() == "compact"
+    dialogue_history = dialogue_history_enabled()
+    if dialogue_history and not compact:
+        raise ValueError("EVIGROUND_DIALOGUE_HISTORY requires the compact prompt profile")
     monitor = None
     if dag_monitor_enabled():
-        from eviground.grounding.dag_monitor import DagMonitor, INSTRUCTIONS as MONITOR_INSTRUCTIONS
+        from eviground.grounding.dag_monitor import (
+            DagMonitor, INSTRUCTIONS as MONITOR_INSTRUCTIONS, COMPACT_INSTRUCTIONS,
+        )
 
         monitor = DagMonitor(query, parsed, known, allowed, available)
-        schema["properties"]["monitor"] = monitor.schema()
+        schema["properties"]["monitor"] = monitor.schema(compact=compact)
         schema["required"].append("monitor")
         instructions += MONITOR_INSTRUCTIONS
-    overview = scene_views(parsed, objects, candidates, xyz, rgb, ids, out)
+    if compact:
+        instructions = PLANNER + "\nAvailable actions: " + ", ".join(available)
+        instructions += "\nEvidence policy: " + json.dumps(policy)
+        schema["properties"]["evidence"]["maxItems"] = 4
+        if monitor is not None:
+            instructions += COMPACT_INSTRUCTIONS
+            # One missing-condition entry per registered requirement is enough;
+            # an unbounded repeated clause has exhausted real model outputs.
+            schema["properties"]["unresolved"]["maxItems"] = len(monitor.requirements)
+    delta_wire = dag_wire_format() == "delta"
+    if delta_wire and (not compact or monitor is None):
+        raise ValueError("Delta DAG wire format requires compact prompts and the DAG Monitor")
+    instructions += ("\nActions in unavailable_evidence_actions have already produced observations. "
+                     "Use those results to update the DAG; do not request them again. "
+                     "Reordering IDs or changing reason/monitor does not create new evidence. "
+                     "Choose a different useful object group, context, camera or observer frame, "
+                     "or finish only when the original verification rules are satisfied.")
+    timings = trace.setdefault("stage_timings_s", {})
+    render_started = perf_counter()
+    try:
+        overview = scene_views(parsed, objects, candidates, xyz, rgb, ids, out)
+    finally:
+        timings["initial_render"] = perf_counter() - render_started
+    trace["rendered_panel_count"] = len(overview)
+    trace["rendered_image_count"] = len(overview)
+    trace["rendered_file_count"] = len(overview)
     views = [overview[0], overview[-1]]
     basic = precision_evidence(query, parsed, objects, candidates)["objects"]
     by_id = {o["bbox_id"]: o for o in objects}
     for row in basic:
+        for key in ("category_source", "category_score_type"):
+            if key in by_id[row["id"]]:
+                row[key] = by_id[row["id"]][key]
         row["category_hypotheses"] = [
             {
                 "category": h["category"],
@@ -275,6 +678,8 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         for name in parsed.get("Anchor", [])
     ]
     observations, actions, signatures, inspected = ([], [], set(), set())
+    invalid_focus_groups = set()
+    dialogue, sent_views, sent_observations = [], 0, 0
     required_inspections = set()
     best_ranks = {
         b["id"]: min(b["matched_ranks"], default=None)
@@ -290,6 +695,9 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         react_tool_budget=limit,
         react_available_actions=available,
         react_evidence_policy=policy,
+        dialogue_history_enabled=dialogue_history,
+        dag_wire_format=dag_wire_format(),
+        action_no_repeat=no_repeat,
     )
     if monitor is not None:
         trace.update(policy="model-revised task DAG with monitored dependencies and reversible exclusions",
@@ -300,15 +708,20 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
     decision_limit = (limit if successful_budget else tool_limit) + repair_limit + 1
     trace["policy_annealing_enabled"] = annealing
     trace["policy_annealing_history"] = []
-    tool_calls_used, repair_failures = 0, 0
+    tool_calls_used, repair_failures, repair_calls_used = 0, 0, 0
     decision = None
     termination_reason = None
     repair_reason = "DAG validation repair budget exhausted" if monitor is not None else "ReAct validation repair budget exhausted"
     for step in range(decision_limit):
+        if observations and (observations[-1].get('error')
+                             or observations[-1].get('no_evidence_acquired')
+                             or observations[-1].get('tool') == 'finish_check'):
+            repair_calls_used += 1
         remaining_tools = max(0, tool_limit - (tool_calls_used if successful_budget else step))
         last_decision = step == decision_limit - 1
         state = {
             **payload,
+            "unavailable_evidence_actions": [json.loads(item) for item in sorted(signatures)],
             "observations": observations,
             "previous_actions": actions,
             "remaining_tool_calls": remaining_tools,
@@ -335,7 +748,9 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             state["required_inspection_ids"] = sorted(required_inspections - inspected)
         if successful_budget:
             state["remaining_plan_repairs"] = max(0, repair_limit - repair_failures)
-        round_instructions = instructions + CATEGORY_INSTRUCTIONS
+        round_instructions = instructions if compact else instructions + CATEGORY_INSTRUCTIONS
+        if no_repeat:
+            round_instructions += "\nUse whole-degree camera angles or null; fractional changes do not supply a new observation."
         if annealing:
             guidance = policy_state(step, decision_limit, remaining_tools, last_decision)
             state["policy_annealing"] = guidance
@@ -343,8 +758,32 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             round_instructions += ("\nRound-aware policy constraint (sampling temperature is unchanged): "
                                    + guidance["guidance"] + " " + guidance["correction_policy"])
         action_schema = json.loads(json.dumps(schema))
+        if compact and monitor is not None:
+            if delta_wire and monitor.plan is not None:
+                from eviground.grounding.dag_monitor import compact_delta_instructions
+
+                action_schema["properties"]["monitor"] = monitor.delta_schema(
+                    evidence_ids=monitor.evidence_ids(observations))
+                round_instructions = round_instructions.replace(
+                    COMPACT_INSTRUCTIONS, compact_delta_instructions(), 1)
+            else:
+                action_schema["properties"]["monitor"] = monitor.schema(
+                    compact=True, evidence_ids=monitor.evidence_ids(observations))
+                if monitor.plan is None:
+                    (action_schema["properties"]["monitor"], action_schema["$defs"]) = (
+                        constrained_initial_monitor_schema(action_schema["properties"]["monitor"]))
         if remaining_tools == 0 or last_decision:
             action_schema["properties"]["action"] = enum("finish")
+        if compact:
+            action_schema = constrained_action_schema(
+                action_schema, ["finish"] if remaining_tools == 0 or last_decision else available,
+                pending_node_ids=[n["id"] for n in monitor.plan["nodes"] if n["status"] == "pending"]
+                if delta_wire and monitor is not None and monitor.plan is not None else (),
+            )
+        if no_repeat:
+            action_schema = exclude_acquired_actions(
+                action_schema, state["unavailable_evidence_actions"], known, available,
+                invalid_focus_groups=[list(ids) for ids in sorted(invalid_focus_groups)])
         call = {
             "stage": "react_decision",
             "role": "multimodal_evidence_planner",
@@ -355,26 +794,77 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             call["role"] = "multimodal_dag_monitor_and_executor"
         calls.append(call)
         trace["react_decision_calls"] = step + 1
-        response = chat(
+        from eviground.api.usage_log import save_progress
+        from eviground.grounding.recovery import sample_recovery
+
+        if sample_recovery.get() is not None:
+            sample_recovery.get()['call_stage'] = 'react_decision'
+        save_progress()
+        model_state = compact_state(state, monitor) if compact else state
+        feedback = None
+        if compact:
+            feedback = {key: model_state.pop(key) for key in (
+                "observations", "unavailable_evidence_actions", "task_dag", "ready_node_ids", "active_target_ids",
+                "supporting_evidence_objects", "supporting_evidence_ids",
+                "discarded_exclusions", "required_inspection_ids", "remaining_tool_calls",
+                "remaining_plan_repairs", "policy_annealing") if key in model_state}
+            if (any(isinstance(value, dict) and set(value) == {"same_as"}
+                    for observation in feedback["observations"] for value in observation.values()) or
+                    any(isinstance(value, dict) and set(value) == {"same_as_view"}
+                        for observation in feedback["observations"]
+                        for view in observation.get("views", []) for value in view.values())):
+                round_instructions += OBSERVATION_REFERENCE_INSTRUCTIONS
+            if not dialogue_history and any(isinstance(value, dict) and set(value) in (
+                    {"same_as_action"}, {"same_as_task_dag"})
+                   for action in model_state.get("previous_actions", [])
+                   for value in action.get("monitor", {}).values()):
+                round_instructions += HISTORY_REFERENCE_INSTRUCTIONS
+        request_views = views
+        if dialogue_history:
+            # Earlier assistant actions and raw observations remain in the conversation.
+            model_state.pop("previous_actions")
+            if dialogue:
+                model_state = {"views": model_state["views"][sent_views:]}
+            request_views = views[sent_views:]
+            feedback["observations"] = feedback["observations"][sent_observations:]
+        if compact:
+            # Serialize only after controller bookkeeping has used the lists.
+            model_state = compact_prompt_tables(model_state)
+            feedback = compact_prompt_tables(feedback)
+            round_instructions += TABLE_INSTRUCTIONS
+        user_content = [{"type": "text", "text": json.dumps(
+            model_state, ensure_ascii=False, **({"separators": (",", ":")} if compact else {}))},
+            *[image_part(v["image"]) for v in request_views]]
+        if feedback is not None:
+            user_content.append({"type": "text", "text": json.dumps(
+                feedback, ensure_ascii=False, separators=(",", ":"))})
+        request_started = perf_counter()
+        try:
+            response = chat(
             [
                 {"role": "system", "content": round_instructions},
+                *dialogue,
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "text", "text": json.dumps(state, ensure_ascii=False)},
-                        *[image_part(v["image"]) for v in views],
-                    ],
+                    "content": user_content,
                 },
             ],
             max_tokens=decision_max_tokens(),
             json_mode=True,
             **schema_kwargs("react_action", action_schema),
-        )
+            )
+        finally:
+            timings["model_requests"] = timings.get("model_requests", 0) + perf_counter() - request_started
         call.update(
             response=response["_content"],
             usage=response.get("usage"),
             **response.get("_request", {}),
         )
+        save_progress()
+        if dialogue_history:
+            dialogue.extend([{"role": "user", "content": user_content},
+                             {"role": "assistant", "content": response["_content"]}])
+            sent_views, sent_observations = len(views), len(observations)
         if response.get("_finish_reason") != "stop":
             raise ValueError("ReAct action response is incomplete")
         action = parse_json_object(response["_content"])
@@ -386,6 +876,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                 if action["action"] == "finish":
                     validate_decision(action, query, allowed, known)
                 if monitor is not None:
+                    action["monitor"] = monitor.decode(action.get("monitor"))
                     event = monitor.update(action.get("monitor"), action, observations)
                     trace["dag_monitor_current_node_id"] = event["current_node_id"]
             except ValueError as exc:
@@ -444,21 +935,19 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                 or len(set(focus)) != len(focus)
                 or any((type(i) is not int or i not in known for i in focus))
             ):
+                if (no_repeat and isinstance(focus, list) and focus
+                        and all(type(i) is int and i in known for i in focus)
+                        and len(set(focus)) != len(focus)):
+                    invalid_focus_groups.add(tuple(sorted(focus)))
                 raise ValueError(
                     "Supply distinct known focus_ids for evidence acquisition"
                 )
+            camera = {
+                key: action.get(key) if action.get(key) is not None else default
+                for key, default in (("azimuth_deg", 315), ("elevation_deg", 30))
+            } if action["action"] == "inspect" else {}
             signature = json.dumps(
-                {
-                    k: action.get(k)
-                    for k in (
-                        "action",
-                        "focus_ids",
-                        "context",
-                        "azimuth_deg",
-                        "elevation_deg",
-                        "frame",
-                    )
-                },
+                evidence_action_key(action),
                 sort_keys=True,
             )
             if signature in signatures:
@@ -470,11 +959,9 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                     raise ValueError(
                         "Inspect at most 12 objects; select the relevant comparison group"
                     )
-                camera = {
-                    key: action.get(key) if action.get(key) is not None else default
-                    for key, default in (("azimuth_deg", 315), ("elevation_deg", 30))
-                }
-                rendered = [
+                render_started = perf_counter()
+                try:
+                    rendered = [
                     render_action(
                         {**action, **camera, "focus_ids": focus[offset : offset + 6]},
                         objects,
@@ -485,7 +972,12 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                         2000 + 2 * step + offset // 6,
                     )
                     for offset in range(0, len(focus), 6)
-                ]
+                    ]
+                finally:
+                    timings["supplemental_render"] = timings.get("supplemental_render", 0) + perf_counter() - render_started
+                trace["rendered_panel_count"] += sum(v.get("views_rendered", 1) for v in rendered)
+                trace["rendered_image_count"] += len(rendered)
+                trace["rendered_file_count"] += sum(1 + len(v.get("panels", [])) for v in rendered)
                 views.extend(rendered)
                 inspected.update(
                     (i for view in rendered for i in view.get("marked_ids", []))
@@ -505,9 +997,13 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                     (v.get("views_rendered", 1) for v in rendered)
                 )
             elif action["action"] == "measure":
-                observation = measure(
-                    focus, objects, parsed, candidates, query, action.get("frame")
-                )
+                measurement_started = perf_counter()
+                try:
+                    observation = measure(
+                        focus, objects, parsed, candidates, query, action.get("frame")
+                    )
+                finally:
+                    timings["geometry_measure"] = timings.get("geometry_measure", 0) + perf_counter() - measurement_started
                 trace["internal_usage"]["compute"] += 1
             else:
                 raise ValueError("Unknown evidence action")
@@ -553,6 +1049,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         "evidence_limit": limit, "available_tool_limit": tool_limit, "repair_limit": repair_limit,
         "max_decision_calls": decision_limit, "successful_tool_calls": tool_calls_used,
         "failed_checks": repair_failures, "decision_calls": len(actions),
+        "repair_calls": repair_calls_used,
     }
     if monitor is not None:
         trace["dag_monitor_budget"] = trace["react_budget"]

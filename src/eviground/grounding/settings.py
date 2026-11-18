@@ -3,11 +3,32 @@
 import os
 
 
+def action_no_repeat_enabled():
+    raw = os.getenv("EVIGROUND_ACTION_NO_REPEAT", "0").strip()
+    if raw not in ("0", "1"):
+        raise ValueError("EVIGROUND_ACTION_NO_REPEAT must be 0 or 1")
+    return raw == "1"
+
+
 def policy_annealing_enabled():
     raw = os.getenv("EVIGROUND_POLICY_ANNEALING_ENABLED", "0").strip()
     if raw not in ("0", "1"):
         raise ValueError("EVIGROUND_POLICY_ANNEALING_ENABLED must be 0 or 1")
     return raw == "1"
+
+
+def dialogue_history_enabled():
+    raw = os.getenv("EVIGROUND_DIALOGUE_HISTORY", "0").strip()
+    if raw not in ("0", "1"):
+        raise ValueError("EVIGROUND_DIALOGUE_HISTORY must be 0 or 1")
+    return raw == "1"
+
+
+def dag_wire_format():
+    raw = os.getenv("EVIGROUND_DAG_WIRE_FORMAT", "snapshot").strip()
+    if raw not in ("snapshot", "delta"):
+        raise ValueError("EVIGROUND_DAG_WIRE_FORMAT must be snapshot or delta")
+    return raw
 
 
 def successful_tool_budget_enabled():
@@ -66,8 +87,11 @@ def settings():
         "evidence_tools": evidence_policy(),
         "dag_monitor_enabled": dag_monitor_enabled(),
         "policy_annealing_enabled": policy_annealing_enabled(),
+        "dialogue_history_enabled": dialogue_history_enabled(),
+        "dag_wire_format": dag_wire_format(),
         "successful_tool_budget": successful_tool_budget_enabled(),
         "decision_max_tokens": decision_max_tokens(),
+        "action_no_repeat": action_no_repeat_enabled(),
     }
     if policy["successful_tool_budget"]:
         policy["dag_monitor_repair_limit"] = dag_repair_limit()
@@ -143,6 +167,13 @@ def evidence_inventory(query, parsed):
             )
     for phrase in parsed.get("Unhandled", []):
         if phrase.casefold() in query.casefold():
+            registered = [row for row in rows if row["condition"] == "unhandled"
+                          and row["source_quote"] == phrase]
+            if registered:
+                for row in registered:
+                    if "obtain quoted predicate evidence" not in row["dependencies"]:
+                        row["dependencies"].append("obtain quoted predicate evidence")
+                continue
             rows.append(
                 {
                     "source_quote": phrase,

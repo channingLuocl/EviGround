@@ -46,13 +46,186 @@ def action(kind="measure", target=None):
             "predicted_id": target,
             "evidence": [{"source_quote": QUERY, "object_ids": [target],
                           "observation": "comparison supports this chair"}]
-            if target is not None else [], "unresolved": []}
+            if target is not None else [],
+            "unresolved": ["The middle comparison remains unverified"]
+            if kind == "finish" and target is None else []}
 
 
 class DagMonitorTests(unittest.TestCase):
     def setUp(self):
         self.monitor = DagMonitor(QUERY, parsed(), {1, 2, 3}, {1, 2},
                                   ["inspect", "measure", "finish"])
+
+    def test_final_dependency_feedback_names_missing_nodes_atomically(self):
+        self.monitor.update(plan(), action(), [])
+        before, history = deepcopy(self.monitor.plan), deepcopy(self.monitor.history)
+        invalid = plan()
+        invalid['nodes'][-1]['depends_on'] = ['group']
+        with self.assertRaisesRegex(ValueError, r"missing node IDs \['compare'\]") as raised:
+            self.monitor.update(invalid, action(), [])
+        self.assertNotIn("'group'", str(raised.exception))
+        self.assertNotIn("'verify'", str(raised.exception))
+        self.assertEqual(self.monitor.plan, before)
+        self.assertEqual(self.monitor.history, history)
+
+    def test_compact_schema_blocks_observed_invalid_graphs_before_decoding(self):
+        from jsonschema import Draft202012Validator, ValidationError, validate
+
+        schema = self.monitor.schema(compact=True)
+        Draft202012Validator.check_schema(schema)
+        p = plan()
+        mapping = {n["id"]: f"n{i}" for i, n in enumerate(p["nodes"])}
+        mapping["verify"] = "n11"
+        for n in p["nodes"]:
+            n["id"] = mapping[n["id"]]
+            n["depends_on"] = [mapping[d] for d in n["depends_on"]]
+        p["current_node_id"] = mapping[p["current_node_id"]]
+        wire = deepcopy(p)
+        wire["requirement_nodes"] = {r["id"]: [n["id"] for n in wire["nodes"]
+                                                if r["id"] in n["condition_ids"]]
+                                     for r in self.monitor.requirements}
+        for n in wire["nodes"]:
+            del n["condition_ids"]
+        wire["verification"] = wire["nodes"].pop()
+        validate(wire, schema)
+        self.assertEqual(self.monitor.encode(p), wire)
+        self.assertEqual(self.monitor.decode(wire), p)
+        self.assertEqual(self.monitor.encode(wire), wire)
+        state = {"observations": [], "task_dag": p,
+                 "previous_actions": [{"action": "measure", "monitor": p}]}
+        compact = react.compact_state(state, self.monitor)
+        validate(compact["task_dag"], schema)
+        restored = deepcopy(compact["previous_actions"][0]["monitor"])
+        for key, value in restored.items():
+            if isinstance(value, dict) and set(value) == {"same_as_task_dag"}:
+                restored[key] = compact["task_dag"][value["same_as_task_dag"]]
+        validate(restored, schema)
+        self.assertEqual(compact["task_dag"], wire)
+        self.assertEqual(state["task_dag"], p)
+        self.monitor.update(p, action(), [])
+        for variant in ("no_tasks", "text_dependency", "condition_as_node", "verification_tool",
+                        "missing_requirement", "missing_verification", "pending_exclusion",
+                        "empty_quotes", "placeholder_quote"):
+            invalid = deepcopy(wire)
+            if variant == "no_tasks":
+                invalid["nodes"] = []
+            elif variant == "text_dependency":
+                invalid["nodes"][1]["depends_on"] = ["bind reference"]
+            elif variant == "condition_as_node":
+                invalid["nodes"][0]["id"] = "q0"
+            elif variant == "verification_tool":
+                invalid["verification"]["allowed_actions"] = ["inspect", "measure", "finish"]
+            elif variant == "missing_requirement":
+                del invalid["requirement_nodes"]["q0"]
+            elif variant == "missing_verification":
+                del invalid["verification"]
+            elif variant == "pending_exclusion":
+                invalid["nodes"][1]["excluded_target_ids"] = [1]
+            else:
+                invalid["nodes"][1]["source_quotes"] = [] if variant == "empty_quotes" else ["<exact description substring>"]
+            with self.subTest(variant=variant), self.assertRaises(ValidationError):
+                validate(invalid, schema)
+        absent = deepcopy(wire)
+        absent["requirement_nodes"]["q0"] = ["n10"]
+        with self.assertRaisesRegex(ValueError, "absent DAG node"):
+            self.monitor.decode(absent)
+        no_tools = DagMonitor(QUERY, parsed(), {1, 2, 3}, {1, 2}, ["finish"])
+        Draft202012Validator.check_schema(no_tools.schema(compact=True))
+
+    def test_compact_requirements_distinguish_prose_from_node_dependencies(self):
+        requirement = {"id": "q1", "dependencies": ["bind reference"]}
+        state = {"observations": [], "monitor_requirements": [requirement]}
+        compact = react.compact_state(state)
+        self.assertEqual(compact["monitor_requirements"],
+                         [{"id": "q1", "prerequisite_descriptions": ["bind reference"]}])
+        self.assertIn("dependencies", requirement)
+
+    def test_compact_example_keeps_full_description_check_at_verification(self):
+        from eviground.grounding.dag_monitor import COMPACT_INSTRUCTIONS
+        from jsonschema import validate
+
+        start = COMPACT_INSTRUCTIONS.index('{"nodes":')
+        end = COMPACT_INSTRUCTIONS.index('\nReplace quoted placeholders', start)
+        example = json.loads(COMPACT_INSTRUCTIONS[start:end].replace(
+            '<exact description substring>', QUERY))
+        validate(example, self.monitor.schema(compact=True))
+        self.assertEqual(example['requirement_nodes']['q0'], ['n11'])
+        self.assertEqual(example['nodes'][0]['depends_on'], [])
+        self.assertEqual(example['verification']['depends_on'], ['n0'])
+        event = self.monitor.update(self.monitor.decode(example), action(), [])
+        final = next(n for n in event['plan']['nodes'] if n['kind'] == 'verification')
+        self.assertEqual(final['condition_ids'], ['q0'])
+        self.assertEqual(self.monitor.ready_ids(), ['n0'])
+
+    def test_compact_set_bounds_block_observed_repeated_id_generation(self):
+        from jsonschema import ValidationError, validate
+
+        schema = self.monitor.schema(compact=True)
+        branches = schema["properties"]["nodes"]["items"]["anyOf"]
+        branches += schema["properties"]["verification"]["anyOf"]
+        for branch in branches:
+            properties = branch["properties"]
+            for field, valid, repeated in (
+                ("excluded_target_ids", [1, 2], [1, 2] * 2000),
+                ("bound_object_ids", [1, 2, 3], [1, 2, 3] * 2000),
+                ("depends_on", [f"n{i}" for i in range(11)], ["n0"] * 12),
+            ):
+                with self.subTest(kind=properties["kind"], field=field):
+                    if field == "excluded_target_ids" and properties["status"]["enum"] == ["pending"]:
+                        valid = []
+                    validate(valid, properties[field])
+                    with self.assertRaises(ValidationError):
+                        validate(repeated, properties[field])
+        validate([f"n{i}" for i in range(12)], schema["properties"]["reopen_node_ids"])
+        with self.assertRaises(ValidationError):
+            validate(["n0"] * 13, schema["properties"]["reopen_node_ids"])
+        # Standard protocol remains available without compact wire limits.
+        self.assertNotIn("maxItems", self.monitor.schema()["properties"]["nodes"])
+
+    def test_compact_completed_nodes_only_cite_current_evidence(self):
+        from jsonschema import ValidationError, validate
+
+        schema = self.monitor.schema(compact=True, evidence_ids={"initial", "observation_1"})
+        completed = schema["properties"]["nodes"]["items"]["anyOf"][1]["properties"]
+        validate(["initial", "observation_1"], completed["evidence_ids"])
+        with self.assertRaises(ValidationError):
+            validate(["observation_2"], completed["evidence_ids"])
+
+    def test_compact_action_sets_reject_duplicates_without_order_assumptions(self):
+        from jsonschema import ValidationError, validate
+
+        pending, completed = self.monitor.schema(compact=True)["properties"]["nodes"]["items"]["anyOf"]
+        for actions in (["inspect"], ["measure"], ["inspect", "measure"], ["measure", "inspect"]):
+            validate(actions, pending["properties"]["allowed_actions"])
+        validate([], completed["properties"]["allowed_actions"])
+        for actions in ([], ["measure", "measure"], ["finish"]):
+            with self.subTest(actions=actions), self.assertRaises(ValidationError):
+                validate(actions, pending["properties"]["allowed_actions"])
+
+    def test_action_schema_emits_monitor_first_and_shares_its_contract(self):
+        from jsonschema import Draft202012Validator, validate
+
+        base = {"type": "object", "properties": {
+            "action": {"enum": ["finish"]}, "focus_ids": {"type": "array", "items": {"type": "integer"}},
+            "context": {}, "azimuth_deg": {}, "elevation_deg": {}, "frame": {},
+            "predicted_id": {"enum": [1, None]},
+            "unresolved": {"type": "array", "items": {"type": "string"}},
+            "evidence": {"type": "array", "items": {"type": "object", "properties": {
+                "object_ids": {"type": "array", "items": {"type": "integer"}}}}},
+            "monitor": {"type": "object", "properties": {"sentinel": {"const": True}},
+                        "required": ["sentinel"], "additionalProperties": False}},
+            "required": ["action", "focus_ids", "monitor", "unresolved"]}
+        before = deepcopy(base)
+        schema = react.constrained_action_schema(base, ["finish"])
+        Draft202012Validator.check_schema(schema)
+        for variant in schema["anyOf"]:
+            self.assertEqual(next(iter(variant["properties"])), "monitor")
+            self.assertEqual(variant["required"][0], "monitor")
+            self.assertEqual(variant["properties"]["monitor"], {"$ref": "#/$defs/monitor"})
+        self.assertEqual(schema["$defs"]["monitor"], base["properties"]["monitor"])
+        validate({"monitor": {"sentinel": True}, "action": "finish", "focus_ids": [],
+                  "predicted_id": None, "unresolved": ["The reference is not visible"]}, schema)
+        self.assertEqual(base, before)
 
     def test_graph_array_order_does_not_determine_execution_order(self):
         p = plan()
@@ -430,6 +603,85 @@ class DagMonitorTests(unittest.TestCase):
 
 
 class DagGroundingTests(unittest.TestCase):
+    def test_dialogue_retains_actions_evidence_and_error_without_repeating_images(self):
+        p = plan()
+        mapping = {"group": "n0", "compare": "n1", "verify": "n11"}
+        for n in p["nodes"]:
+            n["id"] = mapping[n["id"]]
+            n["depends_on"] = [mapping[d] for d in n["depends_on"]]
+        p["current_node_id"] = "n1"
+        monitor = DagMonitor(QUERY, parsed(), {1, 2, 3}, {1, 2}, ["inspect", "measure", "finish"])
+        first = action() | {"monitor": monitor.encode(p)}
+        finished = deepcopy(p)
+        for n in finished["nodes"][1:]:
+            n.update(status="completed", evidence_ids=["observation_1"], conclusion="comparison supports chair 1")
+        finished["nodes"][1]["excluded_target_ids"] = [2]
+        finished["current_node_id"] = "n11"
+        responses = [deepcopy(first), deepcopy(first),
+                     action("finish", 1) | {"monitor": monitor.encode(finished)}]
+        with patch.dict(os.environ, {"EVIGROUND_PROMPT_PROFILE": "compact", "EVIGROUND_DIALOGUE_HISTORY": "1"}):
+            result, calls = self.run_ground(responses, 2, repairs=1)
+        self.assertEqual(result["predicted_id"], 1)
+        messages = calls[-1].args[0]
+        self.assertEqual([m["role"] for m in messages], ["system", "user", "assistant", "user", "assistant", "user"])
+        self.assertEqual(json.loads(messages[2]["content"]), responses[0])
+        self.assertNotIn("previous_actions", json.loads(messages[1]["content"][0]["text"]))
+        feedbacks = [json.loads(m["content"][-1]["text"]) for m in messages[1:] if m["role"] == "user"]
+        self.assertEqual([len(f["observations"]) for f in feedbacks], [0, 1, 1])
+        self.assertIn("already acquired", feedbacks[-1]["observations"][0]["error"])
+        self.assertEqual(feedbacks[-1]["supporting_evidence_ids"], ["initial", "observation_1"])
+        self.assertEqual(feedbacks[-1]["remaining_tool_calls"], 1)
+        self.assertEqual(feedbacks[-1]["remaining_plan_repairs"], 0)
+        self.assertEqual(sum("image" in part for m in messages[1:] if m["role"] == "user"
+                             for part in m["content"]), 2)
+        self.assertEqual(len(result["active_trace"]["react_observations"]), 2)
+
+    def test_dialogue_switch_is_strict_and_audited(self):
+        with patch.dict(os.environ, {"EVIGROUND_DIALOGUE_HISTORY": "0"}):
+            before = settings()
+        with patch.dict(os.environ, {"EVIGROUND_DIALOGUE_HISTORY": "1"}):
+            self.assertTrue(settings()["dialogue_history_enabled"])
+            self.assertNotEqual(before, settings())
+        with patch.dict(os.environ, {"EVIGROUND_DIALOGUE_HISTORY": "true"}):
+            with self.assertRaisesRegex(ValueError, "must be 0 or 1"):
+                settings()
+
+    def test_compact_next_turn_ends_with_current_evidence_and_matching_dag_wire(self):
+        from jsonschema import validate
+
+        monitor = DagMonitor(QUERY, parsed(), {1, 2, 3}, {1, 2},
+                             ["inspect", "measure", "finish"])
+        p = plan()
+        mapping = {"group": "n0", "compare": "n1", "verify": "n11"}
+        for n in p["nodes"]:
+            n["id"] = mapping[n["id"]]
+            n["depends_on"] = [mapping[d] for d in n["depends_on"]]
+        p["current_node_id"] = "n1"
+        finished = deepcopy(p)
+        for n in finished["nodes"][1:]:
+            n.update(status="completed", evidence_ids=["observation_1"], conclusion="middle comparison supports chair 1")
+        finished["nodes"][1]["excluded_target_ids"] = [2]
+        finished["current_node_id"] = "n11"
+        responses = [action() | {"monitor": monitor.encode(p)},
+                     action("finish", 1) | {"monitor": monitor.encode(finished)}]
+        with patch.dict(os.environ, {"EVIGROUND_PROMPT_PROFILE": "compact"}):
+            result, calls = self.run_ground(responses, 1)
+        self.assertEqual(result["predicted_id"], 1)
+        content = calls[1].args[0][1]["content"]
+        static = json.loads(content[0]["text"])
+        feedback = json.loads(content[-1]["text"])
+        self.assertNotIn("observations", static)
+        self.assertIn("image", content[-2])
+        self.assertEqual(feedback["observations"][0]["evidence_id"], "observation_1")
+        self.assertEqual(feedback["remaining_tool_calls"], 0)
+        from tests.unit.test_prompt_tables import expand
+        validate(expand(feedback["task_dag"]), monitor.schema(compact=True))
+        history_monitor = expand(static["previous_actions"][0]["monitor"])
+        for key, value in history_monitor.items():
+            if isinstance(value, dict) and set(value) == {"same_as_task_dag"}:
+                history_monitor[key] = expand(feedback["task_dag"])[value["same_as_task_dag"]]
+        validate(history_monitor, monitor.schema(compact=True))
+
     def run_ground(self, responses, limit, alternative_category=False, repairs=1):
         objects = [{"bbox_id": i, "target": "chair", "bbox_3d": [i, 0, .5, 1, 1, 1],
                     "category_hypotheses": [{"category": "chair", "rank": 1,
@@ -475,6 +727,31 @@ class DagGroundingTests(unittest.TestCase):
         self.assertEqual(state["remaining_plan_repairs"], 0)
         self.assertEqual(result["active_trace"]["dag_monitor_budget"]["successful_tool_calls"], 1)
         self.assertEqual(result["active_trace"]["dag_monitor_budget"]["failed_checks"], 1)
+
+    def test_no_repeat_schema_bans_only_successfully_acquired_observations(self):
+        from jsonschema import Draft202012Validator
+
+        bad = plan()
+        bad["nodes"][0]["evidence_ids"] = ["future"]
+        requested = action() | {"monitor": plan()}
+        responses = [action() | {"monitor": bad}, requested,
+                     action("finish", 1) | {"monitor": self.verified_plan("observation_2")}]
+        with patch.dict(os.environ, {"EVIGROUND_ACTION_NO_REPEAT": "1",
+                                     "EVIGROUND_GUIDED_DECODING_BACKEND": "guidance"}):
+            result, calls = self.run_ground(responses, 2)
+        self.assertEqual(result["predicted_id"], 1)
+        first = calls[0].kwargs["response_schema"]["schema"]
+        retry = calls[1].kwargs["response_schema"]["schema"]
+        after_acquisition = calls[2].kwargs["response_schema"]["schema"]
+        self.assertNotIn("allOf", first)
+        self.assertNotIn("allOf", retry)
+        self.assertEqual(len(after_acquisition["allOf"]), 1)
+        self.assertFalse(Draft202012Validator(after_acquisition).is_valid(requested))
+        finish = responses[-1]
+        self.assertTrue(Draft202012Validator(after_acquisition).is_valid(finish))
+        state = json.loads(calls[2].args[0][1]["content"][0]["text"])
+        self.assertEqual(state["unavailable_evidence_actions"], [react.evidence_action_key(requested)])
+        self.assertTrue(result["active_trace"]["action_no_repeat"])
 
     def test_final_plan_can_be_repaired_after_tools_are_exhausted(self):
         responses = [action() | {"monitor": plan()},
@@ -547,6 +824,33 @@ class DagGroundingTests(unittest.TestCase):
         self.assertEqual(len(calls), 3)
         self.assertEqual(result["active_trace"]["dag_monitor_budget"]["successful_tool_calls"], 0)
         self.assertIn("repair budget", result["decision_reasons"][0])
+
+    def test_production_budget_allows_ten_tools_six_repairs_and_one_finish(self):
+        invalid = action() | {'focus_ids': [], 'monitor': plan()}
+        inspections = [action('inspect') | {'azimuth_deg': i * 30, 'monitor': plan()}
+                       for i in range(10)]
+        finish = action('finish', 1) | {'monitor': self.verified_plan('observation_16')}
+        with patch('eviground.rendering.inspection.render_action',
+                   return_value=dict(image='inspection.png', marked_ids=[1, 2, 3])):
+            result, calls = self.run_ground([invalid] * 6 + inspections + [finish], 10, repairs=6)
+        budget = result['active_trace']['react_budget']
+        self.assertEqual(result['predicted_id'], 1)
+        self.assertEqual(len(calls), 17)
+        self.assertEqual(budget['max_decision_calls'], 17)
+        self.assertEqual(budget['successful_tool_calls'], 10)
+        self.assertEqual(budget['failed_checks'], 6)
+        self.assertEqual(budget['repair_calls'], 6)
+        schema = calls[-1].kwargs['response_schema']['schema']
+        self.assertEqual(schema['properties']['action']['enum'], ['finish'])
+
+    def test_seventh_rejected_reply_does_not_allow_a_seventh_correction(self):
+        invalid = action('finish', 1) | {'monitor': plan()}
+        result, calls = self.run_ground([invalid] * 8, 10, repairs=6)
+        budget = result['active_trace']['react_budget']
+        self.assertEqual(len(calls), 7)
+        self.assertEqual(budget['failed_checks'], 7)
+        self.assertEqual(budget['repair_calls'], 6)
+        self.assertIsNone(result['predicted_id'])
 
     def test_measure_then_verified_unique_finish_preserves_full_candidate_pool(self):
         p = plan()

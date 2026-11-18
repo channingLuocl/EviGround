@@ -9,6 +9,7 @@ import os
 import re
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -130,6 +131,12 @@ def request_options(
         options["temperature"] = temperature
     if "temperature" in options and (not 0 <= options["temperature"] <= 2):
         raise APIError("temperature must be finite and between 0 and 2")
+    backend = os.getenv("EVIGROUND_GUIDED_DECODING_BACKEND", "").strip()
+    if backend not in ("", "guidance"):
+        raise APIError("EVIGROUND_GUIDED_DECODING_BACKEND must be empty or guidance")
+    if backend and json_mode:
+        # vLLM V1 rejects this unless its engine was started with the same backend.
+        options["guided_decoding_backend"] = backend
     if response_schema is not None:
         if (
             provider != "openai"
@@ -142,17 +149,48 @@ def request_options(
         from jsonschema import Draft202012Validator
 
         Draft202012Validator.check_schema(response_schema["schema"])
-        options["response_format"] = {
-            "type": "json_schema",
-            "json_schema": response_schema,
-        }
+        wire = _wire_schema(response_schema)
+        if "x-eviground-acquired-actions" in wire["schema"]:
+            from eviground.grounding.action_repetition import no_repeat_grammar
+
+            if backend != "guidance":
+                raise APIError("Action exclusion grammar requires the Guidance decoding backend")
+            options["guided_grammar"] = no_repeat_grammar(wire["schema"])
+        else:
+            options["response_format"] = {"type": "json_schema", "json_schema": wire}
     elif json_mode:
         options["response_format"] = {"type": "json_object"}
     return options
 
 
+def _wire_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Keep nonblank validation local: XGrammar's wildcard pattern can escape
+    the JSON string and consume subsequent fields. minLength remains on wire.
+    The original schema still validates the completed response in _chat_once.
+    """
+    from eviground.api.response_schemas import REASON
+
+    def copy(value):
+        if isinstance(value, dict):
+            return {key: copy(item) for key, item in value.items()
+                    if not (key == "pattern" and value == REASON)}
+        if isinstance(value, list):
+            return [copy(item) for item in value]
+        return value
+
+    return copy(schema)
+
+
+def read_timeout() -> int:
+    value = int(os.getenv("EVIGROUND_API_READ_TIMEOUT", "120"))
+    if value < 1:
+        raise ValueError("EVIGROUND_API_READ_TIMEOUT must be positive")
+    return value
+
+
 def api_config_summary() -> dict[str, Any]:
     """Include parameter choices in batch provenance without including secrets."""
+    from eviground.api.prompts import prompt_profile
     options = request_options(512, None, True)
     options.pop("max_tokens", None)
     options.pop("max_completion_tokens", None)
@@ -161,6 +199,7 @@ def api_config_summary() -> dict[str, Any]:
         options["response_format"] = {"type": "json_schema"}
     return {
         "provider": api_provider(),
+        "prompt_profile": prompt_profile(),
         "request_options": options,
         **(
             {"thinking_token_floor": thinking_token_floor()}
@@ -173,6 +212,7 @@ def api_config_summary() -> dict[str, Any]:
         ).strip(),
         "allow_http": os.getenv("EVIGROUND_ALLOW_HTTP", "") == "1",
         "api_concurrency": api_concurrency(),
+        "http_read_timeout_s": read_timeout(),
         "api_slot_dir": str(api_slot_dir()),
     }
 
@@ -377,7 +417,7 @@ def repair_missing_nullable_fields(
                     and isinstance(value[field], list)
                 ):
                     item_schema = nested.get("items", {})
-                    if item_schema.get("type") == "object":
+                    if isinstance(item_schema, dict) and item_schema.get("type") == "object":
                         for item in value[field]:
                             if isinstance(item, dict):
                                 fill(item, item_schema)
@@ -406,10 +446,78 @@ def repair_missing_nullable_fields(
     return (payload, repaired)
 
 
+def _factor_text_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Share identical schema fragments in prompt text; leave decoding untouched."""
+    counts = {}
+
+    def visit(value, replace=False, inline=False):
+        if isinstance(value, list):
+            return [visit(item, replace) for item in value]
+        if not isinstance(value, dict):
+            return value
+        encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        candidate = len(encoded) > 120 and (
+            isinstance(value.get("type"), str) or isinstance(value.get("anyOf"), list))
+        if not replace and candidate:
+            counts[encoded] = counts.get(encoded, 0) + 1
+        if replace and candidate and counts.get(encoded, 0) > 1 and not inline:
+            if encoded not in names:
+                name = "text_part_" + str(len(names))
+                while name in definitions:
+                    name += "_"
+                names[encoded] = name
+                definitions[name] = visit(value, True, inline=True)
+            return {"$ref": "#/$defs/" + names[encoded]}
+        return {key: item if key in ("enum", "const", "default", "examples")
+                else visit(item, replace) for key, item in value.items()}
+
+    visit(schema)
+    definitions = {}
+    names = {}
+    # Avoid colliding with names already used by the native contract.
+    definitions.update({name: None for name in schema.get("$defs", {})})
+    result = visit(schema, True, inline=True)
+    result["$defs"] = {**result.get("$defs", {}),
+                       **{name: value for name, value in definitions.items() if value is not None}}
+    return result if len(json.dumps(result)) < len(json.dumps(schema)) else schema
+
+
 def _schema_messages(
     messages: list[dict[str, Any]], schema: dict[str, Any], error: str | None = None
 ) -> list[dict[str, Any]]:
     """Include the output contract in text for compatible gateways."""
+    from eviground.api.prompts import prompt_profile
+
+    if prompt_profile() == "compact":
+        text_schema = _wire_schema(schema["schema"])
+        if "x-eviground-acquired-actions" in text_schema:
+            # The decoder enforces exclusions, and feedback lists the acquired
+            # actions. Repeating their expanded intersections wastes context.
+            acquired = text_schema.pop("x-eviground-acquired-actions")
+            invalid_groups = text_schema.pop("x-eviground-invalid-focus-groups", [])
+            if len(text_schema.get("allOf", [])) != len(acquired) + len(invalid_groups):
+                raise ValueError("Cannot omit unrelated schema intersections from the prompt")
+            text_schema.pop("allOf")
+        if schema.get("name") == "react_action":
+            text_schema = _factor_text_schema(text_schema)
+        instruction = "Return only the requested JSON object. Include all required fields; no invented evidence."
+        native_react = (schema.get("name") == "react_action" and schema.get("strict") is True
+                        and os.getenv("EVIGROUND_GUIDED_DECODING_BACKEND", "").strip() == "guidance")
+        if native_react:
+            # The same complete contract is still passed to the native decoder.
+            instruction += " Follow the output contract enforced by the decoder."
+        else:
+            instruction += " Output JSON Schema: " + json.dumps(
+                text_schema, ensure_ascii=False, separators=(",", ":")
+            )
+        if error is not None:
+            instruction += " Previous validation error: " + error[:1500]
+        result = [dict(message) for message in messages]
+        if result and result[0]["role"] == "system" and isinstance(result[0]["content"], str):
+            result[0]["content"] += "\n" + instruction
+        else:
+            result.insert(0, {"role": "system", "content": instruction})
+        return result
     instruction = (
         "Return ONLY one JSON object matching this JSON Schema. No markdown fences or prose. Include every required field. Use null only where allowed. Do not invent evidence. JSON Schema: "
         + json.dumps(schema["schema"], ensure_ascii=False, separators=(",", ":"))
@@ -429,16 +537,22 @@ def _chat_schema_retry(messages: list[dict[str, Any]], **kwargs: Any) -> dict[st
     attempts = []
     started = time.perf_counter()
     for attempt in range(2):
+        local_attempt_id = uuid.uuid4().hex
         attempt_start = time.perf_counter()
         try:
-            data = _chat_once(request_messages, **kwargs)
+            data = _chat_once(request_messages, _local_attempt_id=local_attempt_id, **kwargs)
             attempts.append(
                 {
                     "status": "success",
+                    "local_attempt_id": local_attempt_id,
+                    "request_id": data["_request"].get("request_id"),
                     "latency_s": round(time.perf_counter() - attempt_start, 4),
                     "usage": data.get("usage"),
                 }
             )
+            from eviground.api.usage_log import log_attempt
+            log_attempt(local_attempt_id, 'finished', status='success', usage=data.get('usage'),
+                        request_id=data['_request'].get('request_id'))
             data["_request"].update(
                 api_attempts=attempts,
                 extra_attempts=len(attempts) - 1,
@@ -448,9 +562,14 @@ def _chat_schema_retry(messages: list[dict[str, Any]], **kwargs: Any) -> dict[st
             return data
         except APIError as exc:
             diagnostic = exc.diagnostic
+            from eviground.api.usage_log import log_attempt
+            log_attempt(local_attempt_id, 'finished', status='failed', usage=diagnostic.get('usage'),
+                        request_id=diagnostic.get('request_id'))
             attempts.append(
                 {
                     "status": "failed",
+                    "local_attempt_id": local_attempt_id,
+                    "usage": diagnostic.get("usage"),
                     "latency_s": round(time.perf_counter() - attempt_start, 4),
                     "diagnostic": dict(diagnostic),
                 }
@@ -478,6 +597,7 @@ def _chat_once(
     timeout: tuple[int, int] = (15, 120),
     json_mode: bool = False,
     response_schema: dict[str, Any] | None = None,
+    _local_attempt_id: str | None = None,
 ) -> dict[str, Any]:
     base, model, key = _settings()
     options = request_options(max_tokens, temperature, json_mode, response_schema)
@@ -487,6 +607,9 @@ def _chat_once(
     started = time.perf_counter()
     try:
         with api_request_slot() as slot_wait_s:
+            if _local_attempt_id is not None:
+                from eviground.api.usage_log import log_attempt
+                log_attempt(_local_attempt_id, 'started', model=model)
             response = requests.post(
                 base + "/chat/completions",
                 headers={"Authorization": "Bearer " + key},
@@ -586,6 +709,7 @@ def _chat_once(
                     "model": model,
                     "request_summary": summary,
                     "schema_name": response_schema["name"],
+                    "usage": data.get("usage"),
                     "finish_reason": choice.get("finish_reason"),
                     "validation_error": (
                         "Model refused"
@@ -629,6 +753,7 @@ def _chat_once(
                     "model": model,
                     "request_summary": summary,
                     "schema_name": response_schema["name"],
+                    "usage": data.get("usage"),
                     "validation_error": parse_error or "content is not a JSON object",
                     "stage": "response_schema_parse",
                 },
@@ -651,6 +776,7 @@ def _chat_once(
                     "model": model,
                     "request_summary": summary,
                     "schema_name": response_schema["name"],
+                    "usage": data.get("usage"),
                     "validation_error": _redact(str(exc)),
                     "stage": "response_schema_validate",
                 },
@@ -670,6 +796,7 @@ def _chat_once(
                     "model": model,
                     "request_summary": summary,
                     "stage": "response_json_parse",
+                    "usage": data.get("usage"),
                 },
             ) from exc
     data["_request"] = {
@@ -698,10 +825,12 @@ def chat(
     *,
     max_tokens: int = 512,
     temperature: float | None = None,
-    timeout: tuple[int, int] = (15, 120),
+    timeout: tuple[int, int] | None = None,
     json_mode: bool = False,
     response_schema: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if timeout is None:
+        timeout = (15, read_timeout())
     from eviground.grounding.recovery import (
         sample_recovery,
         retryable,
