@@ -1,6 +1,7 @@
 """A bounded visual ReAct trajectory, using predicted categories and measured geometry."""
 
 import json
+from itertools import count
 from pathlib import Path
 from time import perf_counter
 import numpy as np
@@ -554,6 +555,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
     allowed = sorted((o["bbox_id"] for o in candidates))
     policy = evidence_policy()
     available = [name for name in ("inspect", "measure") if policy[name]] + ["finish"]
+    record_only = limit is None
     tool_limit = limit if len(available) > 1 else 0
     instructions = planner_instructions(policy)
     schema = obj(
@@ -704,21 +706,24 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                      interface="multimodal_react_dag_monitor", dag_monitor_history=monitor.history)
     successful_budget = successful_tool_budget_enabled()
     annealing = policy_annealing_enabled()
-    repair_limit = dag_repair_limit() if successful_budget else 0
-    decision_limit = (limit if successful_budget else tool_limit) + repair_limit + 1
+    repair_limit = None if record_only else (dag_repair_limit() if successful_budget else 0)
+    decision_limit = None if record_only else (limit if successful_budget else tool_limit) + repair_limit + 1
+    annealing_reference_limit = 17 if record_only else decision_limit
+    trace["resource_budget_mode"] = "record-only" if record_only else "bounded"
     trace["policy_annealing_enabled"] = annealing
     trace["policy_annealing_history"] = []
     tool_calls_used, repair_failures, repair_calls_used = 0, 0, 0
     decision = None
     termination_reason = None
     repair_reason = "DAG validation repair budget exhausted" if monitor is not None else "ReAct validation repair budget exhausted"
-    for step in range(decision_limit):
+    for step in count() if record_only else range(decision_limit):
         if observations and (observations[-1].get('error')
                              or observations[-1].get('no_evidence_acquired')
                              or observations[-1].get('tool') == 'finish_check'):
             repair_calls_used += 1
-        remaining_tools = max(0, tool_limit - (tool_calls_used if successful_budget else step))
-        last_decision = step == decision_limit - 1
+        remaining_tools = (None if record_only and len(available) > 1 else
+                           max(0, tool_limit - (tool_calls_used if successful_budget else step)))
+        last_decision = not record_only and step == decision_limit - 1
         state = {
             **payload,
             "unavailable_evidence_actions": [json.loads(item) for item in sorted(signatures)],
@@ -747,12 +752,22 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             state.update(monitor.context(observations))
             state["required_inspection_ids"] = sorted(required_inspections - inspected)
         if successful_budget:
-            state["remaining_plan_repairs"] = max(0, repair_limit - repair_failures)
+            state["remaining_plan_repairs"] = None if record_only else max(0, repair_limit - repair_failures)
+        if record_only:
+            state["resource_budget_policy"] = {
+                "mode": "record-only", "B_limit": None, "R_limit": None, "T_limit": None,
+                "null_remaining_means": "unbounded; no resource deadline forces finish",
+                "annealing_reference_turns": annealing_reference_limit,
+            }
         round_instructions = instructions if compact else instructions + CATEGORY_INSTRUCTIONS
         if no_repeat:
             round_instructions += "\nUse whole-degree camera angles or null; fractional changes do not supply a new observation."
         if annealing:
-            guidance = policy_state(step, decision_limit, remaining_tools, last_decision)
+            guidance = policy_state(
+                min(step, annealing_reference_limit - 1) if record_only else step,
+                annealing_reference_limit,
+                1 if record_only and remaining_tools is None else remaining_tools,
+                last_decision)
             state["policy_annealing"] = guidance
             trace["policy_annealing_history"].append({"step": step, **guidance})
             round_instructions += ("\nRound-aware policy constraint (sampling temperature is unchanged): "
@@ -887,7 +902,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                                "no_evidence_acquired": True}
                 observations.append(observation)
                 trace["steps"].append({"action": action, "observation": observation})
-                if last_decision or repair_failures > repair_limit:
+                if last_decision or (repair_limit is not None and repair_failures > repair_limit):
                     decision = {"predicted_id": None, "reason": repair_reason,
                                 "evidence": [], "unresolved": [str(exc)]}
                     termination_reason = "repair_exhausted"
@@ -899,8 +914,8 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             if (policy["category_inspection_required"]
                     and best_ranks.get(oid) in (2, 3, 4, 5) and oid not in inspected):
                 gap = "The selected target is an alternative-only category match and has not been visibly inspected. Inspect it with plausible primary matches; distance alone is not category evidence."
-                if remaining_tools > 0 and not last_decision:
-                    if monitor is not None and repair_failures < repair_limit and "inspect" in available:
+                if (remaining_tools is None or remaining_tools > 0) and not last_decision:
+                    if monitor is not None and (repair_limit is None or repair_failures < repair_limit) and "inspect" in available:
                         required_inspections.add(oid)
                         event = monitor.require_inspection(oid, observations)
                         trace["dag_monitor_current_node_id"] = event["current_node_id"]
@@ -913,7 +928,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
                     )
                     if successful_budget:
                         repair_failures += 1
-                        if repair_failures > repair_limit:
+                        if repair_limit is not None and repair_failures > repair_limit:
                             decision = {"predicted_id": None, "reason": repair_reason,
                                         "evidence": [], "unresolved": [gap]}
                             termination_reason = "repair_exhausted"
@@ -1023,7 +1038,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             repair_failures += 1
         observations.append(observation)
         trace["steps"].append({"action": action, "observation": observation})
-        if successful_budget and repair_failures > repair_limit:
+        if successful_budget and repair_limit is not None and repair_failures > repair_limit:
             decision = {"predicted_id": None, "reason": repair_reason,
                         "evidence": [], "unresolved": [observation["error"]]}
             termination_reason = "repair_exhausted"
@@ -1048,6 +1063,8 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         "accounting": "successful_tools" if successful_budget else "nonterminal_decisions",
         "evidence_limit": limit, "available_tool_limit": tool_limit, "repair_limit": repair_limit,
         "max_decision_calls": decision_limit, "successful_tool_calls": tool_calls_used,
+        "budget_mode": "record-only" if record_only else "bounded",
+        "annealing_reference_turns": annealing_reference_limit,
         "failed_checks": repair_failures, "decision_calls": len(actions),
         "repair_calls": repair_calls_used,
     }

@@ -54,7 +54,8 @@ class PolicyAnnealingTests(unittest.TestCase):
         views = [{"image": "initial.png", "kind": "overview"}, {"image": "top.png", "kind": "top"}]
         with (tempfile.TemporaryDirectory() as out, patch.dict(os.environ, env),
               patch("eviground.rendering.overview.scene_views", return_value=views),
-              patch("eviground.rendering.inspection.render_action") as render,
+              patch("eviground.rendering.inspection.render_action", return_value={
+                  "image": "inspection.png", "marked_ids": [1, 2], "views_rendered": 1}) as render,
               patch.object(react, "image_part", side_effect=lambda p: {"image": p}),
               patch.object(react, "chat", side_effect=[response(a) for a in responses]) as chat):
             result = react.ground(QUERY, parsed(), objects, objects,
@@ -159,6 +160,25 @@ class PolicyAnnealingTests(unittest.TestCase):
         trace = result["active_trace"]
         self.assertEqual(trace["termination_cause"], "repair_exhausted")
         self.assertEqual(trace["react_budget"]["successful_tool_calls"], 0)
+
+    def test_record_only_exceeds_B10_R6_T17_without_forced_finish(self):
+        observations = [{**finish(), "action": "inspect", "predicted_id": None,
+                         "focus_ids": [1, 2], "context": "scene", "evidence": [],
+                         "azimuth_deg": angle} for angle in range(11)]
+        invalid = {**finish(), "action": "measure", "predicted_id": None,
+                   "focus_ids": [999], "evidence": []}
+        result, calls, renders = self.run_ground("A2", observations + [invalid] * 7 + [finish()], budget=None)
+        budget = result["active_trace"]["react_budget"]
+        self.assertEqual(result["predicted_id"], 2)
+        self.assertEqual((budget["successful_tool_calls"], budget["failed_checks"], len(calls)), (11, 7, 19))
+        self.assertEqual(renders, 11)
+        self.assertIsNone(budget["evidence_limit"])
+        self.assertIsNone(budget["repair_limit"])
+        self.assertIsNone(budget["max_decision_calls"])
+        for call in calls:
+            state = json.loads(call.args[0][1]["content"][0]["text"])
+            self.assertIsNone(state["remaining_tool_calls"])
+            self.assertEqual(state["policy_annealing"]["stage"], "continuous")
 
     def test_new_switches_and_schedule_enter_run_identity(self):
         with patch.dict(os.environ, {"EVIGROUND_POLICY_ANNEALING_ENABLED": "0"}):

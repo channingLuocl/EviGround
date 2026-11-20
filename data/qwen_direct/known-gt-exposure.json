@@ -1,0 +1,290 @@
+{
+  "source": "Existing preserved v1 parent-scored development identities, unioned with v2 completed prediction-freeze identities using evaluation-file existence only. No annotation values decoded or retained in this preparation. v2 completed19 identities were already in this list. q00171 is interrupted in v2 but its identity was already marked historically GT-exposed in v1.",
+  "samples": [
+    {
+      "scene": "scene0565_00",
+      "csv_row": 12
+    },
+    {
+      "scene": "scene0653_00",
+      "csv_row": 20
+    },
+    {
+      "scene": "scene0221_00",
+      "csv_row": 21
+    },
+    {
+      "scene": "scene0652_00",
+      "csv_row": 23
+    },
+    {
+      "scene": "scene0652_00",
+      "csv_row": 30
+    },
+    {
+      "scene": "scene0256_00",
+      "csv_row": 34
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 36
+    },
+    {
+      "scene": "scene0081_00",
+      "csv_row": 37
+    },
+    {
+      "scene": "scene0256_00",
+      "csv_row": 40
+    },
+    {
+      "scene": "scene0131_00",
+      "csv_row": 47
+    },
+    {
+      "scene": "scene0221_00",
+      "csv_row": 48
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 56
+    },
+    {
+      "scene": "scene0086_00",
+      "csv_row": 62
+    },
+    {
+      "scene": "scene0653_00",
+      "csv_row": 63
+    },
+    {
+      "scene": "scene0307_00",
+      "csv_row": 67
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 118
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 119
+    },
+    {
+      "scene": "scene0435_00",
+      "csv_row": 147
+    },
+    {
+      "scene": "scene0435_00",
+      "csv_row": 148
+    },
+    {
+      "scene": "scene0645_00",
+      "csv_row": 171
+    },
+    {
+      "scene": "scene0645_00",
+      "csv_row": 172
+    },
+    {
+      "scene": "scene0645_00",
+      "csv_row": 173
+    },
+    {
+      "scene": "scene0690_00",
+      "csv_row": 184
+    },
+    {
+      "scene": "scene0690_00",
+      "csv_row": 185
+    },
+    {
+      "scene": "scene0697_00",
+      "csv_row": 186
+    },
+    {
+      "scene": "scene0697_00",
+      "csv_row": 187
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 211
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 212
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 213
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 214
+    },
+    {
+      "scene": "scene0353_00",
+      "csv_row": 219
+    },
+    {
+      "scene": "scene0353_00",
+      "csv_row": 220
+    },
+    {
+      "scene": "scene0353_00",
+      "csv_row": 221
+    },
+    {
+      "scene": "scene0353_00",
+      "csv_row": 222
+    },
+    {
+      "scene": "scene0648_00",
+      "csv_row": 231
+    },
+    {
+      "scene": "scene0648_00",
+      "csv_row": 232
+    },
+    {
+      "scene": "scene0648_00",
+      "csv_row": 233
+    },
+    {
+      "scene": "scene0648_00",
+      "csv_row": 234
+    },
+    {
+      "scene": "scene0256_00",
+      "csv_row": 258
+    },
+    {
+      "scene": "scene0256_00",
+      "csv_row": 259
+    },
+    {
+      "scene": "scene0256_00",
+      "csv_row": 260
+    },
+    {
+      "scene": "scene0256_00",
+      "csv_row": 261
+    },
+    {
+      "scene": "scene0164_00",
+      "csv_row": 303
+    },
+    {
+      "scene": "scene0081_00",
+      "csv_row": 362
+    },
+    {
+      "scene": "scene0081_00",
+      "csv_row": 363
+    },
+    {
+      "scene": "scene0081_00",
+      "csv_row": 364
+    },
+    {
+      "scene": "scene0081_00",
+      "csv_row": 365
+    },
+    {
+      "scene": "scene0591_00",
+      "csv_row": 374
+    },
+    {
+      "scene": "scene0591_00",
+      "csv_row": 375
+    },
+    {
+      "scene": "scene0591_00",
+      "csv_row": 376
+    },
+    {
+      "scene": "scene0591_00",
+      "csv_row": 377
+    },
+    {
+      "scene": "scene0462_00",
+      "csv_row": 404
+    },
+    {
+      "scene": "scene0462_00",
+      "csv_row": 405
+    },
+    {
+      "scene": "scene0462_00",
+      "csv_row": 407
+    },
+    {
+      "scene": "scene0565_00",
+      "csv_row": 455
+    },
+    {
+      "scene": "scene0565_00",
+      "csv_row": 456
+    },
+    {
+      "scene": "scene0565_00",
+      "csv_row": 457
+    },
+    {
+      "scene": "scene0203_00",
+      "csv_row": 504
+    },
+    {
+      "scene": "scene0203_00",
+      "csv_row": 505
+    },
+    {
+      "scene": "scene0203_00",
+      "csv_row": 506
+    },
+    {
+      "scene": "scene0203_00",
+      "csv_row": 507
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 512
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 513
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 514
+    },
+    {
+      "scene": "scene0246_00",
+      "csv_row": 515
+    },
+    {
+      "scene": "scene0081_00",
+      "csv_row": 543
+    },
+    {
+      "scene": "scene0081_00",
+      "csv_row": 545
+    },
+    {
+      "scene": "scene0081_00",
+      "csv_row": 546
+    },
+    {
+      "scene": "scene0203_00",
+      "csv_row": 570
+    },
+    {
+      "scene": "scene0203_00",
+      "csv_row": 571
+    },
+    {
+      "scene": "scene0203_00",
+      "csv_row": 572
+    }
+  ],
+  "target_values_in_file": false
+}

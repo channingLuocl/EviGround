@@ -1,0 +1,2360 @@
+{
+  "ready": true,
+  "selection_path": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/queries/nr3d_val.json",
+  "selection_sha256": "777899fbbb63d7c8204a127597f1d9efc9f87b519922b1b7bb1c2946386f1dbf",
+  "queries": 7805,
+  "scenes": 130,
+  "category_objects": 3413,
+  "scene_cloud_bytes_total": 453451827,
+  "expected_predictions_sha256": "34aa94cbc455324fdd28ddfd21a3832bba743eac25c32d58037c9bc460b1da9e",
+  "expected_config_sha256": "de36aaaaea37c20062c3e4f9c9cc9b5fb039a810ddfa644b9a40f124dd6d6dba",
+  "category_score_type": "weighted_standardized_3d_rgb_fusion_not_probability",
+  "reused_category_scenes": 125,
+  "materialized_scenes": [
+    "scene0599_00",
+    "scene0633_00",
+    "scene0695_00",
+    "scene0701_00",
+    "scene0702_00"
+  ],
+  "scene_entries": {
+    "scene0011_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0011_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0011_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0011_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0011_00/scene.npz": "2ba4c724b19914adc3d6cef6e9f3c1b962907fc64416dd746f46ca178574a865",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0011_00/scene_instances.json": "e4a66f3d6a063645a5edc1eeeef449aceaa1b46eb8feb609a0246fd9b8576fab",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0011_00/objects_top5.json": "2c9678e2bc9c1f9381ea80cac76bcd577404ab55555304a17fbfde7fa7c5e7ec"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0011_00/objects_top5.json",
+        "source_sha256": "2c9678e2bc9c1f9381ea80cac76bcd577404ab55555304a17fbfde7fa7c5e7ec"
+      },
+      "category_objects": 27
+    },
+    "scene0015_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0015_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0015_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0015_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0015_00/scene.npz": "57ee682a65eb10142ff1c0992beaa6c06ca88df9df783c50d8f4aa17a6e1d5ef",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0015_00/scene_instances.json": "ce5fc7d2a9aed5643477e585952a995b16ad8fbde1dd76514fe04cb323001cfe",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0015_00/objects_top5.json": "036199770b8d77f35983fb41c2a68f943d2499bdf56b6847fc11a2f88484f166"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0015_00/objects_top5.json",
+        "source_sha256": "036199770b8d77f35983fb41c2a68f943d2499bdf56b6847fc11a2f88484f166"
+      },
+      "category_objects": 40
+    },
+    "scene0019_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0019_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0019_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0019_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0019_00/scene.npz": "2da313bb4b5a926f3acbd5f005da2375f31588a2d3db14aee67be6e4217ab3d6",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0019_00/scene_instances.json": "5bd2ef7c7f703fd1ce975a1b778e33bd951f53b1a148875fbef6016b0323d6b9",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0019_00/objects_top5.json": "698f14c102efb0fcd20e87cb9af78677265b5a68f38117b793e2f03b4f589677"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0019_00/objects_top5.json",
+        "source_sha256": "698f14c102efb0fcd20e87cb9af78677265b5a68f38117b793e2f03b4f589677"
+      },
+      "category_objects": 16
+    },
+    "scene0025_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0025_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0025_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0025_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0025_00/scene.npz": "cadee9eae5428421251ae5ba4a3b920fcd52f1c9fdeb5586af7685455b67c4c8",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0025_00/scene_instances.json": "bdab881fa829201626e579b544e75654ed79bd83043cdb5b67cd05eafe3c0c8b",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0025_00/objects_top5.json": "c1876f276fafa646626ab84bc952ceb0a85971def156896cadfa4aa28f5bf422"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0025_00/objects_top5.json",
+        "source_sha256": "c1876f276fafa646626ab84bc952ceb0a85971def156896cadfa4aa28f5bf422"
+      },
+      "category_objects": 38
+    },
+    "scene0030_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0030_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0030_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0030_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0030_00/scene.npz": "36f4e15fd8d3d38b8837a6452e4d6c32aa7e1a1c70b68d14998e132f4d42e3b8",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0030_00/scene_instances.json": "ee2d6dcbd006db88d52d0caeb568a206bab199bd15c12bd3656ab5feb7e85c45",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0030_00/objects_top5.json": "fd8e2ebdd603bbb6ad4420b006d172ead02e073ade117806dbf87420848b07a4"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0030_00/objects_top5.json",
+        "source_sha256": "fd8e2ebdd603bbb6ad4420b006d172ead02e073ade117806dbf87420848b07a4"
+      },
+      "category_objects": 82
+    },
+    "scene0046_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0046_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0046_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0046_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0046_00/scene.npz": "6f87b0788a4f74379ead68100299af39141cdcca15fb0f403262b9d620aa46ef",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0046_00/scene_instances.json": "f87aaa3d933ded0cced37e034a094cac4fbf3a18db7a60f98f98f91d6c6dd8a9",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0046_00/objects_top5.json": "e40bb4d4e74dcd15114a259f32ed1284152595b36ff84aaae6f4cd121da297c6"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0046_00/objects_top5.json",
+        "source_sha256": "e40bb4d4e74dcd15114a259f32ed1284152595b36ff84aaae6f4cd121da297c6"
+      },
+      "category_objects": 44
+    },
+    "scene0050_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0050_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0050_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0050_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0050_00/scene.npz": "2c823171819843bb288a0310d2f2321d9e85b29ef1f32d5e6e0ff3c6757e17fa",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0050_00/scene_instances.json": "257c464c334dd8beeba7d1d8100ea1f9f7e80e29debac8f95ba2283f70605a4d",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0050_00/objects_top5.json": "99a1862af275c146fdc7331f6a8340248b32385af48f190df677ed54f8183175"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0050_00/objects_top5.json",
+        "source_sha256": "99a1862af275c146fdc7331f6a8340248b32385af48f190df677ed54f8183175"
+      },
+      "category_objects": 29
+    },
+    "scene0063_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0063_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0063_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0063_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0063_00/scene.npz": "f453f2b31a262e2286c3c327c280598373b6ecae20fe02927648d2b9b1368a5b",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0063_00/scene_instances.json": "0a223628c59adc18056bd24c58bb64ce992a8e78a655504c530e02b5f7b9fe75",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0063_00/objects_top5.json": "e33a1331d07292928535bc96700b3c752cbb6e0629c1c851c8f13f0cdaaa128d"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0063_00/objects_top5.json",
+        "source_sha256": "e33a1331d07292928535bc96700b3c752cbb6e0629c1c851c8f13f0cdaaa128d"
+      },
+      "category_objects": 16
+    },
+    "scene0064_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0064_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0064_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0064_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0064_00/scene.npz": "7dc6ddbc684d4f9e068997977ad3c69360e39d97bcd8bb1ede966cb1b9fa6db2",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0064_00/scene_instances.json": "3d8554546378a9bf93e9deec16c492ae18df4b78865e30ff0c847628a72f47c5",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0064_00/objects_top5.json": "2bc6037ea24be552abbbb514561564ccb0f8fe81d700cb56c2b6f28a40735e2a"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0064_00/objects_top5.json",
+        "source_sha256": "2bc6037ea24be552abbbb514561564ccb0f8fe81d700cb56c2b6f28a40735e2a"
+      },
+      "category_objects": 54
+    },
+    "scene0077_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0077_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0077_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0077_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0077_00/scene.npz": "23b4be9337f6ba7c7dd350d6cf484f04c4b2d28c93a8c8c684f8bc5bc3c112a4",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0077_00/scene_instances.json": "2222d370e4082a5241fdb9b3480e96c92280a2a5499486de7daffcffd51a6d7e",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0077_00/objects_top5.json": "fd5d0e110ae5e12ade4fe6dbe4775510e45d5fb6359b7fe8c792d0596cff7841"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0077_00/objects_top5.json",
+        "source_sha256": "fd5d0e110ae5e12ade4fe6dbe4775510e45d5fb6359b7fe8c792d0596cff7841"
+      },
+      "category_objects": 16
+    },
+    "scene0081_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0081_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0081_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0081_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0081_00/scene.npz": "6359f5c1a576fa147cac2b4867ed98576997824fad2a62784b9c377488e875ba",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0081_00/scene_instances.json": "02ee2bdd1504062e8d40c0db20294b70e8e01f160a0218917f21ec19ba1fedff",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0081_00/objects_top5.json": "1b6b56c5202f08385a9fd59ae885535e0167f39427723eca8a5ded9e1a0afb92"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0081_00/objects_top5.json",
+        "source_sha256": "1b6b56c5202f08385a9fd59ae885535e0167f39427723eca8a5ded9e1a0afb92"
+      },
+      "category_objects": 8
+    },
+    "scene0084_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0084_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0084_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0084_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0084_00/scene.npz": "af9e56389ac2ab1af516ff628e953f0abb32e592ea7b06015cbe16ec3468e9f5",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0084_00/scene_instances.json": "97dd61ab8bdae35c8a90671a6e08db6d09c56112fda7d23acd2621e44a64f5f1",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0084_00/objects_top5.json": "a218449ce33a3c4adf429eafd5722881488dc33973e94fd66f8bcb251ea84863"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0084_00/objects_top5.json",
+        "source_sha256": "a218449ce33a3c4adf429eafd5722881488dc33973e94fd66f8bcb251ea84863"
+      },
+      "category_objects": 37
+    },
+    "scene0086_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0086_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0086_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0086_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0086_00/scene.npz": "bf40c962d022b51a28cd5b7e604598f6472dd6113bfcb47904193112ecac24fe",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0086_00/scene_instances.json": "4a6fcfaa7a5b2f13b740f290b83e04ab6cf3d2a95146af0e289e693acdb1cd48",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0086_00/objects_top5.json": "4d6ee7d3d18577fa33149f2ec45dfd69894eb1b411baee09cc9c81503902377c"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0086_00/objects_top5.json",
+        "source_sha256": "4d6ee7d3d18577fa33149f2ec45dfd69894eb1b411baee09cc9c81503902377c"
+      },
+      "category_objects": 26
+    },
+    "scene0095_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0095_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0095_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0095_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0095_00/scene.npz": "27087c408a08d357729ff0cc05182ae9165101caa7e6eb1c61bdfd283dd5dab5",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0095_00/scene_instances.json": "7c6484463106c301b8dbf49b8bd64dc4f2f3a2ca264a0eaf18aab3ef91707bd9",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0095_00/objects_top5.json": "0e4c914b56ed1d0e37382226f087f4ac3b801314ad1a328c8a8aafebfa34c291"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0095_00/objects_top5.json",
+        "source_sha256": "0e4c914b56ed1d0e37382226f087f4ac3b801314ad1a328c8a8aafebfa34c291"
+      },
+      "category_objects": 45
+    },
+    "scene0100_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0100_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0100_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0100_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0100_00/scene.npz": "07ede59bbaa9f8fbdac0d5a4f3c975421f75d858ae8e26768ee07abbf33ebe99",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0100_00/scene_instances.json": "07e6de2af9ebc6875d9ea208c4cfa222f22ab6cad2132295c3b888cde05c5d3b",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0100_00/objects_top5.json": "6ae5a1378db04008f8c5903973efa5a39b14a1e0078e5e4c0f87e7d44fa1e164"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0100_00/objects_top5.json",
+        "source_sha256": "6ae5a1378db04008f8c5903973efa5a39b14a1e0078e5e4c0f87e7d44fa1e164"
+      },
+      "category_objects": 25
+    },
+    "scene0131_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0131_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0131_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0131_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0131_00/scene.npz": "9f8b1e754ddab2d00b02b3bac59e57bc037d36ef08c279737229359e6333fbbc",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0131_00/scene_instances.json": "0df394da34084b44b8d840ab1854cb583fa2c745be338ebd2e5c8513571a530c",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0131_00/objects_top5.json": "9927239978cb10b3e29644c639c6a39a0834da0c56fe7b053defadeb730a8719"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0131_00/objects_top5.json",
+        "source_sha256": "9927239978cb10b3e29644c639c6a39a0834da0c56fe7b053defadeb730a8719"
+      },
+      "category_objects": 37
+    },
+    "scene0139_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0139_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0139_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0139_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0139_00/scene.npz": "243732a22ffe70bf7db17656878fb68f7b529409651f80b071aeaf6251e9c631",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0139_00/scene_instances.json": "3a56856ac9222d2fc716cda0fad11302df23b40567f0d4fb1635a262e343b7d0",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0139_00/objects_top5.json": "abd96693626c6c20b916f1ebfe91cee7444115168432248a4702da01c3d6e80d"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0139_00/objects_top5.json",
+        "source_sha256": "abd96693626c6c20b916f1ebfe91cee7444115168432248a4702da01c3d6e80d"
+      },
+      "category_objects": 21
+    },
+    "scene0144_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0144_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0144_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0144_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0144_00/scene.npz": "bb4136aa6641f2ad7ba66bd1db9723459df7f121136c2f477cea81bd6faed785",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0144_00/scene_instances.json": "cb415de5852ba59c4098eb5cfc7caa37321fb37a887214aeb78070751e3d8426",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0144_00/objects_top5.json": "42b5c551410ff9637e66ecabc5d7fcdea649ccfb55f44ce1dcc49f69ac0209e9"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0144_00/objects_top5.json",
+        "source_sha256": "42b5c551410ff9637e66ecabc5d7fcdea649ccfb55f44ce1dcc49f69ac0209e9"
+      },
+      "category_objects": 26
+    },
+    "scene0146_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0146_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0146_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0146_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0146_00/scene.npz": "45142cf5a7c4024f3f298b7b7885d74cbdf3e1382ad2bfff0bbe12d8c64e38f3",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0146_00/scene_instances.json": "05a309d579ac50f8876abe2dfe35a0fd61d860b60373b932f85554e2b958b715",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0146_00/objects_top5.json": "54e4a30f68f4d509e7c956cc7bdab0e047681e3c2df07d8733bddab7548891bd"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0146_00/objects_top5.json",
+        "source_sha256": "54e4a30f68f4d509e7c956cc7bdab0e047681e3c2df07d8733bddab7548891bd"
+      },
+      "category_objects": 12
+    },
+    "scene0149_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0149_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0149_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0149_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0149_00/scene.npz": "82f2e0f5ec7f95f505cc6799d009e47ada24c59578af1800b0eb11df2cd06601",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0149_00/scene_instances.json": "c83c9cfdac4ce438c0c2b8efd6ca6f43fe7c39c7ba600d9d47834a93350f829b",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0149_00/objects_top5.json": "27c41249fe9b42b60dd4fa729f04dcc4144827acf03ce728f25dfadf6a5d660e"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0149_00/objects_top5.json",
+        "source_sha256": "27c41249fe9b42b60dd4fa729f04dcc4144827acf03ce728f25dfadf6a5d660e"
+      },
+      "category_objects": 23
+    },
+    "scene0153_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0153_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0153_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0153_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0153_00/scene.npz": "d9fa3ec1abd984a2fb2504bdb7ad89183dd0fbfd2765aa1577f6c4e3af551943",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0153_00/scene_instances.json": "de8556601cbd2410df3d774835a525ba831d4c7c91e80a5fe7b41e3f388f029f",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0153_00/objects_top5.json": "e8c9c2384768e7a6bc9cb20c2cdb49a56e7eb0785231333bcb9300f4a5c2a3a4"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0153_00/objects_top5.json",
+        "source_sha256": "e8c9c2384768e7a6bc9cb20c2cdb49a56e7eb0785231333bcb9300f4a5c2a3a4"
+      },
+      "category_objects": 19
+    },
+    "scene0164_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0164_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0164_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0164_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0164_00/scene.npz": "680d6673d2f0d6e7d1eed01a005c916b7dd5086f76e821fd9d6b5570cd867a7b",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0164_00/scene_instances.json": "98b7f6edea164d9971e32bbf5ff62ff3fb98247777e2c3a0751dd4f5e918d42e",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0164_00/objects_top5.json": "9a8dbcd1f551bcd76b3b1773dce3561d563cb2784f8f0000c1660377153bfa3c"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0164_00/objects_top5.json",
+        "source_sha256": "9a8dbcd1f551bcd76b3b1773dce3561d563cb2784f8f0000c1660377153bfa3c"
+      },
+      "category_objects": 44
+    },
+    "scene0169_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0169_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0169_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0169_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0169_00/scene.npz": "8eedebba94b9695e78001e87eb64fdeec466ca2ffc5ca7a2fa06a7bbb9bcb1d6",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0169_00/scene_instances.json": "e8bc4e9413041627627c18aa4eebf748d03c695a3edb9857803d6217cba963e3",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0169_00/objects_top5.json": "b3d74dfcea3502dd3ea055864062692ac0a679dc023d8ac23743e78c457a8e6a"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0169_00/objects_top5.json",
+        "source_sha256": "b3d74dfcea3502dd3ea055864062692ac0a679dc023d8ac23743e78c457a8e6a"
+      },
+      "category_objects": 35
+    },
+    "scene0187_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0187_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0187_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0187_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0187_00/scene.npz": "1710333738cd11fa3cf9b73e471e0ceea38daba2b4830e1faf134514f66a851a",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0187_00/scene_instances.json": "74241636928587c237672699a8914b6f1f44c6158d6ac14be4fe7a0840ddd511",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0187_00/objects_top5.json": "54c433029413937071747f65f8e226143310f12ad3d90714f2c29d525c66dd82"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0187_00/objects_top5.json",
+        "source_sha256": "54c433029413937071747f65f8e226143310f12ad3d90714f2c29d525c66dd82"
+      },
+      "category_objects": 13
+    },
+    "scene0193_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0193_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0193_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0193_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0193_00/scene.npz": "0bf02d496050bfcc540c83a5d04596f5be8a08d99d1be05dace49460fe654539",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0193_00/scene_instances.json": "2b67081b9b53352d36ae886e29cf296c7dafb26fb9c17dadcaae012afece52bf",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0193_00/objects_top5.json": "8d30bd6b3cadf28ebb32d0c331473a057341cd4941bfd145abc328f98748e7ec"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0193_00/objects_top5.json",
+        "source_sha256": "8d30bd6b3cadf28ebb32d0c331473a057341cd4941bfd145abc328f98748e7ec"
+      },
+      "category_objects": 7
+    },
+    "scene0196_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0196_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0196_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0196_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0196_00/scene.npz": "03b7158390e53f8bf8837e6357f0d2dbe55dccd003dae81b5c67f41b82e94506",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0196_00/scene_instances.json": "07290fe5240074b462e099adf0534beaca26f089239a8ce8fa1773602e171fd6",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0196_00/objects_top5.json": "976c222e55e1ef79e320e779bf809b0fa77fd3e5c62bfca46b9a06fad144c289"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0196_00/objects_top5.json",
+        "source_sha256": "976c222e55e1ef79e320e779bf809b0fa77fd3e5c62bfca46b9a06fad144c289"
+      },
+      "category_objects": 31
+    },
+    "scene0203_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0203_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0203_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0203_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0203_00/scene.npz": "f4941fbb4f3b060e83c7c19b00070bb2fbc85f4de0eefc62dbbde5b68219a52f",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0203_00/scene_instances.json": "c3760c43c0872d8bb2a75fb707bf8b3308852ffce4061eb2116592d223820233",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0203_00/objects_top5.json": "e7002ba0e38642bbe21aed51788b56f3bbd6ab6b14d7f163d3a51caa6b2a4487"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0203_00/objects_top5.json",
+        "source_sha256": "e7002ba0e38642bbe21aed51788b56f3bbd6ab6b14d7f163d3a51caa6b2a4487"
+      },
+      "category_objects": 39
+    },
+    "scene0207_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0207_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0207_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0207_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0207_00/scene.npz": "b4d817d8db759b95851266fe6c337fb0c92b766fc820687c417aef0c146fc849",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0207_00/scene_instances.json": "35fcdd16b4b988e5bcd20b3957d34dbab21cccfbbe8e9f848bb0f5150acb30bc",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0207_00/objects_top5.json": "72720444a6678f006703565ffbaa70d17df2645b5c3b31ba17ef2fd555bf2803"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0207_00/objects_top5.json",
+        "source_sha256": "72720444a6678f006703565ffbaa70d17df2645b5c3b31ba17ef2fd555bf2803"
+      },
+      "category_objects": 59
+    },
+    "scene0208_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0208_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0208_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0208_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0208_00/scene.npz": "818874696e7a4ea14743f88818e9678b04c49105b9059c7d9a5f267d3c479a7c",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0208_00/scene_instances.json": "b6fc927df57ed87ebb4e64eeb268f634a9449b18d3c4a92cf9db8f7863adaee6",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0208_00/objects_top5.json": "e33b0479396973e53d467c8e8ced4a4056610ff84ad573730e808f1156a40110"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0208_00/objects_top5.json",
+        "source_sha256": "e33b0479396973e53d467c8e8ced4a4056610ff84ad573730e808f1156a40110"
+      },
+      "category_objects": 102
+    },
+    "scene0221_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0221_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0221_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0221_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0221_00/scene.npz": "2d7f666d1951acc24ba3018bf5c37b235cfb64e73c8efb355defc700d99a38d2",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0221_00/scene_instances.json": "64ecc69402a4d7ed5979e6fa16f3be9a1eea8915417010abc70aa04dd6ba78e2",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0221_00/objects_top5.json": "50d7b0f58f5fba3afafe21c8009f6b3e7f32339e29a0a34482ce223c8fd1c9ed"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0221_00/objects_top5.json",
+        "source_sha256": "50d7b0f58f5fba3afafe21c8009f6b3e7f32339e29a0a34482ce223c8fd1c9ed"
+      },
+      "category_objects": 42
+    },
+    "scene0222_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0222_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0222_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0222_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0222_00/scene.npz": "c32477c029d4c4f0a9c4b85dd7d3296e63d8cd64670aeed28cc53c3c8afbc425",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0222_00/scene_instances.json": "a4b7f6c2321e419f554ded421102efb6a60834879ed7ecb5b53aa1ab9471ce31",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0222_00/objects_top5.json": "2c2a92ffe86b9ef059d54164ed29d95ab5941d591edc06a94a9fc90ec0c83895"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0222_00/objects_top5.json",
+        "source_sha256": "2c2a92ffe86b9ef059d54164ed29d95ab5941d591edc06a94a9fc90ec0c83895"
+      },
+      "category_objects": 35
+    },
+    "scene0231_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0231_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0231_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0231_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0231_00/scene.npz": "41e516d45e50ec5f2b93aef6b2d82e3ff6d6b1cd7b3e827789d7d0f9a4929704",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0231_00/scene_instances.json": "04f3b6fbe86dd483c39b3d286750db1f2aeedeca527a8a151a9f1f523fd40a86",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0231_00/objects_top5.json": "4529d29aa25d42ad8d52ad01b39b62a3ab48efdcd3455a01547bfc77c7769d78"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0231_00/objects_top5.json",
+        "source_sha256": "4529d29aa25d42ad8d52ad01b39b62a3ab48efdcd3455a01547bfc77c7769d78"
+      },
+      "category_objects": 70
+    },
+    "scene0246_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0246_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0246_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0246_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0246_00/scene.npz": "8fb4f4504e2bb9a8cfacc8bbfe497017207e7ac47c48c281bd12a8f891497f47",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0246_00/scene_instances.json": "cca8fb3c6d3bd85904e67da716721824a770ee64c4ad2c631511bc43503b719b",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0246_00/objects_top5.json": "ffa8e05307d23bfa53ec486f4e8e63e175104e14ca74f82051b015ba606e0ad7"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0246_00/objects_top5.json",
+        "source_sha256": "ffa8e05307d23bfa53ec486f4e8e63e175104e14ca74f82051b015ba606e0ad7"
+      },
+      "category_objects": 33
+    },
+    "scene0249_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0249_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0249_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0249_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0249_00/scene.npz": "baec762113decdbcdf80c40661a09ce92af7972ede025f9a0b9dabaa46bf8476",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0249_00/scene_instances.json": "2bcf95ef5ecb435a04872297f832ded6f7ace00eaeadc88c3b6f3ab989c1319d",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0249_00/objects_top5.json": "08767657756c1567704340e6d83041b5ba45e9a817df816b994e807bb4b274be"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0249_00/objects_top5.json",
+        "source_sha256": "08767657756c1567704340e6d83041b5ba45e9a817df816b994e807bb4b274be"
+      },
+      "category_objects": 46
+    },
+    "scene0251_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0251_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0251_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0251_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0251_00/scene.npz": "4161e48af00b116ecdda052f35ba4a5d2874fdda53e03b5989737a464e59b720",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0251_00/scene_instances.json": "689fa3a65036b9cd2f98b82951bf267dbd56cc97467e737e51db790ec299d18c",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0251_00/objects_top5.json": "cfb02c766b5a0f33edc7f5886d618e785d323b7686e3d43d4544bde04e26d4a5"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0251_00/objects_top5.json",
+        "source_sha256": "cfb02c766b5a0f33edc7f5886d618e785d323b7686e3d43d4544bde04e26d4a5"
+      },
+      "category_objects": 17
+    },
+    "scene0256_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0256_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0256_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0256_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0256_00/scene.npz": "a0355820b097ee844f5ac065af4d815576e1aa8fed20d2f10dfa4a36651d212a",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0256_00/scene_instances.json": "1a2ab2b8633aada58ee595d78f4a17be10b409a8efedb915a067477004ab0ecb",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0256_00/objects_top5.json": "c96efa6ce235b7a36d4fc1f8d22a2459f7b9ef0e8b279331d3f5a5ec844bd487"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0256_00/objects_top5.json",
+        "source_sha256": "c96efa6ce235b7a36d4fc1f8d22a2459f7b9ef0e8b279331d3f5a5ec844bd487"
+      },
+      "category_objects": 11
+    },
+    "scene0257_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0257_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0257_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0257_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0257_00/scene.npz": "21f89ee7e342e1d404e8d4eda73ed129cd09c6c004d42b7213b2f9b1fd1296f6",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0257_00/scene_instances.json": "f0bc10e64264d665842bfe208821df94e3d69f8b0fa8d825f5c76fc431c5baa8",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0257_00/objects_top5.json": "356434bf52f78524fee02bc5676ab9e4fdc4274cc1648c40dc36914420afd6a5"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0257_00/objects_top5.json",
+        "source_sha256": "356434bf52f78524fee02bc5676ab9e4fdc4274cc1648c40dc36914420afd6a5"
+      },
+      "category_objects": 30
+    },
+    "scene0278_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0278_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0278_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0278_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0278_00/scene.npz": "76e4fb034ec67740cffd27348f323da0a143a7fa554f1ed6ced5ea3a543ef0a6",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0278_00/scene_instances.json": "2a62d66edf8588e580bf1af38e78e0ecf1b187f4a2b754daedb4233a2805c1ef",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0278_00/objects_top5.json": "8419b9a885a29577e285aa8b3e7d9669315022fbf1b2f014fe798765403aa060"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0278_00/objects_top5.json",
+        "source_sha256": "8419b9a885a29577e285aa8b3e7d9669315022fbf1b2f014fe798765403aa060"
+      },
+      "category_objects": 14
+    },
+    "scene0300_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0300_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0300_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0300_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0300_00/scene.npz": "1d55578655fee250b1324e019f7d44ba64ac04485d4f737befb6ee9478eecbd9",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0300_00/scene_instances.json": "ab60546b8db56bbd6930fc85564fda8e99bfc72d8d66d451000a9c5125c4c4e6",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0300_00/objects_top5.json": "3358cc7f1db76bf2af6110c2b3b0d19277116d5d3502a8c6f93c60e3ed903834"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0300_00/objects_top5.json",
+        "source_sha256": "3358cc7f1db76bf2af6110c2b3b0d19277116d5d3502a8c6f93c60e3ed903834"
+      },
+      "category_objects": 15
+    },
+    "scene0307_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0307_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0307_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0307_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0307_00/scene.npz": "0e368c752eefaf450aa32edee882a519d8a24a5481e747b9913370f2f20c0f46",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0307_00/scene_instances.json": "9517f55c3a6f79b1d010c795305b04951305a89f06bcd630655df3017ba419d9",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0307_00/objects_top5.json": "5414f0f916f362e1d6643d69c1e2a7a62e822e2e09f78b7dcf258ded87e174c5"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0307_00/objects_top5.json",
+        "source_sha256": "5414f0f916f362e1d6643d69c1e2a7a62e822e2e09f78b7dcf258ded87e174c5"
+      },
+      "category_objects": 28
+    },
+    "scene0314_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0314_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0314_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0314_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0314_00/scene.npz": "73e35867c6d142b4646c45751b87494739fe844305ef9b15db57439f660bd19a",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0314_00/scene_instances.json": "1f6bff68cc419a6b31184107d07df1345e3351085cb57f0468867145b4a8385d",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0314_00/objects_top5.json": "a5d21c388c4ab828394d5e26611cdabcbf752677d30605c25ba592569281476c"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0314_00/objects_top5.json",
+        "source_sha256": "a5d21c388c4ab828394d5e26611cdabcbf752677d30605c25ba592569281476c"
+      },
+      "category_objects": 12
+    },
+    "scene0328_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0328_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0328_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0328_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0328_00/scene.npz": "8e70c6cbc7553649e06bd867988458922eac221812dedccf3f5e07f4f4591c51",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0328_00/scene_instances.json": "3f4fb957f47905807ea8c265eb469fb58b0e00a4796c70ad679a577b0a71c140",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0328_00/objects_top5.json": "5728c296dc4e5d8cd429c6c1c9f969ed1390801784fe823d2b6ddd0cc11d9e67"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0328_00/objects_top5.json",
+        "source_sha256": "5728c296dc4e5d8cd429c6c1c9f969ed1390801784fe823d2b6ddd0cc11d9e67"
+      },
+      "category_objects": 25
+    },
+    "scene0329_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0329_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0329_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0329_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0329_00/scene.npz": "e7b50ab62193342d4af853d3ce4296eb584945367b5b28633eceeeb9da053eb8",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0329_00/scene_instances.json": "4c76110d9961b389340dbc75cf8fba4e2cbbd6353de1e1015e923e7b9232ab87",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0329_00/objects_top5.json": "d115b8f198b296358dbc97c80848e1e6078aa7e0f8d87c9112844a5524d88432"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0329_00/objects_top5.json",
+        "source_sha256": "d115b8f198b296358dbc97c80848e1e6078aa7e0f8d87c9112844a5524d88432"
+      },
+      "category_objects": 39
+    },
+    "scene0334_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0334_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0334_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0334_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0334_00/scene.npz": "18549d57a85129c45eea83edfb01fefd4e25d601caa805cb9fb8bec33c6d61e0",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0334_00/scene_instances.json": "38a6c199a89e8359cea0032e3d27b291d34c730e6d5c9381ec922e373bf1bc91",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0334_00/objects_top5.json": "b3978a7f75a33f6a1e3498a52fb5184297ff4b1172d2fbf893919b119d606b47"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0334_00/objects_top5.json",
+        "source_sha256": "b3978a7f75a33f6a1e3498a52fb5184297ff4b1172d2fbf893919b119d606b47"
+      },
+      "category_objects": 7
+    },
+    "scene0338_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0338_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0338_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0338_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0338_00/scene.npz": "a3d1fe9ff675e7ffce83811a5c110e1e54b200efa1615daa9715084bde169e10",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0338_00/scene_instances.json": "5d4eb4743256b8faee2a456277bae7f26cc43bc73d67b5e95ac598dadd04e727",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0338_00/objects_top5.json": "203f152ee5d58c38d9732681ee3da91ba1e5bb527ce51c48d0ffc1d05173164b"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0338_00/objects_top5.json",
+        "source_sha256": "203f152ee5d58c38d9732681ee3da91ba1e5bb527ce51c48d0ffc1d05173164b"
+      },
+      "category_objects": 15
+    },
+    "scene0343_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0343_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0343_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0343_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0343_00/scene.npz": "63cccc099acfc62246e8c9624870e491f90b20f73e4b79e57fa54348e22f6a05",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0343_00/scene_instances.json": "888d839a483fe9b1143b77531b1f901fa6edc329a35e1923bc24184136c218c8",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0343_00/objects_top5.json": "c873a214b4d9fe5f619d209c551489359611d264bbf1de2d720f11beb638d291"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0343_00/objects_top5.json",
+        "source_sha256": "c873a214b4d9fe5f619d209c551489359611d264bbf1de2d720f11beb638d291"
+      },
+      "category_objects": 15
+    },
+    "scene0351_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0351_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0351_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0351_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0351_00/scene.npz": "f840dec0ea5f558ed45f1f4f971952e1dc38f0045bbdfab7db53da4748cf5958",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0351_00/scene_instances.json": "8d08f472b18e5a97c67af8ba274439b1c9b8a75e01a7eede49dd3dc3cdd8da8a",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0351_00/objects_top5.json": "c1e0e039b1a99a04fae339d5cf17d68f39ab24eee3920ae4240c08f90535e5d2"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0351_00/objects_top5.json",
+        "source_sha256": "c1e0e039b1a99a04fae339d5cf17d68f39ab24eee3920ae4240c08f90535e5d2"
+      },
+      "category_objects": 20
+    },
+    "scene0353_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0353_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0353_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0353_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0353_00/scene.npz": "e47a7b2633b6a78776c68fbd8fa3c5931120b55709ba8cbb2f1252ab076fd2c4",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0353_00/scene_instances.json": "5cb14db16afe04272520e40d96364eb46d89f33010794d53651ba5df9d037db7",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0353_00/objects_top5.json": "c59694eeb817316e46d11e7319acd6d975bf8e3741ef6f8de7d14db29d5975ab"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0353_00/objects_top5.json",
+        "source_sha256": "c59694eeb817316e46d11e7319acd6d975bf8e3741ef6f8de7d14db29d5975ab"
+      },
+      "category_objects": 48
+    },
+    "scene0355_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0355_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0355_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0355_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0355_00/scene.npz": "8b4e7a65de53d13f789a08dc607524ade225c2fe6ede412cd6c1526dcfdbf57c",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0355_00/scene_instances.json": "e521e647bedb73eebf2cc79ed08e99f37cc6c6acfa78b8a88a9f60182d2217a2",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0355_00/objects_top5.json": "1a375cbbbfb9c4193b71a17f250985aea7b00673cd94383456f76939e261cbd6"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0355_00/objects_top5.json",
+        "source_sha256": "1a375cbbbfb9c4193b71a17f250985aea7b00673cd94383456f76939e261cbd6"
+      },
+      "category_objects": 14
+    },
+    "scene0356_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0356_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0356_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0356_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0356_00/scene.npz": "5207c7133cc30677cb260b280c5a677436e469c576cd35393b1258e5289474b4",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0356_00/scene_instances.json": "181984154dfbf44b551790af0b229b22c05b3dacaa1fd397d3a6ffd50bf2517d",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0356_00/objects_top5.json": "4d9498d69c290fa75428fb301ed8d4a933795eb82a6ac8e14c5cbe201600c536"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0356_00/objects_top5.json",
+        "source_sha256": "4d9498d69c290fa75428fb301ed8d4a933795eb82a6ac8e14c5cbe201600c536"
+      },
+      "category_objects": 16
+    },
+    "scene0357_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0357_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0357_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0357_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0357_00/scene.npz": "6a4329a60886fbecc8d8eeb84c7c89381e7f3ac4e34efa882e99ecc3246ebc75",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0357_00/scene_instances.json": "354eee7d4bbd1fd1110d5ad34e33cb78e01baf94791e289111d1f6901f578c78",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0357_00/objects_top5.json": "14af3c956f5f57daff9034c1bd5c21ebca275a786bc093b5e84a11f7baca346d"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0357_00/objects_top5.json",
+        "source_sha256": "14af3c956f5f57daff9034c1bd5c21ebca275a786bc093b5e84a11f7baca346d"
+      },
+      "category_objects": 24
+    },
+    "scene0377_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0377_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0377_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0377_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0377_00/scene.npz": "056548d91e0dba473c4886a42bf9431f8b31b295d603511ae0842ad90f0a98b0",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0377_00/scene_instances.json": "fa598a31ad19998e33b5f483aded930069f3821c78cd99b7e032d9cb119807fb",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0377_00/objects_top5.json": "e0fbd20e2c21ceda2b27b30b4e5249bafdd7b6f5883e758694fd07edbc1389a3"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0377_00/objects_top5.json",
+        "source_sha256": "e0fbd20e2c21ceda2b27b30b4e5249bafdd7b6f5883e758694fd07edbc1389a3"
+      },
+      "category_objects": 16
+    },
+    "scene0378_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0378_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0378_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0378_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0378_00/scene.npz": "88582f1cfc00ab501675735f2cb243f6739fde028f75224ea89d8a2beb98d6f8",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0378_00/scene_instances.json": "b33f251b7e388060e29976b503bb8cf4e5a6081905a310a9f50407609d1a8f73",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0378_00/objects_top5.json": "e868dd7644528410c73326874c1b079a352c12f433c4ab76881eac393cf41f76"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0378_00/objects_top5.json",
+        "source_sha256": "e868dd7644528410c73326874c1b079a352c12f433c4ab76881eac393cf41f76"
+      },
+      "category_objects": 38
+    },
+    "scene0389_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0389_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0389_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0389_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0389_00/scene.npz": "c4a38cab73671196eda208ff95c6237d3f5e2975fa05b09efa44d46569d063ff",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0389_00/scene_instances.json": "1ed35169022bdb3dc92c56f339c0838f43d09056a172fc355d7d5e27974d7bb1",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0389_00/objects_top5.json": "ca53506a991c4e67d81b628353fc8ab5f02400ca9bbb0f780a1ba2e3409f674d"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0389_00/objects_top5.json",
+        "source_sha256": "ca53506a991c4e67d81b628353fc8ab5f02400ca9bbb0f780a1ba2e3409f674d"
+      },
+      "category_objects": 22
+    },
+    "scene0412_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0412_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0412_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0412_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0412_00/scene.npz": "7e4073884f6c5f9fa728c69a7339e5a89f97f2b46dcbbc290bbd13aaf6b68d29",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0412_00/scene_instances.json": "87d423d8f34981be9d79cd49f555615ea702a8263a70f8df966353b4cdbb6f26",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0412_00/objects_top5.json": "2debf44c180bbf80e209c8b0a231ebf7635b4b26359db1bf40b6d87b704781c1"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0412_00/objects_top5.json",
+        "source_sha256": "2debf44c180bbf80e209c8b0a231ebf7635b4b26359db1bf40b6d87b704781c1"
+      },
+      "category_objects": 22
+    },
+    "scene0423_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0423_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0423_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0423_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0423_00/scene.npz": "101cd4e3370eacbe3f286cbef2338a2fa04af4f4ba87d822283bae27c0f9463d",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0423_00/scene_instances.json": "0f285ab852145064d5392143af52abe516e030605c085636fb20903a886352f8",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0423_00/objects_top5.json": "79dc94f87cdeb4ebe460e2512b24c307c817d64f1b92943e244df57276bccfb9"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0423_00/objects_top5.json",
+        "source_sha256": "79dc94f87cdeb4ebe460e2512b24c307c817d64f1b92943e244df57276bccfb9"
+      },
+      "category_objects": 5
+    },
+    "scene0426_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0426_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0426_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0426_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0426_00/scene.npz": "eb2cc33507ced75c4d36bb552b94af1ac13aff98c3ac46fda56bd17cea519e78",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0426_00/scene_instances.json": "fb66889999d36d89fb2a334cd789e261f59951e082fb77b2b2a9ccc6874eec0d",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0426_00/objects_top5.json": "362572f4445c000c4910faae459477155e5c8c9dbf5428b5a233febb97f8020c"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0426_00/objects_top5.json",
+        "source_sha256": "362572f4445c000c4910faae459477155e5c8c9dbf5428b5a233febb97f8020c"
+      },
+      "category_objects": 37
+    },
+    "scene0427_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0427_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0427_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0427_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0427_00/scene.npz": "757fdd24b49e70b463b0865a04f20ff1474b4a3d08409cab7e41b549554dbb2a",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0427_00/scene_instances.json": "c6908a2dfced7629c760c77cc4368e38631a406a4914a1d40a7276e4c1778516",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0427_00/objects_top5.json": "4fa0aedbea0b8df3b8704dee6de1544e17d97762dddcbecd11a032fabc7a382c"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0427_00/objects_top5.json",
+        "source_sha256": "4fa0aedbea0b8df3b8704dee6de1544e17d97762dddcbecd11a032fabc7a382c"
+      },
+      "category_objects": 9
+    },
+    "scene0430_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0430_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0430_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0430_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0430_00/scene.npz": "6a354272217f6eaea8962e935f211c17d6372337e4e4a584933d733bad377b80",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0430_00/scene_instances.json": "4055b9f6702f3c8104e4b8fa298db963e23853f9f87a83a79af548ec513e5e81",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0430_00/objects_top5.json": "40cd7dfe166e0fcda437d39e472b294f5de433d9fc6d80dc3756bb6de77d05ca"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0430_00/objects_top5.json",
+        "source_sha256": "40cd7dfe166e0fcda437d39e472b294f5de433d9fc6d80dc3756bb6de77d05ca"
+      },
+      "category_objects": 26
+    },
+    "scene0432_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0432_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0432_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0432_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0432_00/scene.npz": "fea905a2f0c77038db46a62745bd3d00b1c313d13a50fafe52b46b91fb3910e2",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0432_00/scene_instances.json": "dd04cb3d21b5dd8219f722aadbd863a557fbe9e99482a3c9f6cb7bdc2b244f4b",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0432_00/objects_top5.json": "d90a3590dc983c7fbf056387354abd9f4881bf64eddd7a0d6efa62e7ce665b23"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0432_00/objects_top5.json",
+        "source_sha256": "d90a3590dc983c7fbf056387354abd9f4881bf64eddd7a0d6efa62e7ce665b23"
+      },
+      "category_objects": 3
+    },
+    "scene0435_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0435_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0435_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0435_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0435_00/scene.npz": "46ed2c48942c34a141bcc0aa9418765f1e22344f77892c890c31377864958dca",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0435_00/scene_instances.json": "5fa92a67136a3fa018e2bb6acb9e95262073db84ef88f0fdb21ff06ec35d70f7",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0435_00/objects_top5.json": "a0d443d8dd7556d381e7f470ae937044334fcad7be4e6551d777b647927a2b8d"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0435_00/objects_top5.json",
+        "source_sha256": "a0d443d8dd7556d381e7f470ae937044334fcad7be4e6551d777b647927a2b8d"
+      },
+      "category_objects": 45
+    },
+    "scene0441_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0441_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0441_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0441_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0441_00/scene.npz": "5a2ddb86e023b2e7207678f0e336d2fa852b4a4747c016115984e3572f30dbd5",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0441_00/scene_instances.json": "4b83d3def9256c7c30b17c204adf0a53298743343e8a7468a2e747c9596db517",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0441_00/objects_top5.json": "c3dd1eeb8b042b76c244cb48e8bb6a530d991c693cda515b605c7d378d42bea8"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0441_00/objects_top5.json",
+        "source_sha256": "c3dd1eeb8b042b76c244cb48e8bb6a530d991c693cda515b605c7d378d42bea8"
+      },
+      "category_objects": 14
+    },
+    "scene0458_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0458_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0458_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0458_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0458_00/scene.npz": "1a308decda99b8952b2522ef66226fe5af473a86e1d4bd5891a9f26fd3812a6a",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0458_00/scene_instances.json": "f26275baa83eb1d9eb82fb5fed94f870219de5bd8878ce0b00a659c0f30e108d",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0458_00/objects_top5.json": "b568595029b1c0b811efea2c39eb6ad824f3fbe119f5501dcfff0a5e4c6d4f8d"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0458_00/objects_top5.json",
+        "source_sha256": "b568595029b1c0b811efea2c39eb6ad824f3fbe119f5501dcfff0a5e4c6d4f8d"
+      },
+      "category_objects": 28
+    },
+    "scene0461_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0461_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0461_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0461_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0461_00/scene.npz": "480a991e85e6c53fa95380ab5635a1ef6b6e579a7686d97a46b527c6d15cce9f",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0461_00/scene_instances.json": "391c0517a77117b6b29ad0dbcfefa614fbce8411b5cd0e62f971db12608ac14a",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0461_00/objects_top5.json": "e829ba7b5f370a003145082cc1390d92f8aa1898a0eae04470463e2b9f0419fd"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0461_00/objects_top5.json",
+        "source_sha256": "e829ba7b5f370a003145082cc1390d92f8aa1898a0eae04470463e2b9f0419fd"
+      },
+      "category_objects": 5
+    },
+    "scene0462_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0462_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0462_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0462_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0462_00/scene.npz": "79171e8e37194f80ed91fc251a1dfc4a57dc33bba81965994fef857f2bcdc92c",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0462_00/scene_instances.json": "01115bc79eb980430af19bda7a63f0ebe4a4559f0e31dba0edd016b5b88f1e12",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0462_00/objects_top5.json": "0dc7206e699e2bec0730ad6f3723aafb0fedf35791a19adab0198b78171ffc9f"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0462_00/objects_top5.json",
+        "source_sha256": "0dc7206e699e2bec0730ad6f3723aafb0fedf35791a19adab0198b78171ffc9f"
+      },
+      "category_objects": 17
+    },
+    "scene0474_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0474_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0474_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0474_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0474_00/scene.npz": "5cc71d4e3ed4ef74ecab07151461f94a6438b1482dbedd8a232789b11533963d",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0474_00/scene_instances.json": "af7b6a88fe253ca98fa0c98cee5cdcc87a3cad53c7f7da951511ff9887eff142",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0474_00/objects_top5.json": "3c361abc89462e8d4df60dece11685f51708fd679a1fbf77415724ae3efa1305"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0474_00/objects_top5.json",
+        "source_sha256": "3c361abc89462e8d4df60dece11685f51708fd679a1fbf77415724ae3efa1305"
+      },
+      "category_objects": 35
+    },
+    "scene0488_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0488_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0488_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0488_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0488_00/scene.npz": "f61441cbcd8c7b7ee0afb637e57625d5faab723e225dca07727f4d8ac1f80202",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0488_00/scene_instances.json": "b0c264b3a937c54e3c3089093a8ab33e35e4db500b2a9c04fea7996e24110bd5",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0488_00/objects_top5.json": "5a6ec40a93eeae377654155b1a4ee643cbecf45e0eba1211d9a9d66583f29848"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0488_00/objects_top5.json",
+        "source_sha256": "5a6ec40a93eeae377654155b1a4ee643cbecf45e0eba1211d9a9d66583f29848"
+      },
+      "category_objects": 17
+    },
+    "scene0490_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0490_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0490_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0490_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0490_00/scene.npz": "b6d878686fe5f3ba3ccdbe4ddd7e798075e1f0a8372883951e2f8893e45246ea",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0490_00/scene_instances.json": "428fab19969dfa3e96268798264256cd53e0a7fee39689e8d1da2470c671ea43",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0490_00/objects_top5.json": "19443c3520f55e9c7f4e594868fc4406983311e5f65e3f6a4c3734c42368559c"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0490_00/objects_top5.json",
+        "source_sha256": "19443c3520f55e9c7f4e594868fc4406983311e5f65e3f6a4c3734c42368559c"
+      },
+      "category_objects": 14
+    },
+    "scene0494_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0494_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0494_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0494_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0494_00/scene.npz": "c54a1ba13fa5dfab3dabd33bff50300f25d8b19abbd38e52ecb8eb5f3def69a0",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0494_00/scene_instances.json": "5d9528683c204827ad738b6e7ee5c71814e005c130d27319dda9180be337e1f8",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0494_00/objects_top5.json": "1b736edf27110f05f9df08546b7dd31e011b4bcfa75bd28e304084ff00d1e1d0"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0494_00/objects_top5.json",
+        "source_sha256": "1b736edf27110f05f9df08546b7dd31e011b4bcfa75bd28e304084ff00d1e1d0"
+      },
+      "category_objects": 9
+    },
+    "scene0496_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0496_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0496_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0496_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0496_00/scene.npz": "3cab8357a7363e96d33b8dff38366346754f3b3b27ca2a9976074b7f9a69b711",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0496_00/scene_instances.json": "c14d24c3d38b4a12d8b6d2f748844585dc8fbe08e8b425459e56a8e9650aa4e2",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0496_00/objects_top5.json": "524a030142b9079ead9726a1912206276f35e3138d57af83991f86384d568fb4"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0496_00/objects_top5.json",
+        "source_sha256": "524a030142b9079ead9726a1912206276f35e3138d57af83991f86384d568fb4"
+      },
+      "category_objects": 26
+    },
+    "scene0500_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0500_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0500_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0500_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0500_00/scene.npz": "bc10bb9d43f6b0b89de9a1470d22a6f3ba220886967196c8de2bdc1aacd3b305",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0500_00/scene_instances.json": "57c77f6f584bd0d7b5b8dbe2d07d406a1ba47712e2e8c090dc7ddd0480764e5e",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0500_00/objects_top5.json": "c59377f2663fff937f2f48ea65f1e2a2f48e7fd347a192fa8925ac4c223158fe"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0500_00/objects_top5.json",
+        "source_sha256": "c59377f2663fff937f2f48ea65f1e2a2f48e7fd347a192fa8925ac4c223158fe"
+      },
+      "category_objects": 49
+    },
+    "scene0518_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0518_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0518_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0518_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0518_00/scene.npz": "5d1c189cd5fc9035fc64e02755d116a95cbf315414c5cb33e018e668f4066f04",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0518_00/scene_instances.json": "d281720d1bbf27875975bdc7df98fc9f6c6ff58234f1ec380ac199e2baa84649",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0518_00/objects_top5.json": "3ba3ec8bc5b0d86ca8c96ab6aec6f003bf5458008ffdb4e149a7d984dc4a61f1"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0518_00/objects_top5.json",
+        "source_sha256": "3ba3ec8bc5b0d86ca8c96ab6aec6f003bf5458008ffdb4e149a7d984dc4a61f1"
+      },
+      "category_objects": 18
+    },
+    "scene0527_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0527_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0527_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0527_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0527_00/scene.npz": "37d85f2a3b9d5a0e648a72552aaf9e1c882b9614d4db507514b91a987d2790bd",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0527_00/scene_instances.json": "cb4084bce7066dcfee676a6fbbb00f6d1aa7414f100cae20328e4b9fb8352867",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0527_00/objects_top5.json": "045098be12fe0b8572e1f450b4f13ffb86b1e449dff3904b441b92bbceaa82da"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0527_00/objects_top5.json",
+        "source_sha256": "045098be12fe0b8572e1f450b4f13ffb86b1e449dff3904b441b92bbceaa82da"
+      },
+      "category_objects": 24
+    },
+    "scene0535_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0535_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0535_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0535_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0535_00/scene.npz": "b073fee4d09eaffb7a31b68e5ca7b08b52f5d3f32ca5497b8bcd10631a148d22",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0535_00/scene_instances.json": "d2b3d4f507befc6b0c7da87c2f9538d25a10da7fe2140d433eebbda0ef56280f",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0535_00/objects_top5.json": "cbe0974fdea8c1ab910b6014fbee679c0032789d70804a1f2610073b896c794a"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0535_00/objects_top5.json",
+        "source_sha256": "cbe0974fdea8c1ab910b6014fbee679c0032789d70804a1f2610073b896c794a"
+      },
+      "category_objects": 20
+    },
+    "scene0549_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0549_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0549_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0549_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0549_00/scene.npz": "6d3ef3b17c7e45a345ac5c861f6857247e4119e0e324d76220c2e93d37193e71",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0549_00/scene_instances.json": "00c4b01025948513c533142f7c3e9a5be25ede0ec9c28e98c15bf510fb454dde",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0549_00/objects_top5.json": "24f3a15d3016ea0633df6173baccd930682acd8ef52f0e6fa79e4e4996eb161c"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0549_00/objects_top5.json",
+        "source_sha256": "24f3a15d3016ea0633df6173baccd930682acd8ef52f0e6fa79e4e4996eb161c"
+      },
+      "category_objects": 21
+    },
+    "scene0550_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0550_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0550_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0550_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0550_00/scene.npz": "9521ca0e52c305e58caa736ee6e77af56ce2dacc51bc6ed62863b9358d5136d0",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0550_00/scene_instances.json": "85fcf495c838fa716d15b029920459877d202e1beea85b53a747e2cc08e5f82a",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0550_00/objects_top5.json": "37016092b3f74c21a053bcf8a610e45551d0f60b160dc953d526e483bd9a012b"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0550_00/objects_top5.json",
+        "source_sha256": "37016092b3f74c21a053bcf8a610e45551d0f60b160dc953d526e483bd9a012b"
+      },
+      "category_objects": 21
+    },
+    "scene0552_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0552_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0552_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0552_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0552_00/scene.npz": "7303ea64a36d3e75ea4a79c3992d42729148a241cc24efb5b108542ca9d6ed66",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0552_00/scene_instances.json": "8910b7100043e5d24592f4b7793f9b13f50f53848c8ebfefdb0934f6dbe61f2c",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0552_00/objects_top5.json": "6d3a504bf7f6b76cfde3a3f7d0bbd9b1632fa19fdc0e560eff4c4f0c8771ee6e"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0552_00/objects_top5.json",
+        "source_sha256": "6d3a504bf7f6b76cfde3a3f7d0bbd9b1632fa19fdc0e560eff4c4f0c8771ee6e"
+      },
+      "category_objects": 29
+    },
+    "scene0553_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0553_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0553_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0553_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0553_00/scene.npz": "54a37ea333c34bc7161e26bd725066d21d2e8a18ac1f136673808e6e19fa1788",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0553_00/scene_instances.json": "30f67b8d74e7b209dd90eb01e82fe4d3d829fd2820d7a2f7cd91017ef64c7dd5",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0553_00/objects_top5.json": "1bdaf2a026f0d7e540494689fae700f79a5ceff657037d6367903da3cddd0f0d"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0553_00/objects_top5.json",
+        "source_sha256": "1bdaf2a026f0d7e540494689fae700f79a5ceff657037d6367903da3cddd0f0d"
+      },
+      "category_objects": 13
+    },
+    "scene0558_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0558_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0558_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0558_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0558_00/scene.npz": "183fce72c9aa0f5be517570874c44da92d992b5adbbb4d47d36518a32edf744e",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0558_00/scene_instances.json": "9bcf826581042b99ce940e835c6719afb223d865a948c995744644c2dfe6414d",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0558_00/objects_top5.json": "cbde54271aa6f15c6b9eb2201901289bfc7a96cb47712dfc8fda31419733a441"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0558_00/objects_top5.json",
+        "source_sha256": "cbde54271aa6f15c6b9eb2201901289bfc7a96cb47712dfc8fda31419733a441"
+      },
+      "category_objects": 32
+    },
+    "scene0559_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0559_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0559_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0559_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0559_00/scene.npz": "3a9782970c0886f6ce11e6b121e540e9b9eb9b27391209e2f9e164cf1489b422",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0559_00/scene_instances.json": "2a5845d7e53741b2504641799bcfaa81a07ee1d678cf117ba2dc15bc5c2fd4cd",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0559_00/objects_top5.json": "7b7423b484c9aff90f8b067fe6ec0c00affead2d9623345a3221c1fada9ce681"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0559_00/objects_top5.json",
+        "source_sha256": "7b7423b484c9aff90f8b067fe6ec0c00affead2d9623345a3221c1fada9ce681"
+      },
+      "category_objects": 9
+    },
+    "scene0565_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0565_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0565_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0565_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0565_00/scene.npz": "796cc7d0b341021b16d3df7963d25dfdb4a790fcee4ee6780e92ad9f18e21484",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0565_00/scene_instances.json": "3c2c86459e19a78d2b432e747d8b6fa3850220a0b40f5250938cf9662bdd4a3c",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0565_00/objects_top5.json": "e9874a97818225a549c82f95a14dce76954e7b0033e5b08b5b52ee25ac4927c0"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0565_00/objects_top5.json",
+        "source_sha256": "e9874a97818225a549c82f95a14dce76954e7b0033e5b08b5b52ee25ac4927c0"
+      },
+      "category_objects": 36
+    },
+    "scene0568_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0568_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0568_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0568_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0568_00/scene.npz": "45283747e9570dcd2b2f48c6ada89c1c579870b917aa1e732bb2c3586cda2c4c",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0568_00/scene_instances.json": "4a771ea12d7eba06e66ff18c703085915c0549c24212b93cdb558c48483616ce",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0568_00/objects_top5.json": "dafe32762388b7b2010beff0b8f76b4ca97b6269e6439b91fdf326ae798c609f"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0568_00/objects_top5.json",
+        "source_sha256": "dafe32762388b7b2010beff0b8f76b4ca97b6269e6439b91fdf326ae798c609f"
+      },
+      "category_objects": 18
+    },
+    "scene0574_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0574_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0574_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0574_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0574_00/scene.npz": "5f273ceace328fb6144ecde7a3c753d4bfb4dc62115cfdcff8fa8f23f5b1dbd1",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0574_00/scene_instances.json": "bf0137b0b3aa33d319b83e4a3b701dc18a69efad1e27651025f98c7d9343dae2",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0574_00/objects_top5.json": "b0181f25c3863c41a59297a5b4a4fcb38781388730960ad87fc02dac3741d81e"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0574_00/objects_top5.json",
+        "source_sha256": "b0181f25c3863c41a59297a5b4a4fcb38781388730960ad87fc02dac3741d81e"
+      },
+      "category_objects": 21
+    },
+    "scene0578_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0578_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0578_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0578_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0578_00/scene.npz": "a2103fc8121bdf87247605bd7eb71d52016e3b56334b65b551f0eb1b5dcc94ba",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0578_00/scene_instances.json": "84a1180f76bda64b544e47b057419838a15117d8a71a99c59a6a1f06d6a2c633",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0578_00/objects_top5.json": "e11f11b9edc43a097f3e340b94594074c3c52f0e779442dfc24a49645c9293a3"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0578_00/objects_top5.json",
+        "source_sha256": "e11f11b9edc43a097f3e340b94594074c3c52f0e779442dfc24a49645c9293a3"
+      },
+      "category_objects": 15
+    },
+    "scene0580_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0580_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0580_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0580_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0580_00/scene.npz": "4e04b1e13f33d5a169c042883c7e58c389bfb096620623734b5eec012744645e",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0580_00/scene_instances.json": "317c6426ccd31b5be242821aeca71fbf7928dcac97a1ceb4e164dfa29cc1361d",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0580_00/objects_top5.json": "d70df8098e0a95b61247c006d764d67550a4075c7c103a635358c4da455ba0e9"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0580_00/objects_top5.json",
+        "source_sha256": "d70df8098e0a95b61247c006d764d67550a4075c7c103a635358c4da455ba0e9"
+      },
+      "category_objects": 21
+    },
+    "scene0583_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0583_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0583_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0583_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0583_00/scene.npz": "8fc852c011b3f1ebaaedd0b0e765bcb97fa233d3ef1d35875d8bac6e0e272098",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0583_00/scene_instances.json": "99b3d367c8af6bc633de64acb2a1b121a048d448fa4591202e6c5d38a27d16e9",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0583_00/objects_top5.json": "209de42d85e6d161e1ef16cfbc9558c1d3325d57ac712542437cdc4d97c7e29c"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0583_00/objects_top5.json",
+        "source_sha256": "209de42d85e6d161e1ef16cfbc9558c1d3325d57ac712542437cdc4d97c7e29c"
+      },
+      "category_objects": 23
+    },
+    "scene0591_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0591_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0591_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0591_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0591_00/scene.npz": "7a7a7b8149d2cacd505a4df281ac456bb14029e7c83b1fbcfa3fe51bd9506e2f",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0591_00/scene_instances.json": "0f64cd80938ee30136ce3f27b38fd4965e64c82f85d3c4a357dd735c13cbd2e5",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0591_00/objects_top5.json": "efedf424bebe862f3c95b3d73990514ffbb3460e344e5e6087df6204665ea3c8"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0591_00/objects_top5.json",
+        "source_sha256": "efedf424bebe862f3c95b3d73990514ffbb3460e344e5e6087df6204665ea3c8"
+      },
+      "category_objects": 29
+    },
+    "scene0593_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0593_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0593_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0593_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0593_00/scene.npz": "5752de0b592ea1d4bfaeecb6f403407ac7bd01bb1ab1280fa4ac8a912419aff4",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0593_00/scene_instances.json": "236af0ba5aad116337216785af104a19c9ad0c5dee269b58177657f47074c85e",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0593_00/objects_top5.json": "5bbc4ee439d30dec180d6cba54eba993f16190574b19506dd79ba3b351eb2197"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0593_00/objects_top5.json",
+        "source_sha256": "5bbc4ee439d30dec180d6cba54eba993f16190574b19506dd79ba3b351eb2197"
+      },
+      "category_objects": 21
+    },
+    "scene0595_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0595_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0595_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0595_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0595_00/scene.npz": "f9cac3cf69e745be74f8d849c72755e830c7b33565f0e1e7aa5790b5d437d35f",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0595_00/scene_instances.json": "ff5b706e4d429d020d8c8c7b445a85001e69b7e87600724b5db211bcb49583fb",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0595_00/objects_top5.json": "3ecd98ae863ef34e27eacb585b7ac926ce8bc1035efe3a160d8e1d87fc6795d2"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0595_00/objects_top5.json",
+        "source_sha256": "3ecd98ae863ef34e27eacb585b7ac926ce8bc1035efe3a160d8e1d87fc6795d2"
+      },
+      "category_objects": 8
+    },
+    "scene0598_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0598_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0598_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0598_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0598_00/scene.npz": "81ea394bbf86e6503d4ae1ebeb83ec0e2ed1bf0316b77d4823a2fb22ebff5352",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0598_00/scene_instances.json": "3bb437abf387c7ffcebcc0682cbd2ae7e8ca9f45d96dadc169a7346d75b9d71e",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0598_00/objects_top5.json": "80172c7a38b2248afcc0262eb05e33b66750640d74fce78ab3ec61be51e58ffe"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0598_00/objects_top5.json",
+        "source_sha256": "80172c7a38b2248afcc0262eb05e33b66750640d74fce78ab3ec61be51e58ffe"
+      },
+      "category_objects": 19
+    },
+    "scene0599_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0599_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0599_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0599_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0599_00/scene.npz": "7ca7cca89310b71748561bac293dcd3d7c2d46addffb71fa96dc9e22b425cec4",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0599_00/scene_instances.json": "74892db5a0054a76fd6f6dd6767cd0e680e49426e63f8f800d3a472564af1c54",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0599_00/objects_top5.json": "b9e9e39975abf930e50810d57f59377a614298e798a9dc5f1f8df88050e1d763"
+      },
+      "category_origin": {
+        "mode": "materialize_verified_original_prediction_rows_without_inference",
+        "source": "/Users/luocl/Desktop/seeground/outputs/20261020_r8_object_predictions"
+      },
+      "category_objects": 20
+    },
+    "scene0606_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0606_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0606_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0606_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0606_00/scene.npz": "2a3a9df8665f85a1bd70f81367492c5f7ea132cfbcda9033507feb2dee91ad0f",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0606_00/scene_instances.json": "d8b29fe1625d1029ec756ed4df84087e35555c5f300ea08db180607f708f5368",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0606_00/objects_top5.json": "4845b686ca6026b6b45b2951743cee645413f143d55c93569b3bab7f70947a26"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0606_00/objects_top5.json",
+        "source_sha256": "4845b686ca6026b6b45b2951743cee645413f143d55c93569b3bab7f70947a26"
+      },
+      "category_objects": 33
+    },
+    "scene0607_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0607_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0607_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0607_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0607_00/scene.npz": "7b6286ab1aa81cde029b60bc54763b00e37b1fc3b24d00e45f544d1da32c62b5",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0607_00/scene_instances.json": "4fb839024782b1f4da5c81452365581e731fec7727bb5058e72dd64c71c478dc",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0607_00/objects_top5.json": "f524095df8071004bd1c26c5c64a007deb2306eddd8c841f0d5bac62934bc218"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0607_00/objects_top5.json",
+        "source_sha256": "f524095df8071004bd1c26c5c64a007deb2306eddd8c841f0d5bac62934bc218"
+      },
+      "category_objects": 21
+    },
+    "scene0608_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0608_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0608_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0608_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0608_00/scene.npz": "c43d35d43bbf3e5415eff619f7dd12a5afada354830e8a8374b91f3753710d7d",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0608_00/scene_instances.json": "620c713c5d42fb343ac28cbae735263b9ecf217518810a19b3aac7b64363e1ba",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0608_00/objects_top5.json": "7c89d8d1478cd2d70adce4d26fe40b1b641ccdf2635a3511118509c1a262ed8b"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0608_00/objects_top5.json",
+        "source_sha256": "7c89d8d1478cd2d70adce4d26fe40b1b641ccdf2635a3511118509c1a262ed8b"
+      },
+      "category_objects": 38
+    },
+    "scene0609_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0609_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0609_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0609_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0609_00/scene.npz": "53a0da7e00a69b30d00df0e70d250f9f7f1c3001423cbbc8925c99adf5afe1ac",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0609_00/scene_instances.json": "57f5c5bc0ce8fc8683ad5cdd05e3c3148bed14a8d66ada1c9c1be963df5d64f6",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0609_00/objects_top5.json": "1261f1af9d4f0ee04229ee9e3fa6ecd72ad89e58493ba11a415be56c7ea1eb3b"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0609_00/objects_top5.json",
+        "source_sha256": "1261f1af9d4f0ee04229ee9e3fa6ecd72ad89e58493ba11a415be56c7ea1eb3b"
+      },
+      "category_objects": 11
+    },
+    "scene0616_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0616_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0616_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0616_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0616_00/scene.npz": "03e2d639f7612c599007a9ae60c147e5b7f443ae9b2d62adfa7df12c7fe89d30",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0616_00/scene_instances.json": "dbfde16529322a762952be81ca08d0c12263b2f374e875dc1f70a295b5e19d7b",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0616_00/objects_top5.json": "51744e9731557987f165f3672726c80cd47fab707fac60c9919a3a03dbc8c607"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0616_00/objects_top5.json",
+        "source_sha256": "51744e9731557987f165f3672726c80cd47fab707fac60c9919a3a03dbc8c607"
+      },
+      "category_objects": 24
+    },
+    "scene0618_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0618_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0618_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0618_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0618_00/scene.npz": "1fa1aca0dda04ff40619bc23b0f0e58f73cb71b834d2e20075bf4332d218b3d3",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0618_00/scene_instances.json": "3a55e4cee619b2efccc9e9987a1a5c37418b24bb37ab3886489501e96e25c6b0",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0618_00/objects_top5.json": "9a3b1ecd461ccc6c99e79a5feef5050602a269a46165bbaec8f20e064543cbc9"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0618_00/objects_top5.json",
+        "source_sha256": "9a3b1ecd461ccc6c99e79a5feef5050602a269a46165bbaec8f20e064543cbc9"
+      },
+      "category_objects": 23
+    },
+    "scene0621_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0621_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0621_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0621_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0621_00/scene.npz": "70e451080e94d63cf857efa80700842afdf551d8cbc51993a5aff175d19bcceb",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0621_00/scene_instances.json": "1eb46a4e0a5572ca13127d293c04719f48593c2f19e13ea0cfb035f1b7a95b6e",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0621_00/objects_top5.json": "374ccdab3cc466edbe8f3eb32456fc101a2cdc3eb775367580c51225009f4344"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0621_00/objects_top5.json",
+        "source_sha256": "374ccdab3cc466edbe8f3eb32456fc101a2cdc3eb775367580c51225009f4344"
+      },
+      "category_objects": 35
+    },
+    "scene0629_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0629_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0629_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0629_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0629_00/scene.npz": "79dee94d41b80b13b78161f0d2695e11a5abcb38bc248bf24c072f4bbb68a4e8",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0629_00/scene_instances.json": "285077a71df66c706b122796f98d338045367c4e852713f25849d68bdc378feb",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0629_00/objects_top5.json": "cac8fd1f653d4b8e89b7e0558d1ae3917486ceb381d9e8a021a5c3cefc9750da"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0629_00/objects_top5.json",
+        "source_sha256": "cac8fd1f653d4b8e89b7e0558d1ae3917486ceb381d9e8a021a5c3cefc9750da"
+      },
+      "category_objects": 24
+    },
+    "scene0633_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0633_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0633_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0633_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0633_00/scene.npz": "1942c8f2eb3609d08b89e348f9f65614e26d9c2ecd3db7a1d40dac77e209b2b9",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0633_00/scene_instances.json": "1f5687f5ae6bad659906943fedef3c4e24501c68c2cd40e1283ae97ef5f94f52",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0633_00/objects_top5.json": "4b6fd63e9a3a9e1b19f0e7042e71723935304e779244370a896eb3d19e8f26b3"
+      },
+      "category_origin": {
+        "mode": "materialize_verified_original_prediction_rows_without_inference",
+        "source": "/Users/luocl/Desktop/seeground/outputs/20261020_r8_object_predictions"
+      },
+      "category_objects": 25
+    },
+    "scene0643_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0643_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0643_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0643_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0643_00/scene.npz": "540e022841732ecd5a831c8501be24f1e801b14b8649784e7ecdfb276b517f83",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0643_00/scene_instances.json": "2ce9d97f07bf05f83ac2acc4b4729609878aa45fb54aadc9ffc155a5ced1cfd3",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0643_00/objects_top5.json": "55e4f89b2a2ffee88bd02733f137c8da9d8af1170acb0cf866a29306b96d3d45"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0643_00/objects_top5.json",
+        "source_sha256": "55e4f89b2a2ffee88bd02733f137c8da9d8af1170acb0cf866a29306b96d3d45"
+      },
+      "category_objects": 33
+    },
+    "scene0644_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0644_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0644_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0644_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0644_00/scene.npz": "9e9019c3d9f676558ce3efb186ef754a059666356570ab680c95761270e04987",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0644_00/scene_instances.json": "6ca43b193e5e6156ec2050784a4ef4b34a8d0a9d5800279ce2579c21336bdbbd",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0644_00/objects_top5.json": "509e1a38c176c128acfc82e62aeb7a1743f0b25a509530c249d2da3bdc295adb"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0644_00/objects_top5.json",
+        "source_sha256": "509e1a38c176c128acfc82e62aeb7a1743f0b25a509530c249d2da3bdc295adb"
+      },
+      "category_objects": 57
+    },
+    "scene0645_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0645_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0645_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0645_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0645_00/scene.npz": "d87671e06128c6e1ce5e343b7b2a7468a811a9e3a83cbd0109dd6d9f92444229",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0645_00/scene_instances.json": "676254c45fa7942c830cb9dc533f6c9a8efaeb376efdb0ee31545570cfe33040",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0645_00/objects_top5.json": "de24a52853483fd7a1b5fda1da58cb860fce92ef674139e21c13247367dae740"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0645_00/objects_top5.json",
+        "source_sha256": "de24a52853483fd7a1b5fda1da58cb860fce92ef674139e21c13247367dae740"
+      },
+      "category_objects": 68
+    },
+    "scene0647_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0647_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0647_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0647_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0647_00/scene.npz": "f89d3bf6331b0c77c7122a6a815afd646feaa189e0f3828f5c1935b0c2b79bed",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0647_00/scene_instances.json": "17ade2c9b42b6c5ad16954f4818f876ffea3c73750bd20669623d4f1a3a9b71b",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0647_00/objects_top5.json": "9fa6e2dacbc91e67a622cfa3a31aa617afa956212c9c3dd2666274b9c0ffa7f9"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0647_00/objects_top5.json",
+        "source_sha256": "9fa6e2dacbc91e67a622cfa3a31aa617afa956212c9c3dd2666274b9c0ffa7f9"
+      },
+      "category_objects": 18
+    },
+    "scene0648_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0648_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0648_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0648_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0648_00/scene.npz": "7721802f7b3f36b0c7bfd78342a9c2d28c6bc5ae681bd4d6860177f79d04273b",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0648_00/scene_instances.json": "109f5cacec70357a8546406cfb2eed5f8c9d271075fb4d9ee0eaecb6a56b8fa9",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0648_00/objects_top5.json": "18dd3e4d085be70dcba3b78420d9e304de720b3313a32134772919b1b60e6f7a"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0648_00/objects_top5.json",
+        "source_sha256": "18dd3e4d085be70dcba3b78420d9e304de720b3313a32134772919b1b60e6f7a"
+      },
+      "category_objects": 38
+    },
+    "scene0651_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0651_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0651_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0651_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0651_00/scene.npz": "97f8adb37f4f32d3ea6432f1ab60fa06abfc3b300659931bda2da9ea30f61ed0",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0651_00/scene_instances.json": "35a5e728cc6accd9a5a12efd0adf26401b07bd4b0ef6c6ea71799f2dd65f48e0",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0651_00/objects_top5.json": "072ff084dc7290fbaf640bf5b904e8bb6a396433ab26fb35bce63c0b1ae2d0b7"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0651_00/objects_top5.json",
+        "source_sha256": "072ff084dc7290fbaf640bf5b904e8bb6a396433ab26fb35bce63c0b1ae2d0b7"
+      },
+      "category_objects": 15
+    },
+    "scene0652_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0652_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0652_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0652_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0652_00/scene.npz": "46b4df475b06e9e043805ca17e4b259a893afe3697788b339b333e777773374b",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0652_00/scene_instances.json": "0ad52a1630ade220131939278a64f5d7dd70188e20d5c4459fa3aa506e344b3b",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0652_00/objects_top5.json": "782877ea2a562e98f1ad962a17cee09f021e540c96800101cd51469dbfcfe829"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0652_00/objects_top5.json",
+        "source_sha256": "782877ea2a562e98f1ad962a17cee09f021e540c96800101cd51469dbfcfe829"
+      },
+      "category_objects": 22
+    },
+    "scene0653_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0653_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0653_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0653_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0653_00/scene.npz": "4ecb1745f3a09fe48aca1d4471082aee32d779eea7d6f2ebc5f6d7168ae6d0d4",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0653_00/scene_instances.json": "df25d004c6f94688358d56275513e605050e25ffd4c10a245975c7b09dc59980",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0653_00/objects_top5.json": "bbbacff2979db849f6e273e0a6bdd3399ad94b772f10aaf41d0f0564a4fadbf4"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0653_00/objects_top5.json",
+        "source_sha256": "bbbacff2979db849f6e273e0a6bdd3399ad94b772f10aaf41d0f0564a4fadbf4"
+      },
+      "category_objects": 48
+    },
+    "scene0655_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0655_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0655_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0655_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0655_00/scene.npz": "69a049fb03a028477d0a50c8c52e88780aba980ec4b21c2a9e615168cd157853",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0655_00/scene_instances.json": "082020f0838ef2dffc0f9c43f323407ee943913519d8039d65d6f95cc9adfdd7",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0655_00/objects_top5.json": "05eecfdfccf1651dd288f62b6be4e472d868fd15a15bf18c5fb2cb420c68f77a"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0655_00/objects_top5.json",
+        "source_sha256": "05eecfdfccf1651dd288f62b6be4e472d868fd15a15bf18c5fb2cb420c68f77a"
+      },
+      "category_objects": 17
+    },
+    "scene0658_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0658_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0658_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0658_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0658_00/scene.npz": "89eea0148d699b822d5ef2b3c5a631f83671af94cd3af5e19256ae3f71bff09e",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0658_00/scene_instances.json": "a71eb70160d1616ae99bccb87689b9130ec0ba88ee89cdfcd8387ba3accd6ed0",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0658_00/objects_top5.json": "b51a788a2daa0e4f9d5df9c1f98b33f5e64862d6d2e70e1770f9f0289947050a"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0658_00/objects_top5.json",
+        "source_sha256": "b51a788a2daa0e4f9d5df9c1f98b33f5e64862d6d2e70e1770f9f0289947050a"
+      },
+      "category_objects": 12
+    },
+    "scene0663_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0663_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0663_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0663_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0663_00/scene.npz": "38539906eb1c20562aedae436bbd9450452b0d89ef6ef3e3bfd74da660b9653b",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0663_00/scene_instances.json": "c332606700a9a4fd88f54e137ae02eec9f73c16e487fefa5b17d90be40e7daf7",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0663_00/objects_top5.json": "650a90566a3cf4bc5a93fcb52827c67d6b0271aaea9ed85fc34e07f0afaf32f6"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0663_00/objects_top5.json",
+        "source_sha256": "650a90566a3cf4bc5a93fcb52827c67d6b0271aaea9ed85fc34e07f0afaf32f6"
+      },
+      "category_objects": 33
+    },
+    "scene0664_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0664_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0664_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0664_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0664_00/scene.npz": "9cad3aabf7649a4f3db508d58042d7c7269bdf95539bf1ac4dbc0f4c03ad5d09",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0664_00/scene_instances.json": "48c82857a1a516bdcacc848c693ce8cf85c520a3bf903d69f153aad8bc83eaec",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0664_00/objects_top5.json": "462f2dca62cedbd085fbacb5b13e3bf5c1ca462569707dd10d0d2756a19780dd"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0664_00/objects_top5.json",
+        "source_sha256": "462f2dca62cedbd085fbacb5b13e3bf5c1ca462569707dd10d0d2756a19780dd"
+      },
+      "category_objects": 18
+    },
+    "scene0665_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0665_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0665_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0665_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0665_00/scene.npz": "1ee4d5a3a37c85d1d888d9875a6f651cc7102181f1f9664d49f76a0b63a8daf3",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0665_00/scene_instances.json": "681cbac961a5b68c4f4c55ab880ccb7efc928b4da5abf1a804a695d7d5439db2",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0665_00/objects_top5.json": "765f99de794e3aaa404d9899fcb482fb1227132d6aa0dd905523d65ab7878915"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0665_00/objects_top5.json",
+        "source_sha256": "765f99de794e3aaa404d9899fcb482fb1227132d6aa0dd905523d65ab7878915"
+      },
+      "category_objects": 31
+    },
+    "scene0670_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0670_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0670_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0670_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0670_00/scene.npz": "87a3478d016d0aa9af1f6e252025858acf041e53cc2aa9f4c74c87018f60220a",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0670_00/scene_instances.json": "3964d7a8725830fd18d0db8e5cd3359e9e3a069fa2c2c93931a132df1467e491",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0670_00/objects_top5.json": "1855d96d4a6757a504055e1d0fa14cafcc53b8f7955100379a76dc170c802070"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0670_00/objects_top5.json",
+        "source_sha256": "1855d96d4a6757a504055e1d0fa14cafcc53b8f7955100379a76dc170c802070"
+      },
+      "category_objects": 32
+    },
+    "scene0671_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0671_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0671_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0671_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0671_00/scene.npz": "236b77df4eb757fb4942588eeee74609aa7758f4a13865ca9dcbe7c8396d41ad",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0671_00/scene_instances.json": "97f64b29ea5fe08e22b5ce23be09bae66038f8bb743a1d8de0a4858b4f69d69a",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0671_00/objects_top5.json": "db8e2e83ba949ae494f13e9f509c65cb8706cd29beb12b8b852e95ebeb0b428b"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0671_00/objects_top5.json",
+        "source_sha256": "db8e2e83ba949ae494f13e9f509c65cb8706cd29beb12b8b852e95ebeb0b428b"
+      },
+      "category_objects": 19
+    },
+    "scene0678_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0678_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0678_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0678_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0678_00/scene.npz": "f99542e405f8f360c43584958c88ab0d197b578d42e1c249cd6829a31fe6e86a",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0678_00/scene_instances.json": "fc7f6ad4bef8c91d321ac5ad18e5b657b12e442782971601fc2dda047678ca3d",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0678_00/objects_top5.json": "c3dbde3c10e5036d333604c489fa217c1c92d7595a550f2ee07529aaa310bc32"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0678_00/objects_top5.json",
+        "source_sha256": "c3dbde3c10e5036d333604c489fa217c1c92d7595a550f2ee07529aaa310bc32"
+      },
+      "category_objects": 28
+    },
+    "scene0684_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0684_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0684_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0684_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0684_00/scene.npz": "f070f668c8c628c99f747975314b9d9de5657fc31dab21e9470a2c78aa354802",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0684_00/scene_instances.json": "758f213be4593b41ea2d3ea652c9fee97292ab13c0ec885043d63935bf757dde",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0684_00/objects_top5.json": "67c9a742817475dd2c96aa42f5e7954fabf6e56bd42abaeb8e2b48c22f4b2577"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0684_00/objects_top5.json",
+        "source_sha256": "67c9a742817475dd2c96aa42f5e7954fabf6e56bd42abaeb8e2b48c22f4b2577"
+      },
+      "category_objects": 16
+    },
+    "scene0685_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0685_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0685_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0685_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0685_00/scene.npz": "802767b36df4f78b260012d3225f6d9323bfd88b0a4b3d4fcbea1c71f545090c",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0685_00/scene_instances.json": "2ddebb1b35f63cb57c871e8976bc5615e8816aee88b37cbee1520c97f025ae26",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0685_00/objects_top5.json": "4825ed8cad36f4b9936115217ee1fcf93af09b448ce8f4380702e0ce20c88df3"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0685_00/objects_top5.json",
+        "source_sha256": "4825ed8cad36f4b9936115217ee1fcf93af09b448ce8f4380702e0ce20c88df3"
+      },
+      "category_objects": 14
+    },
+    "scene0686_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0686_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0686_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0686_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0686_00/scene.npz": "8798079f2bbd575ac30340824363783b6900abc5713b5b5916174eae3e90f612",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0686_00/scene_instances.json": "1bee9862a6112c79dfea253134b11d013396151a22a0ae6160d06fec068413ef",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0686_00/objects_top5.json": "0d2dd9f02b3e670b87a1fb362eed57fc2f73752ac30217aec67a68832aa299cc"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0686_00/objects_top5.json",
+        "source_sha256": "0d2dd9f02b3e670b87a1fb362eed57fc2f73752ac30217aec67a68832aa299cc"
+      },
+      "category_objects": 16
+    },
+    "scene0689_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0689_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0689_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0689_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0689_00/scene.npz": "fc3001d2f927c35b97e0b5b5dc535533eaa71b505846b3cf5479b7db52ae56e3",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0689_00/scene_instances.json": "de4fa2e22138526d3c73f5681512306667e7161ec2b024c7f3e90bcbf7419c92",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0689_00/objects_top5.json": "910e37e58fb381d07dd7979b7bdc3d45d6a7ec38607943965caeaea1fd6537d2"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0689_00/objects_top5.json",
+        "source_sha256": "910e37e58fb381d07dd7979b7bdc3d45d6a7ec38607943965caeaea1fd6537d2"
+      },
+      "category_objects": 14
+    },
+    "scene0690_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0690_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0690_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0690_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0690_00/scene.npz": "1f2c53451a40b8bc378e94fbb02bfadb5c2b1b9f05dd194efbf168c35fe3f960",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0690_00/scene_instances.json": "12fac2a7a3d69126cea7f34e7fb07bbeadaa0aa8790366e15c5bcd31657cc463",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0690_00/objects_top5.json": "551b3c7b3c80c54e215ceb4d44e288ef47e8418b788b6d007108b83142740719"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0690_00/objects_top5.json",
+        "source_sha256": "551b3c7b3c80c54e215ceb4d44e288ef47e8418b788b6d007108b83142740719"
+      },
+      "category_objects": 23
+    },
+    "scene0693_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0693_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0693_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0693_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0693_00/scene.npz": "94123f4124b858bfaf7dad841fb93ea6a84b72a9205ba43684e7424b5098ee7b",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0693_00/scene_instances.json": "a06d4a3f23709b691009b460086339b4d9b10cb226da4288cd4318712964f8c3",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0693_00/objects_top5.json": "3e3668c965bcb6fe1bf431a54d77269c488bf3b1aa609c3a98a9a155d784e181"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0693_00/objects_top5.json",
+        "source_sha256": "3e3668c965bcb6fe1bf431a54d77269c488bf3b1aa609c3a98a9a155d784e181"
+      },
+      "category_objects": 23
+    },
+    "scene0695_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0695_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0695_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0695_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0695_00/scene.npz": "9d49c6a6d5dbd450496e0164f46968f2b0ed6aaa26c4b1e3a8697baa6d359bb3",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0695_00/scene_instances.json": "8766316ea7f933a02f65a3e5fac99fcb5792ac7aa724f1a3a617607dce8e4d39",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0695_00/objects_top5.json": "4f2d4c8f794166ac1cf84bc0645522e086d6ab8284175a8d472be048d8b60797"
+      },
+      "category_origin": {
+        "mode": "materialize_verified_original_prediction_rows_without_inference",
+        "source": "/Users/luocl/Desktop/seeground/outputs/20261020_r8_object_predictions"
+      },
+      "category_objects": 26
+    },
+    "scene0696_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0696_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0696_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0696_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0696_00/scene.npz": "8a4ec4bdfbcbeb5e998217923c155c19407d469d5c31b3def990d9ca53d0bf07",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0696_00/scene_instances.json": "fe4dad922f218c33dc53fa13eb40c0580e96845929946157694ae4caf080b4d4",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0696_00/objects_top5.json": "708d32f089e2ed73e9df5177488ca829a17b7c891f18c93c956bfafe8520d713"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0696_00/objects_top5.json",
+        "source_sha256": "708d32f089e2ed73e9df5177488ca829a17b7c891f18c93c956bfafe8520d713"
+      },
+      "category_objects": 27
+    },
+    "scene0697_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0697_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0697_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0697_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0697_00/scene.npz": "ddf4a7b739eba619d9d33f4301bcacc1e97ffc6ca1678eb230fdb07784cd98d7",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0697_00/scene_instances.json": "bfefd6a504f826615e5eb390114ca8a864a25ab9ab057e2966cac8eba054e0b4",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0697_00/objects_top5.json": "6a109cc3563ae9844ba109783a39f4717e16d04226162ecb1418c13141faf293"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0697_00/objects_top5.json",
+        "source_sha256": "6a109cc3563ae9844ba109783a39f4717e16d04226162ecb1418c13141faf293"
+      },
+      "category_objects": 27
+    },
+    "scene0699_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0699_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0699_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0699_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0699_00/scene.npz": "2034f9185e6b6711bc9d0d6669ffeb92813bf885599ce63dbb8e369f683118ea",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0699_00/scene_instances.json": "9ffe3f441b2a5d5ce00e7296145c0958689b447230582989ab4577c0419a109f",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0699_00/objects_top5.json": "f1c7c93e2d7b3c18c9cf45b6541098b4313d612b1cbd59ee4d9fc856b9e0e160"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0699_00/objects_top5.json",
+        "source_sha256": "f1c7c93e2d7b3c18c9cf45b6541098b4313d612b1cbd59ee4d9fc856b9e0e160"
+      },
+      "category_objects": 33
+    },
+    "scene0700_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0700_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0700_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0700_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0700_00/scene.npz": "2064b5766820f6fa29650f396bb35587ea767bf487d4f82ecdbb5d5048b18433",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0700_00/scene_instances.json": "18971e7399004038706060e72efd4a128cb656385a7509bd4d36f92f50953ff1",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0700_00/objects_top5.json": "8c2e832430b52b88ec7e31692eaa5cf337fce3ed1f9809340eb8dc55dbca9346"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0700_00/objects_top5.json",
+        "source_sha256": "8c2e832430b52b88ec7e31692eaa5cf337fce3ed1f9809340eb8dc55dbca9346"
+      },
+      "category_objects": 30
+    },
+    "scene0701_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0701_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0701_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0701_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0701_00/scene.npz": "85c8014a539ea9a170e467e570a1397307a23d9469be0f64732c1fb70fa4a359",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0701_00/scene_instances.json": "7937401ddca2c284fb746f181b60fa059b15bb420df10b747f0c4a5cf6bdf2a3",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0701_00/objects_top5.json": "e3f8babb5afb81de3280d1c1d6b77f65002d1411fa259526521ca216c5d695e8"
+      },
+      "category_origin": {
+        "mode": "materialize_verified_original_prediction_rows_without_inference",
+        "source": "/Users/luocl/Desktop/seeground/outputs/20261020_r8_object_predictions"
+      },
+      "category_objects": 4
+    },
+    "scene0702_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0702_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0702_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0702_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0702_00/scene.npz": "2401bc28a98334d89de52fe0e7d28837ac96c52f2ef10b2bd96847bbd468f87b",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0702_00/scene_instances.json": "9537725592c018367b7e418a838a2ccc443d9ed6a495ee703adc68b5713e2a6c",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0702_00/objects_top5.json": "b4f84eec4b0ebc3bb75aad2c0439738070add3672d2ae0f6dc0b659d7e4af3df"
+      },
+      "category_origin": {
+        "mode": "materialize_verified_original_prediction_rows_without_inference",
+        "source": "/Users/luocl/Desktop/seeground/outputs/20261020_r8_object_predictions"
+      },
+      "category_objects": 15
+    },
+    "scene0704_00": {
+      "paths": {
+        "scene.npz": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0704_00/scene.npz",
+        "scene_instances.json": "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0704_00/scene_instances.json",
+        "category": "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0704_00/objects_top5.json"
+      },
+      "hashes": {
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0704_00/scene.npz": "008f3769374c05cd98c8729df1364bc7d0c5786d06138da470c38a928e6b6cdd",
+        "/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs/scene0704_00/scene_instances.json": "7a202096e4f58ce225f6cef69aad71c6c995f39acf06a3dcbc957008464a443a",
+        "/Users/luocl/.codex/worktrees/qwen-direct-fresh-20261120/EviGround/data/qwen_direct/full_categories/scene0704_00/objects_top5.json": "12d1327ea8e89f77e0ab4ba2d0c8aad71d1983ceddd82a403a420090272b5596"
+      },
+      "category_origin": {
+        "mode": "reuse_complete_original_cache",
+        "source": "/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs/scene0704_00/objects_top5.json",
+        "source_sha256": "12d1327ea8e89f77e0ab4ba2d0c8aad71d1983ceddd82a403a420090272b5596"
+      },
+      "category_objects": 20
+    }
+  },
+  "GT_supplied_to_workers": false,
+  "model_calls": 0,
+  "public_scene_policy": "Read-only shared originals, hash-checked each worker; one manifest, no per-query cloud copy."
+}
