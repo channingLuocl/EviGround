@@ -37,7 +37,8 @@ def audit_requests(episode, frozen, levels, stats, roles):
         require(index not in seen, path, 'duplicate call index')
         seen.add(index)
         if receipt['status'] == 'rejected_preflight':
-            require(not receipt['http_sent'] and receipt['preflight']['maximum'] >= frozen.OUTPUT_LIMIT,
+            require(not receipt['http_sent'] and (receipt['preflight']['maximum'] >= frozen.OUTPUT_LIMIT
+                    or receipt.get('server_prompt_count', 0) + receipt['output_reserved'] >= frozen.OUTPUT_LIMIT),
                     path, 'invalid capacity refusal')
             stats['preflight_refusals'] += 1
         if not receipt['http_sent']:
@@ -61,8 +62,14 @@ def audit_requests(episode, frozen, levels, stats, roles):
         recorded = receipt['preflight']
         require(recorded['enforced'] and recorded['limit'] == frozen.OUTPUT_LIMIT
                 and all(recorded[key] == actual[key] for key in ('maximum', 'images', 'text_bytes', 'output_reserved'))
-                and actual['maximum'] < frozen.OUTPUT_LIMIT, path, 'reconstructed request fails the recorded 32K gate')
+                and actual['maximum'] < frozen.OUTPUT_LIMIT, path, 'reconstructed request fails the recorded context gate')
         stats['max_sent_context_bound'] = max(stats['max_sent_context_bound'], actual['maximum'])
+        glm_text = frozen.MODEL == 'GLM-4.5V' and not images
+        if glm_text:
+            count = receipt.get('server_prompt_count')
+            require(type(count) is int and 0 < count < frozen.OUTPUT_LIMIT - actual['output_reserved'],
+                    path, 'missing or over-capacity vLLM text tokenization')
+            stats['server_text_preflights'] += 1
         if receipt.get('http_status') != 200:
             stats['pending_or_unknown_http' if receipt.get('http_status') is None else 'http_errors'] += 1
             continue
@@ -75,6 +82,8 @@ def audit_requests(episode, frozen, levels, stats, roles):
         reserve = actual['output_reserved']
         require(prompt <= actual['maximum'] - reserve and prompt + reserve < frozen.OUTPUT_LIMIT
                 and completion <= reserve, path, 'provider usage exceeds the reconstructed reservation')
+        if glm_text:
+            require(prompt == count, path, 'vLLM prompt usage differs from pre-send text tokenization')
         stats['max_reported_context_used'] = max(stats['max_reported_context_used'], prompt + completion)
         stats['provider_usage_verified'] += 1
     require(seen == set(range(1, len(seen) + 1)), episode, 'missing call indices')
@@ -236,8 +245,12 @@ def main():
 
     protocol = manifest['protocol']
     levels = protocol['visual_levels']
-    require(levels in (2, 3) and protocol['model'] == frozen.MODEL == 'qwen3.8-max'
-            and protocol['endpoint'] == frozen.BASE_URL and frozen.OUTPUT_LIMIT == 32768,
+    if protocol['model'] == 'GLM-4.5V':
+        frozen.configure_glm(protocol['endpoint'])
+    expected_limit = {'qwen3.8-max': 32768, 'GLM-4.5V': 65536}.get(protocol['model'])
+    require(levels in (2, 3) and protocol['model'] == frozen.MODEL
+            and protocol['endpoint'] == frozen.BASE_URL and frozen.OUTPUT_LIMIT == expected_limit
+            and protocol['qwen_context_policy']['reference_bound'] == expected_limit,
             manifest_path, 'unexpected model, endpoint, role policy, or window')
     source = root/'parent-evaluation/selection.json'
     require(sha(source) == manifest['selection_sha256'], source, 'frozen selection hash changed')

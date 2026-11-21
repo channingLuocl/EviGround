@@ -13,7 +13,7 @@ def packed(value):
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-RULES = """You are the same qwen3.8-max planner/semantic Monitor; return one JSON object with the supplied schema. B/R/T are record-only; capacity is separate and never forces evidence-free completion. The original utterance outranks parser/Top5 priors. Unknown is not false; ambiguous appearance is not confirmed. Compare every active target and strongest rivals; keep negation, noun attachment and the full reference/comparison group. Bind nested support references before comparing targets.
+RULES = """You are the planner/semantic Monitor; return one JSON object with the supplied schema. B/R/T are record-only; capacity is separate and never forces evidence-free completion. The original utterance outranks parser/Top5 priors. Unknown is not false; ambiguous appearance is not confirmed. Compare every active target and strongest rivals; keep negation, noun attachment and the full reference/comparison group. Bind nested support references before comparing targets.
 Inspect appearance/category with targets AND references; isolated tiles have independent cameras/scales, not spatial relations. Up to12 IDs; azimuth[0,360), elevation[10,75], null defaults315/30. Measure distance/support/height/order. frame=null for non-directional distances; origin_ids=[] means room center, facing_ids is what is faced, not the origin. Groups differ. Conditional frames require explicit binding/assumptions. Honor raw same-frame signs, units and rows_left_to_right; never reverse them. AABB does not identify bed head/foot.
 YOU propose all bindings/exclusions/completions/rollback. Completed nodes cite existing object-covering evidence and observed conclusions, not priors/unknown. initial is delivered pixels/basic geometry. Cover every requirement. n0..n10 are tasks; n11 is finish-only verification depending transitively on all tasks. For tools current node is pending, allows the tool, dependencies completed; verification stays pending. allowed_actions restricts NEXT tool, not evidence that may complete an old task. Complete supported old tasks and switch to another ready pending task in the SAME proposal. Delta changes state only; change goals/tools/dependencies via COMPLETE replace_plan with verification and all requirement_nodes. Reopen contradicted old IDs/descendants; preserve unchanged completed states verbatim.
 inspect/measure: predicted_id=null,evidence=[]; inspect:frame=null. finish:focus_ids=[],context/camera/frame=null. Strict non-null finish needs all nodes completed,current=n11,unresolved=[], supported exclusions leaving only that ID, and rival comparison. Otherwise null with missing evidence. Tentative never changes Monitor or claims strict acceptance. reason<=60words,evidence<=4,observation<=35words; evidence source_quote=FULL original; Monitor quotes=exact substrings.
@@ -221,9 +221,12 @@ def compact_wire_schema(schema, state=None, *, text_visual_reports=False, compac
             }) if compact_replacement else plan
             action['properties']['monitor'] = {'anyOf': [delta, obj({'replace_plan': replacement})]}
         focus_limits = {}
+        inspect_angles = {}
         for variant in schema['properties']['action'].get('anyOf', []):
             native = variant.get('properties', {})
             kinds = native.get('action', {}).get('enum', [])
+            if kinds == ['inspect']:
+                inspect_angles = {key: native[key] for key in ('azimuth_deg', 'elevation_deg') if key in native}
             limit = native.get('focus_ids', {}).get('maxItems')
             if len(kinds) == 1 and limit is not None:
                 focus_limits[kinds[0]] = limit
@@ -238,6 +241,7 @@ def compact_wire_schema(schema, state=None, *, text_visual_reports=False, compac
             if text_visual_reports:
                 if kind == 'inspect':
                     fields.update(context={'enum': ['scene', 'isolated']}, frame={'type': 'null'})
+                    fields.update(deepcopy(inspect_angles))
                 else:
                     fields.update(context={'type': 'null'}, azimuth_deg={'type': 'null'},
                                   elevation_deg={'type': 'null'})
@@ -249,6 +253,7 @@ def compact_wire_schema(schema, state=None, *, text_visual_reports=False, compac
                         task_ids = [node['id'] for node in state['task_dag']['nodes']]
                         delta_fields = fields['monitor']['anyOf'][0]['properties']
                         delta_fields['current_node_id'] = {'enum': task_ids}
+                        delta_fields['node_updates']['minItems'] = 1
                         delta_fields['node_updates']['maxItems'] = len(task_ids)
                         updates = delta_fields['node_updates']['items']['anyOf']
                         for update in updates:

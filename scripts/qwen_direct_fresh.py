@@ -17,6 +17,7 @@ from pathlib import Path
 import shlex
 import sys
 import time
+from urllib.parse import urlsplit
 import requests
 from qwen_step2_context import original_resolution_pack, compact_call, compact_wire_schema
 from qwen_evidence_selector import EvidenceSelectionError, registry as evidence_registry, select_context, validate_visible_references
@@ -29,6 +30,10 @@ INPUTS = PROJECT / "data/qwen_direct"
 MODEL = "qwen3.8-max"
 BASE_URL = "https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1"
 OUTPUT_LIMIT = 32768  # strict local engineering gate; provider usage audited separately
+GLM_MODEL = "GLM-4.5V"
+GLM_CONTEXT = 65536
+# Deployed processor maximum: 9,633,792 pixels / (14 * 2)^2, plus template markers.
+GLM_IMAGE_BOUND = 12288 + 16
 OUTPUT_RESERVE = 4096
 OUTPUT_OVERRUN_ALLOWANCE = 10  # explicit engineering cushion for approximate provider output limits
 IMAGE_MAX_PIXELS = 2621440
@@ -82,6 +87,37 @@ def private_qwen_config():
     if not token:
         raise ValueError("Existing Token Plan API key is missing")
     return token
+
+
+def configure_glm(endpoint):
+    global MODEL, BASE_URL, OUTPUT_LIMIT
+    url = urlsplit(endpoint)
+    if (url.scheme != 'http' or url.hostname not in ('127.0.0.1', 'localhost', '::1')
+            or url.username is not None or url.query or url.fragment or url.path != '/v1'):
+        raise ValueError('GLM requires a loopback vLLM API base ending in /v1')
+    MODEL, BASE_URL, OUTPUT_LIMIT = GLM_MODEL, endpoint, GLM_CONTEXT
+
+
+def check_glm_service():
+    with requests.Session() as session:
+        session.trust_env = False
+        response = session.get(BASE_URL + '/models', timeout=10, allow_redirects=False)
+        response.raise_for_status()
+        models = response.json()['data']
+    if not any(row.get('id') == GLM_MODEL and row.get('max_model_len') == GLM_CONTEXT for row in models):
+        raise ValueError(f'vLLM must advertise {GLM_MODEL} with a {GLM_CONTEXT}-token context')
+
+
+def glm_prompt_count(session, payload):
+    data = {key: payload[key] for key in ('model', 'messages', 'chat_template_kwargs')}
+    reply = session.post(BASE_URL.removesuffix('/v1') + '/tokenize', json=data,
+                         timeout=(10, 45), allow_redirects=False)
+    reply.raise_for_status()
+    result = reply.json()
+    count = result.get('count')
+    if type(count) is not int or count < 1 or result.get('max_model_len') != OUTPUT_LIMIT:
+        raise ValueError('Invalid GLM tokenizer count or service context changed')
+    return count
 
 def redact(value):
     if isinstance(value, dict):
@@ -161,16 +197,21 @@ def qwen_preflight(messages, response_format, reserve, allow_legacy_image_fields
         "output_reserved": reserve + OUTPUT_OVERRUN_ALLOWANCE,
         "maximum": maximum,
         "limit": OUTPUT_LIMIT,
-        "image_bound_source": "https://help.aliyun.com/zh/model-studio/vision",
-        "image_bound_contract": "Conditional Qwen-style smart resize bound, factor32, conservative minimum512*512, max_pixels2621440 and two image markers; exact private endpoint preprocessing not verified",
+        "image_bound_source": ("Deployed GLM-4.5V-AWQ preprocessor_config.json" if MODEL == GLM_MODEL
+                               else "https://help.aliyun.com/zh/model-studio/vision"),
+        "image_bound_contract": ("GLM processor maximum 12288 image patches plus 16 markers" if MODEL == GLM_MODEL else
+                                 "Conditional Qwen-style smart resize bound, factor32, conservative minimum512*512, max_pixels2621440 and two image markers; exact private endpoint preprocessing not verified"),
         "provider_count_contract_verified": False,
         'historical_legacy_image_param_audit': allow_legacy_image_fields,
         "counting_assumptions": ["one text token consumes at least one original UTF8 byte (private tokenizer not supplied)",
             "response Schema counted once plus explicit framing allowance (private chat template/Schema linearization not supplied)",
-            "documented Qwen-family vision preprocessing applies to this private endpoint"],
+            ("Deployed GLM processor uses its configured pixel ceiling and 28-pixel spatial merge"
+             if MODEL == GLM_MODEL else "documented Qwen-family vision preprocessing applies to this private endpoint")],
     }
 
 def image_token_bound(width, height):
+    if MODEL == GLM_MODEL:
+        return GLM_IMAGE_BOUND
     factor, minimum, maximum = 32, 512 * 512, IMAGE_MAX_PIXELS
     h = max(factor, round(height / factor) * factor)
     w = max(factor, round(width / factor) * factor)
@@ -513,11 +554,33 @@ def prepare_qwen_payload(messages, schema, role, reserve, state=None, wire_schem
         for part in message['content']:
             if part.get('type') == 'image_url':
                 part['image_url'].pop('max_pixels', None)
-                part['max_pixels'] = IMAGE_MAX_PIXELS
+                if MODEL == GLM_MODEL:
+                    part.pop('max_pixels', None)
+                else:
+                    part['max_pixels'] = IMAGE_MAX_PIXELS
     generated = compact_wire_schema(wire_schema if wire_schema is not None else schema,
                                     state if role == 'semantic_consultant' else None,
                                     text_visual_reports=text_visual_reports,
                                     compact_replacement=visual_report_rows)
+    if MODEL == GLM_MODEL and role == 'semantic_consultant' and 'main_rivals' in generated.get('properties', {}):
+        fields = generated['properties']
+        targets = [target for target in fields['predicted_id'].get('enum', []) if target is not None]
+        selected = fields['predicted_id'].get('const')
+        if selected is not None:
+            targets = [selected]
+        no_target = deepcopy(generated)
+        no_target['properties']['predicted_id'] = {'type': 'null'}
+        no_target['properties']['unresolved']['minItems'] = 1
+        if targets:
+            fields['predicted_id'] = {'enum': targets}
+            fields['evidence']['minItems'] = 1
+            rival_ids = fields['main_rivals']['items']['properties']['object_id'].get('enum', targets)
+            if fields['main_rivals'].get('maxItems') != 0 and (len(rival_ids) > 1 or selected is not None):
+                fields['main_rivals']['minItems'] = 1
+            if selected is None:
+                generated = {'anyOf': [generated, no_target]}
+        else:
+            generated = no_target
     if recheck_ids:
         generated['properties']['action']['anyOf'].append(recheck_action_schema(recheck_ids))
     if readback_ids:
@@ -528,9 +591,14 @@ def prepare_qwen_payload(messages, schema, role, reserve, state=None, wire_schem
     preflight = qwen_preflight(visible, response_format, reserve)
     visible, packing, preflight = original_resolution_pack(visible, response_format, reserve, packing,
         preflight, qwen_preflight, OUTPUT_LIMIT)
-    preflight.update(enforced=True, context_policy='strict-local-32k', provider_context_limit=None)
+    preflight.update(enforced=True, context_policy='strict-local-64k' if MODEL == GLM_MODEL else 'strict-local-32k',
+                     provider_context_limit=GLM_CONTEXT if MODEL == GLM_MODEL else None)
     payload = {'model': MODEL, 'messages': visible, 'max_tokens': reserve, 'temperature': 0,
-               'enable_thinking': False, 'vl_high_resolution_images': False, 'response_format': response_format}
+               'response_format': response_format}
+    if MODEL == GLM_MODEL:
+        payload['chat_template_kwargs'] = {'enable_thinking': False}
+    else:
+        payload.update(enable_thinking=False, vl_high_resolution_images=False)
     packing['visible_native_evidence_ids'] = ['initial'] + packing.get('all_raw_evidence_ids', []) if state is not None else []
     packing['readback_ids'] = list(readback_ids)
     return PreparedCall(payload, preflight, packing)
@@ -549,7 +617,7 @@ class DirectCalls:
         self.root = root
         self.key = API_KEY
         self.record_only = True
-        self.qwen_context_policy = "strict-local-32k"
+        self.qwen_context_policy = "strict-local-64k" if MODEL == GLM_MODEL else "strict-local-32k"
         self.context_state = None
         self.session = requests.Session()
         self.session.trust_env = False
@@ -642,7 +710,7 @@ class DirectCalls:
             "state_version": version, "native_snapshot": snapshot, "strict_monitor_accepted": False})
         visible = deepcopy(messages)
         visible[0] = {"role": "system", "content":
-            "You are the SAME grounding Qwen, performing ONE final tentative evaluation after no progress. "
+            "You are the same grounding model, performing ONE final tentative evaluation after no progress. "
             "This is an explicitly user-authorized TENTATIVE exit, not a strict Monitor finish. "
             "Do not emit or complete Monitor nodes, exclusions or rollback. The accepted plan and all "
             "other active candidates remain unchanged. Read the full original description, raw "
@@ -966,7 +1034,7 @@ class DirectCalls:
             raise PreparedCall(payload, preflight, packing)
         if self.bootstrap_only:
             if preflight['maximum'] >= OUTPUT_LIMIT:
-                raise RuntimeError('Offline bootstrap payload does not fit strict local32K bound')
+                raise RuntimeError(f'Offline bootstrap payload does not fit strict local {OUTPUT_LIMIT}-token bound')
             from eviground.query.query_syntax import syntax_settings
             from importlib.metadata import version
             save(self.root / 'bootstrap-check.json', {
@@ -1040,7 +1108,22 @@ class DirectCalls:
             record.update(status='rejected_preflight', error='capacity_bound_exceeds_limit')
             save(folder / 'receipt.json', record)
             save(self.root / 'model-ledger.json', self.ledger)
-            raise ContextCapacityExceeded(f"Qwen preflight {preflight['maximum']} >= {OUTPUT_LIMIT}; no request sent")
+            raise ContextCapacityExceeded(f"Model preflight {preflight['maximum']} >= {OUTPUT_LIMIT}; no request sent")
+        if MODEL == GLM_MODEL and not preflight['images']:
+            try:
+                count = glm_prompt_count(self.session, payload)
+            except (requests.RequestException, ValueError) as exc:
+                record.update(status='rejected_tokenizer', error_type=type(exc).__name__,
+                              error='GLM tokenizer request failed before generation')
+                save(folder / 'receipt.json', record)
+                save(self.root / 'model-ledger.json', self.ledger)
+                raise RuntimeError(record['error']) from exc
+            record['server_prompt_count'] = count
+            if count + preflight['output_reserved'] >= OUTPUT_LIMIT:
+                record.update(status='rejected_preflight', error='provider_tokenization_exceeds_limit')
+                save(folder / 'receipt.json', record)
+                save(self.root / 'model-ledger.json', self.ledger)
+                raise ContextCapacityExceeded(f'GLM tokenizer count {count} plus output does not fit {OUTPUT_LIMIT}')
         started = time.monotonic()
         record['http_sent'] = True
         record['status'] = 'sent'
@@ -1048,7 +1131,8 @@ class DirectCalls:
         self.progress("request_sent", call=record['index'], role=role,
                       context_bound=preflight['maximum'], context_limit=OUTPUT_LIMIT)
         try:
-            response = self.session.post(BASE_URL + '/chat/completions', json=payload, headers={'Authorization': 'Bearer ' + self.key}, timeout=(45, 180), allow_redirects=False)
+            headers = {'Authorization': 'Bearer ' + self.key} if self.key else {}
+            response = self.session.post(BASE_URL + '/chat/completions', json=payload, headers=headers, timeout=(45, 180), allow_redirects=False)
             (folder / 'provider-response.json').write_text(response.text.replace(self.key, '[REDACTED]') if self.key else response.text)
             record['http_status'] = response.status_code
             try:
@@ -1057,6 +1141,8 @@ class DirectCalls:
                 record['usage'] = None
             save(folder / 'receipt.json', record)
             value = read_response(response, MODEL, preflight, preflight['output_reserved'], enforce_32k=preflight['enforced'])
+            if 'server_prompt_count' in record and value['usage']['prompt_tokens'] != record['server_prompt_count']:
+                raise ProviderCapacityViolation('GLM completion prompt usage differs from pre-send tokenization')
             content = value['choices'][0]['message'].get('content') or ''
             answer = json.loads(content, object_pairs_hook=unique_json_object)
             if role == WORKER and isinstance(answer, list):
@@ -1146,6 +1232,11 @@ class DirectCalls:
             "To replan, explicitly use the native complete replace_plan form. Legal null finish "
             "states missing evidence; no forced target. "
             "This record-only protocol is exploratory, not strict B10/R6/T17 comparison.")
+        if MODEL == GLM_MODEL:
+            visible[0]["content"] += (
+                "\nFor inspect, set elevation_deg to null for the default view, or choose a value "
+                "from 10 to 75 degrees inclusive. Set azimuth_deg to null or a value from 0 up to "
+                "but excluding 360 degrees.")
         native_feedback = [row for row in state.get("observations", []) if row.get("no_evidence_acquired")]
         visible.append({"role": "user", "content": packed({"state_version": version,
             "candidate_contract": candidate_contract(state, self.monitor.plan, len(self.monitor.history))})})
@@ -1288,7 +1379,7 @@ def validate_tentative_answer(answer, schema, targets):
             raise TentativeRivalOverlap("Rival list contains predicted target")
 
 
-def build_frozen_manifest():
+def build_frozen_manifest(*, include_single_sample_inputs=True):
     sources = sorted([*PROJECT.glob("src/**/*.py"), Path(__file__),
                       PROJECT / 'scripts/qwen_step2_context.py', PROJECT / 'scripts/check_qwen_step2_context.py',
                       PROJECT / 'scripts/qwen_evidence_selector.py', PROJECT / 'scripts/qwen_visual_reports.py',
@@ -1305,16 +1396,21 @@ def build_frozen_manifest():
                       PROJECT / "docs/qwen-direct-source-provenance.json", PROJECT / "pyproject.toml"])
     files = [INPUTS / "nr3d/scene0565_00/scene.npz", INPUTS / "nr3d/scene0565_00/scene_instances.json",
              INPUTS / "nr3d/query.json", INPUTS / "categories/scene0565_00/objects_top5.json"]
-    return {"candidate": "qwen-step2-three-level-visual-reports", "branch": "20261120_step2",
-            "baseline_commit": "8a44a23897687d8fb35a766b71bf67c008767940",
+    glm = MODEL == GLM_MODEL
+    return {"candidate": "glm-three-level-visual-reports" if glm else "qwen-step2-three-level-visual-reports",
+            "branch": "20261121_step3_glm" if glm else "20261120_step2",
+            "baseline_commit": ("e4705403853c9163698cfc6c60ccaccb21968e35" if glm else
+                                "8a44a23897687d8fb35a766b71bf67c008767940"),
             "model": MODEL, "endpoint": BASE_URL, "scheduler_sha256": sha256(Path(__file__)),
             "source_closure": {str(p.relative_to(PROJECT)): sha256(p) for p in sources},
-            "inputs": {str(p.relative_to(PROJECT)): sha256(p) for p in files},
+            "inputs": {str(p.relative_to(PROJECT)): sha256(p) for p in files} if include_single_sample_inputs else {},
             "python": sys.version, "packages": {d.metadata["Name"]: d.version for d in distributions() if d.metadata.get("Name")},
             "resource_budget_policy": {"mode": "record-only", "B_limit": None, "R_limit": None, "T_limit": None,
                                        "annealing_reference_turns_not_a_cap": 17},
-            "qwen_context_policy": {"policy": "strict-local-32k", "local_32768_refusal_enforced": True, 'strict_operator': '<',
-                "provider_context_limit_verified": False, 'private_count_contract_verified': False, "reference_bound": 32768,
+            "qwen_context_policy": {"policy": "strict-local-64k" if glm else "strict-local-32k",
+                f"local_{OUTPUT_LIMIT}_refusal_enforced": True, 'strict_operator': '<',
+                "provider_context_limit_verified": glm, 'private_count_contract_verified': False,
+                "server_tokenizes_text_before_generation": glm, "reference_bound": OUTPUT_LIMIT,
                 'requested_output_limits': {'parser': 1600, 'parser_repair': 1600, 'action': 4096,
                     'action_capacity_fallbacks': [3072, 2048, 1536], 'structural_repair': 3072, 'tentative': 3072,
                     'visual_coordinator_plan': 1024, 'visual_coordinator_review': 3072, 'visual_worker': 1024},
@@ -1323,8 +1419,9 @@ def build_frozen_manifest():
                 'visual_worker_original_image_bytes': True,
                 'framing': '1024 base +128/message +16/part; engineering allowance only; no provider absolute proof'},
             "model_visibility": "Three levels use the same model. Main and visual coordinator receive text only. Each visual worker reads one original image. The coordinator groups original findings by ID and flags conflict or gaps. The main receives reviewed textual reports and raw measurements. Complete original evidence stays local.",
-            "decision_protocol": "Native local Schema/Monitor and verbatim source quotes remain enforced. Main can ask for image rechecks independently of inspect/measure/finish. Visual calls are counted in R; B/R/T are record-only. Every request has strict local32K preflight and responses have provider usage audits.",
-            "credential_policy": "Git-external Token Plan config or run-scoped key override; key contents excluded from frozen metadata.",
+            "decision_protocol": f"Native local Schema/Monitor and verbatim source quotes remain enforced. Main can ask for image rechecks independently of inspect/measure/finish. Visual calls are counted in R; B/R/T are record-only. Every request has a strict local {OUTPUT_LIMIT}-token preflight and responses have provider usage audits.",
+            "credential_policy": ("Loopback vLLM service via SSH" if glm else
+                                  "Git-external Token Plan config or run-scoped key override; key contents excluded from frozen metadata."),
             "scope": "Diagnostic new single run; not strict B10/R6/T17 comparison, formal score or paper update.",
             "fresh_start": True, "old_runtime_source_imports": [], "inherited_dag_answers_predictions": [],
             "server_model_requests": 0, "gt_read_before_prediction": False}
@@ -1332,7 +1429,6 @@ def build_frozen_manifest():
 
 def run(root, batch_request=None, bootstrap_check=False):
     global API_KEY
-    API_KEY = '' if bootstrap_check else private_qwen_config()
     if root.exists():
         raise FileExistsError(f"Run directory already exists: {root}")
     root.mkdir(parents=True)
@@ -1344,6 +1440,8 @@ def run(root, batch_request=None, bootstrap_check=False):
             raise ValueError("Unexpected worker input fields; target annotations are forbidden")
         shared_path = (request_path.parent / request["shared_manifest"]).resolve()
         shared = json.loads(shared_path.read_text())
+        if shared['protocol']['model'] == GLM_MODEL:
+            configure_glm(shared['protocol']['endpoint'])
         manifest = {**shared["protocol"], "source_closure": shared["source_closure"],
                     "shared_manifest": str(shared_path),
                     "shared_manifest_sha256": sha256(shared_path),
@@ -1353,6 +1451,7 @@ def run(root, batch_request=None, bootstrap_check=False):
                 raise ValueError(f"Worker input changed: {name}")
     else:
         manifest = build_frozen_manifest()
+    API_KEY = '' if bootstrap_check or MODEL == GLM_MODEL else private_qwen_config()
     calls = DirectCalls(root, visual_reports=True, visual_levels=manifest.get('visual_levels', 3))
     calls.bootstrap_only = bootstrap_check
     calls.console_progress = request is not None
@@ -1390,7 +1489,7 @@ def run(root, batch_request=None, bootstrap_check=False):
         "EVIGROUND_DAG_REPAIR_LIMIT": "6",
         "EVIGROUND_DECISION_MAX_TOKENS": str(OUTPUT_RESERVE),
         "EVIGROUND_SUCCESSFUL_TOOL_BUDGET": "1",
-        "EVIGROUND_CONTEXT_LIMIT": "32768",
+        "EVIGROUND_CONTEXT_LIMIT": str(OUTPUT_LIMIT),
         "EVIGROUND_DIALOGUE_HISTORY": "0",
     }.items():
         os.environ[name] = value

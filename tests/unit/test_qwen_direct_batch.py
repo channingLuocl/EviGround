@@ -186,7 +186,8 @@ def test_freeze_resume_identity_and_gt_not_in_worker_selection(tmp_path, monkeyp
     monkeypatch.setattr(batch, 'inference_selection', lambda p: original_selection(p, expected=1))
     monkeypatch.setattr(batch, 'source_closure', lambda: {'pyproject.toml': batch.sha(batch.ROOT/'pyproject.toml')})
     import qwen_direct_fresh
-    monkeypatch.setattr(qwen_direct_fresh, 'build_frozen_manifest', lambda: {'model': 'fake', 'source_closure': {}, 'inputs': {}})
+    monkeypatch.setattr(qwen_direct_fresh, 'build_frozen_manifest',
+                        lambda *, include_single_sample_inputs: {'model': 'fake', 'source_closure': {}, 'inputs': {}})
     one, selected, _ = batch.freeze_run(output, selection, assets_path)
     two, _, _ = batch.freeze_run(output, selection, assets_path)
     assert one == two and selected == rows

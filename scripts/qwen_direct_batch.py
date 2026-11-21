@@ -213,11 +213,12 @@ def freeze_run(output, selection, assets_path, sample_rows=None, visual_levels=3
         if i % 20 == 0 or i == len(assets['scene_entries']):
             print(f'[startup input integrity] {i}/{len(assets["scene_entries"])} scenes; no inference yet', flush=True)
     closure = source_closure()
-    protocol = build_frozen_manifest()
+    protocol = build_frozen_manifest(include_single_sample_inputs=False)
     # Single-sample local input IDs do not describe this run; shared asset hashes do.
     for key in ('source_closure', 'inputs', 'scheduler_sha256'):
         protocol.pop(key, None)
-    protocol.update(candidate=f'qwen-step2-{visual_levels}-level-visual-reports', visual_levels=visual_levels,
+    family = 'glm' if protocol['model'] == 'GLM-4.5V' else 'qwen-step2'
+    protocol.update(candidate=f'{family}-{visual_levels}-level-visual-reports', visual_levels=visual_levels,
                     full_selection=sample_rows is None,
                     scope='Full Nr3D research run' if sample_rows is None else 'Selected Nr3D diagnostic rows',
                     shared_scene_storage='Read-only public scene refs checked against asset hashes',
@@ -588,6 +589,8 @@ def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluat
 
 
 def main():
+    import qwen_direct_fresh as fresh
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--preflight', action='store_true', help='Offline only: verify7805 queries/scenes/categories and prepare missing category tables; no model calls')
     parser.add_argument('--prepare-only', action='store_true', help='Verify all input hashes and freeze shared output/source, but do NOT start workers or call any model')
@@ -600,11 +603,17 @@ def main():
     parser.add_argument('--workers', type=int, choices=[1], default=1, help='Sequential fresh subprocesses only; no shared global Monitor')
     parser.add_argument('--sample-rows', type=int, nargs='+', help='Explicit diagnostic csv_row IDs; not a model/API budget')
     parser.add_argument('--visual-levels', type=int, choices=[2, 3], default=3)
+    parser.add_argument('--glm-url', help='GLM-4.5V vLLM endpoint through a local SSH tunnel, ending in /v1')
     args = parser.parse_args()
     if args.preflight:
         report = asset_preflight(args.manifest, args.scene_root, args.category_cache, args.prediction_export, args.assets_file)
         print(json.dumps({k: v for k, v in report.items() if k != 'scene_entries'}, ensure_ascii=False), flush=True)
         return
+    if args.glm_url:
+        if args.output == OUTPUT:
+            parser.error('--glm-url requires a separate --output directory')
+        fresh.configure_glm(args.glm_url)
+        fresh.check_glm_service()
     output = args.output.resolve(); ensure_run_writable(output); output.mkdir(parents=True, exist_ok=True)
     with (output/'.batch.lock').open('a') as lock:
         try:

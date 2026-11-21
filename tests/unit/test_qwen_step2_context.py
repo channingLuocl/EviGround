@@ -59,6 +59,68 @@ def test_response_reserved_actual_and_count_bounds_fail_without_retry():
     assert fresh.read_response(response(100, 100), fresh.MODEL, bound, 4096)['usage']['prompt_tokens'] == 100
 
 
+@pytest.fixture
+def glm_backend(monkeypatch):
+    for name in ('MODEL', 'BASE_URL', 'OUTPUT_LIMIT'):
+        monkeypatch.setattr(fresh, name, getattr(fresh, name))
+    fresh.configure_glm('http://127.0.0.1:18045/v1')
+
+
+def test_glm_text_preflight_blocks_completion_at_context_limit(tmp_path, glm_backend):
+    direct = fresh.DirectCalls(tmp_path, visual_reports=True)
+    tokenizer = requests.Response()
+    tokenizer.status_code = 200
+    tokenizer._content = json.dumps({'count': 65536 - 768 - 10, 'max_model_len': 65536}).encode()
+    with patch.object(direct.session, 'post', return_value=tokenizer) as post:
+        with pytest.raises(fresh.ContextCapacityExceeded, match='GLM tokenizer count'):
+            direct._qwen('test', 'parser', [{'role': 'user', 'content': 'return JSON'}], {'type': 'object'}, reserve=768)
+    post.assert_called_once()
+    assert post.call_args.args[0].endswith('/tokenize')
+    assert not direct.ledger[-1]['http_sent']
+
+
+def test_glm_visual_worker_preserves_image_without_tokenizer_call(tmp_path, glm_backend):
+    direct = fresh.DirectCalls(tmp_path, visual_reports=True)
+    part = pixels()
+    with patch.object(direct.session, 'post', return_value=response()) as post:
+        direct._qwen('worker', fresh.WORKER, [{'role': 'user', 'content': [part]}], {'type': 'object'})
+    post.assert_called_once()
+    assert post.call_args.args[0].endswith('/v1/chat/completions')
+    wire = post.call_args.kwargs['json']
+    assert wire['model'] == 'GLM-4.5V'
+    assert wire['messages'][0]['content'] == [part]
+    assert wire['chat_template_kwargs'] == {'enable_thinking': False}
+    assert 'vl_high_resolution_images' not in wire
+
+
+def test_compact_inspect_keeps_native_angle_bounds():
+    elevation = {'anyOf': [{'type': 'number', 'minimum': 10, 'maximum': 75}, {'type': 'null'}]}
+    native = {'properties': {'state_version': {'const': 'v'}, 'action': {'anyOf': [
+        {'properties': {'action': {'enum': ['inspect']}, 'elevation_deg': elevation}}
+    ]}}}
+    wire = context.compact_wire_schema(native, {'description': 'A lamp'}, text_visual_reports=True)
+    inspect = wire['properties']['action']['anyOf'][0]['properties']
+    assert inspect['elevation_deg'] == elevation
+    with pytest.raises(fresh.ValidationError):
+        fresh.validate(0, inspect['elevation_deg'])
+
+
+def test_glm_tentative_schema_requires_evidence_or_explained_abstention(glm_backend):
+    fields = {'predicted_id': {'enum': [12, 33, None]},
+              'evidence': {'type': 'array'},
+              'main_rivals': {'type': 'array', 'items': {'type': 'object', 'properties': {
+                  'object_id': {'enum': [12, 33]}}}},
+              'unresolved': {'type': 'array'}}
+    schema = {'type': 'object', 'properties': fields, 'required': list(fields)}
+    prepared = fresh.prepare_qwen_payload([], schema, 'semantic_consultant', 1024)
+    wire = prepared.payload['response_format']['json_schema']['schema']
+    answer = {'predicted_id': 12, 'evidence': [], 'main_rivals': [], 'unresolved': ['missing geometry']}
+    with pytest.raises(fresh.ValidationError):
+        fresh.validate(answer, wire)
+    fresh.validate({**answer, 'predicted_id': None}, wire)
+    fresh.validate({**answer, 'evidence': ['image'], 'main_rivals': [{'object_id': 33}]}, wire)
+
+
 def measurement():
     return {'tool': 'measure', 'evidence_id': 'observation_1', 'objects': [{'id': i, 'center_xyz_m': [i, -i, 1.234567890123]} for i in range(8)],
         'directed_pair_measurements': [{'object_id': i, 'reference_id': j, 'xy_center_m': abs(i-j) + .1234567890123}
