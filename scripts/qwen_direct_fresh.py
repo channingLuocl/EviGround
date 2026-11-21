@@ -1,20 +1,26 @@
-"""Isolated single-Qwen native ReAct episode; no Laya runtime or remote GPU."""
+"""Qwen native ReAct episode with optional text-only visual reporting."""
 from __future__ import annotations
 import argparse
 import base64
+from collections import Counter
 from copy import deepcopy
 from datetime import datetime, timezone
 from importlib.metadata import distributions
+from graphlib import CycleError, TopologicalSorter
 import hashlib
 import io
 import json
 import math
 import os
+import re
 from pathlib import Path
 import shlex
 import sys
 import time
 import requests
+from qwen_step2_context import original_resolution_pack, compact_call, compact_wire_schema
+from qwen_evidence_selector import EvidenceSelectionError, registry as evidence_registry, select_context, validate_visible_references
+from qwen_visual_reports import COORDINATOR, WORKER, VisualReports, obj, request_schema
 from PIL import Image
 from jsonschema import Draft202012Validator, ValidationError, validate
 
@@ -22,8 +28,9 @@ PROJECT = Path(__file__).resolve().parents[1]
 INPUTS = PROJECT / "data/qwen_direct"
 MODEL = "qwen3.8-max"
 BASE_URL = "https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1"
-OUTPUT_LIMIT = 32768  # reference only, no local context gate
-OUTPUT_RESERVE = 8192
+OUTPUT_LIMIT = 32768  # strict local engineering gate; provider usage audited separately
+OUTPUT_RESERVE = 4096
+OUTPUT_OVERRUN_ALLOWANCE = 10  # explicit engineering cushion for approximate provider output limits
 IMAGE_MAX_PIXELS = 2621440
 API_KEY = ""
 sys.path.insert(0, str(PROJECT / "src"))
@@ -71,9 +78,10 @@ def private_qwen_config():
             values[key.strip()] = parsed[0] if parsed else ""
     if values.get("SEEGROUND_BASE_URL", "").rstrip("/") != BASE_URL:
         raise ValueError("Existing Token Plan configuration has an unexpected base URL")
-    if not values.get("SEEGROUND_API_KEY"):
+    token = os.environ.get("EVIGROUND_DIRECT_QWEN_TOKEN_PLAN_KEY") or values.get("SEEGROUND_API_KEY")
+    if not token:
         raise ValueError("Existing Token Plan API key is missing")
-    return values["SEEGROUND_API_KEY"]
+    return token
 
 def redact(value):
     if isinstance(value, dict):
@@ -88,16 +96,29 @@ def redact(value):
         return value.replace(API_KEY, "[REDACTED]") if API_KEY else value
     return value
 
-def qwen_preflight(messages, response_format, reserve):
+def qwen_preflight(messages, response_format, reserve, allow_legacy_image_fields=False):
+    if type(reserve) is not int or reserve <= 0:
+        raise ValueError('Positive integer output reservation required')
     clean_messages = deepcopy(messages)
     images = []
     for message in clean_messages:
+        if set(message) - {'role', 'content'} or message.get('role') not in ('system', 'user', 'assistant'):
+            raise ValueError('Unsupported chat framing fields/role; no uncounted tool/name inputs')
         content = message.get("content")
+        if not isinstance(content, (str, list)):
+            raise ValueError('Unsupported message content')
         if not isinstance(content, list):
             continue
         for part in content:
+            if part.get('type') not in ('text', 'image_url'):
+                raise ValueError('Unsupported uncounted media/content part')
+            if part['type'] == 'text' and (set(part) != {'type', 'text'} or not isinstance(part['text'], str)):
+                raise ValueError('Unsupported text part fields')
             if part.get("type") != "image_url":
                 continue
+            url_keys = {'url', 'max_pixels'} if allow_legacy_image_fields else {'url'}
+            if set(part) - {'type', 'image_url', 'max_pixels'} or set(part['image_url']) - url_keys:
+                raise ValueError('Unsupported vision preprocessing fields; bound does not cover them')
             url = part["image_url"]["url"]
             if not url.startswith("data:image/") or ";base64," not in url:
                 raise ValueError("Only frozen local image attachments are allowed")
@@ -106,6 +127,8 @@ def qwen_preflight(messages, response_format, reserve):
                 width, height = image.size
                 if width < 1 or height < 1:
                     raise ValueError("Invalid image dimensions")
+                if getattr(image, 'n_frames', 1) != 1 or max(width, height) / min(width, height) > 200:
+                    raise ValueError('Only static images with aspect ratio<=200 have a supported local vision bound')
             images.append({
                 "sha256": hashlib.sha256(raw).hexdigest(),
                 "width": width,
@@ -123,18 +146,28 @@ def qwen_preflight(messages, response_format, reserve):
             text_bytes += sum(len(part["text"].encode("utf-8"))
                               for part in content if part.get("type") == "text")
     image_bound = sum(row["visual_tokens_upper_bound"] for row in images)
-    maximum = text_bytes + 1024 + image_bound + reserve
+    parts = sum(len(m['content']) if isinstance(m.get('content'), list) else 1 for m in clean_messages)
+    framing = 1024 + 128 * len(messages) + 16 * parts
+    maximum = text_bytes + framing + image_bound + reserve + OUTPUT_OVERRUN_ALLOWANCE
     return {
         "method": "UTF-8 byte text upper bound + full per-image patch ceiling",
         "text_bytes": text_bytes,
-        "framing_allowance": 1024,
+        "framing_allowance": framing,
+        "framing_policy": "1024 base +128 per message +16 per content part; explicit engineering allowance, not a private provider template proof",
         "image_tokens_upper_bound": image_bound,
         "images": images,
-        "output_reserved": reserve,
+        "requested_max_tokens": reserve,
+        "output_overrun_allowance": OUTPUT_OVERRUN_ALLOWANCE,
+        "output_reserved": reserve + OUTPUT_OVERRUN_ALLOWANCE,
         "maximum": maximum,
         "limit": OUTPUT_LIMIT,
         "image_bound_source": "https://help.aliyun.com/zh/model-studio/vision",
-        "image_bound_contract": "Official Qwen3.8 smart resize: factor=32, min_pixels=512*512, max_pixels=2621440; resized pixels/1024 plus two markers; vl_high_resolution_images=false",
+        "image_bound_contract": "Conditional Qwen-style smart resize bound, factor32, conservative minimum512*512, max_pixels2621440 and two image markers; exact private endpoint preprocessing not verified",
+        "provider_count_contract_verified": False,
+        'historical_legacy_image_param_audit': allow_legacy_image_fields,
+        "counting_assumptions": ["one text token consumes at least one original UTF8 byte (private tokenizer not supplied)",
+            "response Schema counted once plus explicit framing allowance (private chat template/Schema linearization not supplied)",
+            "documented Qwen-family vision preprocessing applies to this private endpoint"],
     }
 
 def image_token_bound(width, height):
@@ -169,7 +202,7 @@ def factor_schema(schema):
                        or isinstance(value.get("enum"), list))
         if replace and schema_node and not root and len(key) >= 80 and counts.get(key, 0) > 1:
             if key not in names:
-                name = f"shared_{len(names)}"
+                name = f"s{len(names)}"
                 while name in reserved:
                     name += "_"
                 reserved.add(name)
@@ -182,6 +215,31 @@ def factor_schema(schema):
     visit(schema)
     result = visit(schema, True, True)
     result["$defs"] = {**result.get("$defs", {}), **definitions}
+    def references(value):
+        if isinstance(value, dict):
+            if "$ref" in value:
+                yield value["$ref"]
+            for key, child in value.items():
+                if key not in ("enum", "const", "default", "examples"):
+                    yield from references(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from references(child)
+
+    prefix = "#/$defs/"
+    counts = Counter(references(result))
+    inline = {prefix + name: node for name, node in definitions.items() if counts[prefix + name] == 1}
+    for name in inline:
+        result["$defs"].pop(name.removeprefix(prefix))
+    def inline_once(value):
+        if isinstance(value, dict):
+            if set(value) == {"$ref"} and value["$ref"] in inline:
+                return inline_once(inline[value["$ref"]])
+            return {key: child if key in ("enum", "const", "default", "examples") else inline_once(child)
+                    for key, child in value.items()}
+        return [inline_once(child) for child in value] if isinstance(value, list) else value
+
+    result = inline_once(result)
     return result if len(packed(result)) < len(packed(schema)) else schema
 
 def provider_schema(value):
@@ -207,6 +265,37 @@ def canonical_monitor_updates(monitor):
         raise ValueError("Explicit current_node_id update is missing; no checkpoint will be invented")
     result["node_updates"] = [row for row in updates if row["id"] == current] + [
         row for row in updates if row["id"] != current]
+    return result
+
+
+def canonical_initial_monitor(monitor):
+    """Serialize the model's explicit graph in the native topological ID order."""
+    result = deepcopy(monitor)
+    nodes = result['nodes']
+    graph = {node['id']: node['depends_on'] for node in nodes}
+    if len(graph) != len(nodes) or any(dep not in graph for deps in graph.values() for dep in deps):
+        raise ValueError('Initial DAG must contain distinct task IDs and only dependencies on existing tasks')
+    ordered = list(graph)
+    if all(node_id == f'n{index}' and set(graph[node_id]) <= set(ordered[:index])
+           for index, node_id in enumerate(ordered)):
+        return result
+    try:
+        ordered = list(TopologicalSorter(graph).static_order())
+    except CycleError as exc:
+        raise ValueError('Initial DAG contains a cycle; propose acyclic task dependencies') from exc
+    ids = {node_id: f'n{index}' for index, node_id in enumerate(ordered)}
+    by_id = {node['id']: node for node in nodes}
+    for node in nodes:
+        node['id'] = ids[node['id']]
+        node['depends_on'] = [ids[dep] for dep in node['depends_on']]
+    result['nodes'] = [by_id[node_id] for node_id in ordered]
+    result['verification']['depends_on'] = [ids.get(dep, dep) for dep in result['verification']['depends_on']]
+    if set(result['verification']['depends_on']) == set(ids.values()):
+        result['verification']['depends_on'].sort(key=lambda node_id: int(node_id[1:]))
+    result['current_node_id'] = ids.get(result['current_node_id'], result['current_node_id'])
+    result['reopen_node_ids'] = [ids.get(node_id, node_id) for node_id in result['reopen_node_ids']]
+    for requirement, task_ids in result['requirement_nodes'].items():
+        result['requirement_nodes'][requirement] = [ids.get(node_id, node_id) for node_id in task_ids]
     return result
 
 def extract_state(messages):
@@ -240,13 +329,38 @@ def decode_prompt_tables(value):
         return [decode_prompt_tables({**dict(zip(columns, row)), **constants}) for row in value["rows"]]
     return {key: decode_prompt_tables(child) for key, child in value.items()}
 
-def complete_validation_feedback(error):
+def complete_validation_feedback(error, *, concise=False):
     if not isinstance(error, ValidationError):
         return [{"path": [], "error": str(error)}]
     if error.context:
-        return [row for child in error.context for row in complete_validation_feedback(child)]
+        children = error.context
+        if concise and error.validator == 'anyOf' and isinstance(error.instance, dict):
+            instance = error.instance
+            choices = list(enumerate(error.validator_value))
+            for field in ('action', 'status', 'predicted_id', 'current_node_id'):
+                matching = [(index, branch) for index, branch in choices
+                            if field in instance and field in branch.get('properties', {}) and
+                            Draft202012Validator(branch['properties'][field]).is_valid(instance[field])]
+                choices = matching or choices
+            nodes = instance.get('nodes')
+            if isinstance(nodes, list):
+                matching = [(index, branch) for index, branch in choices
+                            if branch.get('properties', {}).get('nodes', {}).get('maxItems') == len(nodes)]
+                choices = matching or choices
+            matching = [(index, branch) for index, branch in choices
+                        if {'node_updates', 'replace_plan'}.intersection(branch.get('required', ()))
+                        and set(branch.get('required', ())) <= instance.keys()]
+            choices = matching or choices
+            if len(choices) == 1:
+                index = choices[0][0]
+                children = [child for child in children if child.schema_path[0] == index] or children
+        return [row for child in children for row in complete_validation_feedback(child, concise=concise)]
+    message = error.message
+    if concise and len(message) > 120:
+        constraint = packed(error.validator_value)
+        message = f'{error.validator} constraint: {constraint[:160]}'
     return [{"path": list(error.absolute_path), "schema_path": list(error.absolute_schema_path),
-             "validator": error.validator, "error": error.message}]
+             "validator": error.validator, "error": message}]
 
 def expand_history_references(state):
     """Decode existing exact history references before model-selected row delivery."""
@@ -278,15 +392,24 @@ def read_response(response, model, preflight, reserve, enforce_32k=True):
         raise RuntimeError(f"Unexpected Qwen response model: {value.get('model')}")
     choice = value["choices"][0]
     usage = value.get("usage") or {}
+    if not isinstance(usage, dict):
+        raise ProviderCapacityViolation('Provider returned a non-object usage record')
+    prompt_tokens = usage.get("prompt_tokens")
+    completion_tokens = usage.get("completion_tokens")
+    if type(prompt_tokens) is not int or prompt_tokens < 0:
+        raise ProviderCapacityViolation("Provider did not report valid integer prompt_tokens")
+    if type(completion_tokens) is not int or completion_tokens < 0 or completion_tokens > reserve:
+        raise ProviderCapacityViolation("Provider completion_tokens missing/invalid or beyond output reservation")
+    if enforce_32k and prompt_tokens + reserve >= OUTPUT_LIMIT:
+        raise ProviderCapacityViolation("Provider usage exceeded the reserved context window")
+    if enforce_32k and prompt_tokens + completion_tokens >= OUTPUT_LIMIT:
+        raise ProviderCapacityViolation("Provider actual input plus output reached strict context boundary")
+    if prompt_tokens > preflight["maximum"] - reserve:
+        raise ProviderCapacityViolation("Provider usage exceeded the preflight input upper bound")
+    if choice.get("finish_reason") == "length":
+        raise ValueError("Output reached max_tokens before completing JSON. Return a compact answer within the supplied Schema.")
     if choice.get("finish_reason") != "stop":
         raise RuntimeError(f"Qwen response incomplete: {choice.get('finish_reason')}")
-    prompt_tokens = usage.get("prompt_tokens")
-    if type(prompt_tokens) is not int:
-        raise RuntimeError("Provider did not report integer prompt_tokens")
-    if enforce_32k and prompt_tokens + reserve > OUTPUT_LIMIT:
-        raise RuntimeError("Provider usage exceeded the reserved context window")
-    if prompt_tokens > preflight["maximum"] - reserve:
-        raise RuntimeError("Provider usage exceeded the preflight input upper bound")
     return value
 
 def progress_identity(state, accepted_plan):
@@ -363,12 +486,71 @@ class BootstrapReady(Exception):
     """Offline real-worker startup reached the first actual API boundary."""
 
 
+class ContextCapacityExceeded(RuntimeError):
+    pass
+
+
+class TentativeRivalOverlap(ValueError):
+    pass
+
+
+class ProviderCapacityViolation(RuntimeError):
+    pass
+
+
+class PreparedCall(Exception):
+    """Offline-only final payload capture, before journal/HTTP; no model response."""
+    def __init__(self, payload, preflight, packing):
+        self.payload, self.preflight, self.packing = payload, preflight, packing
+
+
+def prepare_qwen_payload(messages, schema, role, reserve, state=None, wire_schema=None, *,
+                         text_visual_reports=False, recheck_ids=(), readback_ids=(), visual_report_rows=False):
+    visible, packing = compact_call(messages, state if role == 'semantic_consultant' else None,
+                                   text_visual_reports=text_visual_reports, visual_report_rows=visual_report_rows)
+    for message in visible:
+        if not isinstance(message.get('content'), list): continue
+        for part in message['content']:
+            if part.get('type') == 'image_url':
+                part['image_url'].pop('max_pixels', None)
+                part['max_pixels'] = IMAGE_MAX_PIXELS
+    generated = compact_wire_schema(wire_schema if wire_schema is not None else schema,
+                                    state if role == 'semantic_consultant' else None,
+                                    text_visual_reports=text_visual_reports,
+                                    compact_replacement=visual_report_rows)
+    if recheck_ids:
+        generated['properties']['action']['anyOf'].append(recheck_action_schema(recheck_ids))
+    if readback_ids:
+        generated['properties']['action']['anyOf'].append(readback_action_schema(readback_ids))
+    generated = provider_schema(factor_schema(generated))
+    Draft202012Validator.check_schema(generated)
+    response_format = {'type': 'json_schema', 'json_schema': {'name': role + '_answer', 'strict': True, 'schema': generated}}
+    preflight = qwen_preflight(visible, response_format, reserve)
+    visible, packing, preflight = original_resolution_pack(visible, response_format, reserve, packing,
+        preflight, qwen_preflight, OUTPUT_LIMIT)
+    preflight.update(enforced=True, context_policy='strict-local-32k', provider_context_limit=None)
+    payload = {'model': MODEL, 'messages': visible, 'max_tokens': reserve, 'temperature': 0,
+               'enable_thinking': False, 'vl_high_resolution_images': False, 'response_format': response_format}
+    packing['visible_native_evidence_ids'] = ['initial'] + packing.get('all_raw_evidence_ids', []) if state is not None else []
+    packing['readback_ids'] = list(readback_ids)
+    return PreparedCall(payload, preflight, packing)
+
+
+def recheck_action_schema(image_ids):
+    return obj({'evidence_request': request_schema(image_ids)})
+
+
+def readback_action_schema(source_ids):
+    return obj({'read_evidence_page': {'enum': list(source_ids)}})
+
+
 class DirectCalls:
-    def __init__(self, root):
+    def __init__(self, root, *, visual_reports=False, visual_levels=3):
         self.root = root
         self.key = API_KEY
         self.record_only = True
-        self.qwen_context_policy = "provider"
+        self.qwen_context_policy = "strict-local-32k"
+        self.context_state = None
         self.session = requests.Session()
         self.session.trust_env = False
         self.ledger = []
@@ -386,6 +568,11 @@ class DirectCalls:
         self.console_progress = False
         self.trace = None
         self.bootstrap_only = False
+        self.preview_only = False
+        self.selector_preview = None
+        self.selector_sessions = 0
+        self.visual = VisualReports(self._visual_call, self._save_visual_report,
+                                    coordinated=visual_levels == 3) if visual_reports else None
 
     def progress(self, stage, **fields):
         b_used = sum(bool(step.get('observation')) and not step['observation'].get('no_evidence_acquired')
@@ -419,6 +606,7 @@ class DirectCalls:
         return self.stagnant_transitions >= 3
 
     def tentative_final(self, messages, state, trigger):
+        self.context_state = deepcopy(state)
         if self.tentative_evaluation_started:
             raise RuntimeError("Only one tentative final evaluation is permitted")
         self.tentative_evaluation_started = True
@@ -460,7 +648,8 @@ class DirectCalls:
             "other active candidates remain unchanged. Read the full original description, raw "
             "evidence and actual attached images. Choose the best-supported target ONLY from "
             "legal_current_prediction_ids, compare your strongest remaining rival(s), cite original "
-            "evidence covering each claim, and state unresolved assumptions/uncertainty. If no "
+            "evidence covering each claim, and state unresolved assumptions/uncertainty. Every "
+            "main_rivals object_id must differ from predicted_id. If no "
             "usable basis exists, choose null and explain missing evidence. No forced target. "
             "Do not infer certainty from classifier priors or absence from a view. Negative right "
             "coordinates are less than positive coordinates; honor the SAME frame rows/order. "
@@ -494,24 +683,290 @@ class DirectCalls:
                     raise RuntimeError("Tentative evaluation still structurally invalid after one model repair") from exc
                 call = self.ledger[-1]
                 raw = self.root / "calls" / f"{call['index']:03d}-{call['tag']}-{call['role']}" / "provider-response.json"
-                feedback["previous_raw_answer"] = json.loads(raw.read_text())["choices"][0]["message"]["content"]
+                previous = json.loads(raw.read_text())["choices"][0]["message"]["content"]
+                try:
+                    proposal = json.loads(previous or "", object_pairs_hook=unique_json_object)
+                except ValueError:
+                    proposal = {}
+                selected = proposal.get('predicted_id') if isinstance(proposal, dict) else None
+                proposed_rivals = proposal.get('main_rivals') if isinstance(proposal, dict) else None
+                if (type(selected) is int and selected in targets and proposal.get('state_version') == version
+                        and isinstance(proposed_rivals, list)
+                        and any(isinstance(row, dict) and row.get('object_id') == selected for row in proposed_rivals)):
+                    # Keep the model's explicit target and constrain the rival IDs on its repair.
+                    schema = deepcopy(schema)
+                    fields = schema['properties']
+                    fields['predicted_id'] = {'const': selected}
+                    rivals = [target for target in targets if target != selected]
+                    if rivals:
+                        fields['main_rivals']['items']['properties']['object_id']['enum'] = rivals
+                    else:
+                        fields['main_rivals']['maxItems'] = 0
+                    feedback['instruction'] += ' Keep predicted_id and give distinct rival IDs.'
+                    if not isinstance(exc, TentativeRivalOverlap):
+                        feedback['errors'].append({'path': ['main_rivals'], 'error': 'Rival list contains predicted target'})
+                    save(folder / f"structural-rejection-{attempt}.json", feedback)
+                feedback["previous_raw_answer"] = previous
                 visible = deepcopy(original_visible) + [{"role": "user", "content": packed(feedback)}]
-    def _qwen(self, tag, role, messages, schema, reserve=OUTPUT_RESERVE, wire_schema=None, quote_registry=None):
-        messages = deepcopy(messages)
+    def _selected_payload(self, tag, messages, schema, reserve, wire_schema):
+        self.selector_sessions += 1
+        session = self.root / 'evidence-selections' / f's{self.selector_sessions:04d}'
+        before = deepcopy(self.context_state)
+        native_version = digest(before)
+        full, units = evidence_registry(before, messages)
+        save(session/'full-native-state.json', before)
+        manifest_units = []
+        for unit in units:
+            save(session/'units'/f"{unit['id']}.json", unit['raw'])
+            originals = []
+            for part in unit['images']:
+                header, encoded = part['image_url']['url'].split(',', 1)
+                raw = base64.b64decode(encoded, validate=True)
+                sha = hashlib.sha256(raw).hexdigest()
+                mime = header.split(';', 1)[0].removeprefix('data:')
+                suffix = {'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp'}.get(mime, '.bin')
+                path = session/'original-images'/(sha + suffix); path.parent.mkdir(parents=True, exist_ok=True)
+                if not path.exists(): path.write_bytes(raw)
+                originals.append({'path': str(path.relative_to(session)), 'sha256': sha})
+            manifest_units.append({**{k: v for k, v in unit.items() if k not in ('raw', 'images')}, 'original_images': originals})
+        save(session/'registry.json', {'native_state_version': native_version, 'units': manifest_units})
+        def prepare_selector(batch_messages, batch_schema):
+            return prepare_qwen_payload(batch_messages, batch_schema, 'evidence_selector', 768)
+        def request_selector(batch_messages, batch_schema, metadata):
+            folder = session/f"batch-{metadata['batch_index']:03d}"
+            probe = prepare_selector(batch_messages, batch_schema)
+            save(folder/'request-redacted.json', redact(probe.payload))
+            save(folder/'preflight.json', probe.preflight)
+            save(folder/'allowed-and-required-ids.json', metadata)
+            if self.preview_only:
+                if self.selector_preview is None:
+                    raise EvidenceSelectionError('Offline selector requires an explicit simulated ID selection; no model reply fabricated')
+                selected = self.selector_preview(metadata)
+                answer = {'batch_id': metadata['batch_id'], 'selected_evidence_ids': selected}
+                provenance = {'simulated_selection': True, 'actual_model_requests': 0, 'provider_usage': None}
+                save(folder/'SIMULATED-selection-not-model-response.json', {**provenance, 'answer': answer})
+                return answer, provenance
+            try:
+                response = self._qwen(f"selector-s{self.selector_sessions:04d}-b{metadata['batch_index']:03d}",
+                                      'evidence_selector', batch_messages, batch_schema, reserve=768)
+                answer = json.loads(response['_content'], object_pairs_hook=unique_json_object)
+            except ProviderCapacityViolation:
+                raise
+            except Exception as exc:
+                raise EvidenceSelectionError('Selector request/validation failed after journal saved: ' + str(exc)) from exc
+            receipt = self.ledger[-1]
+            return answer, {'simulated_selection': False, 'model': MODEL, 'call_index': receipt['index'],
+                            'usage': receipt.get('usage'), 'preflight': receipt['preflight']}
+        def prepare_main(main_messages, model_state):
+            return prepare_qwen_payload(main_messages, schema, 'semantic_consultant', reserve, model_state, wire_schema)
+        repair_ids = set()
+        def requested_ids(value):
+            if isinstance(value, list):
+                for row in value: requested_ids(row)
+            elif isinstance(value, dict):
+                for key, child in value.items():
+                    if key == 'evidence_ids' and isinstance(child, list): repair_ids.update(e for e in child if isinstance(e, str))
+                    else: requested_ids(child)
         for message in messages:
-            if isinstance(message.get('content'), list):
-                for part in message['content']:
-                    if part.get('type') == 'image_url':
-                        part['image_url']['max_pixels'] = IMAGE_MAX_PIXELS
-        response_schema = {'name': role + '_answer', 'strict': True, 'schema': schema}
-        wire_schema = provider_schema(factor_schema(wire_schema if wire_schema is not None else schema))
-        Draft202012Validator.check_schema(wire_schema)
-        response_format = {'type': 'json_schema', 'json_schema': {**response_schema, 'schema': wire_schema}}
-        preflight = qwen_preflight(messages, response_format, reserve)
-        preflight['enforced'] = self.qwen_context_policy == 'certified-32k'
-        preflight['context_policy'] = self.qwen_context_policy
-        preflight['provider_context_limit'] = None
+            if not isinstance(message.get('content'), str) or message.get('role') == 'system': continue
+            try:
+                content = json.loads(message['content'])
+                if isinstance(content, dict) and isinstance(content.get('previous_raw_answer'), str):
+                    requested_ids(json.loads(content['previous_raw_answer']))
+            except ValueError: pass
+        repair_ids &= {unit['id'] for unit in units}
+        try:
+            prepared, audit, _ = select_context(before, messages, prepare_selector, request_selector,
+                prepare_main, repair_ids)
+        except EvidenceSelectionError as exc:
+            save(session/'selection-failure.json', {'error': str(exc), 'audit': exc.audit,
+                'journal_entries_to_date': len(self.ledger), 'no_default_or_semantic_selection': True})
+            raise
+        except ProviderCapacityViolation as exc:
+            save(session/'provider-capacity-violation.json', {'error': str(exc), 'journal_entries_to_date': len(self.ledger),
+                                                            'no_further_selector_or_main_sent': True})
+            raise
+        assert self.context_state == before, 'Selector altered full native state'
+        audit.update(native_state_unchanged=True, canonical_native_state_version=native_version,
+                     current_main_tag=tag, original_registry_path=str(session/'registry.json'))
+        save(session/'selection-and-delivery.json', audit)
+        prepared.packing['evidence_selection'] = audit
+        prepared.packing['visible_native_evidence_ids'] = audit['selected_ids']
+        return prepared
+
+    def _save_visual_report(self, run_id, name, value):
+        save(self.root / 'visual-reports' / run_id / name, value)
+
+    def _visual_call(self, tag, role, messages, schema, reserve):
+        try:
+            answer = self._qwen(tag, role, messages, schema, reserve=reserve)
+            return json.loads(answer['_content'], object_pairs_hook=unique_json_object)
+        except (ValueError, ValidationError) as exc:
+            raise EvidenceSelectionError(f'{role} returned an invalid visual report: {exc.message if isinstance(exc, ValidationError) else exc}') from exc
+
+    def _reported_payload(self, messages, schema, reserve, wire_schema=None, *,
+                          allow_recheck=False, allow_readback=False):
+        from qwen_evidence_selector import required_evidence
+        from eviground.grounding.dag_monitor import usable_evidence_observation
+
+        state = self.context_state
+        units = self.visual.collect_new(state, messages)
+        expanded = expand_history_references(state)
+        self._save_visual_report('registry', 'images.json', self.visual.catalog())
+        all_ids = {row['id'] for row in units}
+        mandatory = required_evidence(expanded, units)
+        # Keep the latest rendered evidence and any raw facts cited by a
+        # proposed repair. Original evidence remains in the native Monitor.
+        latest_render = next((row['id'] for row in reversed(units) if row['raw']['tool'] == 'render'), None)
+        if latest_render:
+            mandatory.add(latest_render)
+        measurements = {row['id']: row['object_group'] for row in units if row['raw']['tool'] == 'measure'}
+        latest_measure = next(reversed(measurements), None)
+        readback = self.visual.current_readback
+        current_measurements = {readback} if readback in measurements else set()
+        current_reports = self.visual.current_recheck_reports.copy()
+        if readback in self.visual.reports:
+            current_reports.add(readback)
+        for msg in messages:
+            content = msg.get('content')
+            if msg.get('role') != 'system' and isinstance(content, str):
+                try:
+                    control = json.loads(content)
+                except ValueError:
+                    control = {}
+                if isinstance(control, dict) and {'candidate_contract', 'image_recheck_completed', 'repair'} & control.keys():
+                    continue
+                references = all_ids.intersection(re.findall(r'\bobservation_[0-9]+\b', content))
+                mandatory.update(references)
+                current_measurements.update(measurements.keys() & references)
+                current_reports.update(self.visual.reports_for_citations(content))
+        mandatory.update(current_measurements)
+        pinned_reports = current_reports | self.visual.reports_for_citations(packed(expanded.get('task_dag')))
+        mandatory.update(row['evidence_id'] for report_id in pinned_reports
+                         for row in self.visual.reports[report_id]['findings'])
+        recheck_ids = tuple(self.visual.views) if allow_recheck else ()
+        extras = [deepcopy(msg) for msg in messages
+                  if msg.get('role') == 'system' or isinstance(msg.get('content'), str)]
+        prior_rechecks = [key for key in self.visual.reports
+                          if key in self.visual.recheck_reports and key not in pinned_reports]
+        old_reports = [key for key in self.visual.reports
+                       if key in self.visual.recheck_reports and key in pinned_reports and key not in current_reports]
+        omitted_units, omitted_reports = set(), set()
+        archive_order = [None, *prior_rechecks, *(row['id'] for row in units if row['id'] not in mandatory)]
+        if reserve <= 1536:
+            archive_order.extend(old_reports)
+            keep_measure = readback if readback in measurements else latest_measure
+            archive_order.extend(e for e in measurements if e in mandatory
+                                 and e not in current_measurements and e != keep_measure)
+        for remove_id in archive_order:
+            if remove_id in self.visual.reports:
+                omitted_reports.add(remove_id)
+            elif remove_id is not None:
+                omitted_units.add(remove_id)
+            available = all_ids - omitted_units
+            reports = self.visual.selected_reports(available, omitted_reports)
+            projected = deepcopy(expanded)
+            projected['views'] = []
+            projected['observations'] = [
+                {key: value for key, value in row.items() if key != 'views'}
+                for row in projected['observations'] if not usable_evidence_observation(row) or row['evidence_id'] in available]
+            # Reports can use multiple images. Expose an evidence ID for visual
+            # claims only when its report is actually present in this request.
+            scopes = {row['id']: set(row['object_group']) for row in units
+                      if row['id'] in available and row['raw']['tool'] == 'measure'}
+            for report in reports:
+                for finding in report['findings']:
+                    scope = scopes.setdefault(finding['evidence_id'], set())
+                    if finding['status'] == 'observed':
+                        scope.update(finding['object_ids'])
+            visible_ids = scopes.keys()
+            projected['supporting_evidence_ids'] = sorted(visible_ids)
+            projected['supporting_evidence_objects'] = {key: sorted(ids) for key, ids in scopes.items()}
+            # The image catalog already supplies the hash for every finding's image ID.
+            projected['visual_reports'] = [{**report, 'findings': [
+                {key: value for key, value in finding.items() if key != 'image_sha256'}
+                for finding in report['findings']]} for report in reports]
+            projected['image_catalog'] = self.visual.catalog()
+            if projected.get('policy_annealing'):
+                projected['policy_annealing'].pop('guidance', None)
+                projected['policy_annealing'].pop('correction_policy', None)
+            projected['archived_evidence_ids'] = sorted(all_ids - visible_ids)
+            projected['archived_visual_report_ids'] = sorted(self.visual.reports.keys() -
+                {report['report_id'] for report in reports})
+            archived_measures = measurements.keys() - available
+            readback_ids = (projected['archived_visual_report_ids'] + sorted(archived_measures)) if allow_readback else ()
+            if allow_readback and projected['archived_visual_report_ids']:
+                projected['archived_visual_report_index'] = [[report_id, sorted({row['image_id'] for row
+                    in self.visual.reports[report_id]['findings']})] for report_id in projected['archived_visual_report_ids']]
+            if archived_measures:
+                projected['archived_measurement_index'] = [[e, measurements[e]] for e in measurements if e in archived_measures]
+            prepared = prepare_qwen_payload(extras, schema, 'semantic_consultant', reserve, projected,
+                  wire_schema, text_visual_reports=True, recheck_ids=recheck_ids, readback_ids=readback_ids)
+            if reports and prepared.preflight['maximum'] >= OUTPUT_LIMIT:
+                compact = prepare_qwen_payload(extras, schema, 'semantic_consultant', reserve, projected,
+                    wire_schema, text_visual_reports=True, recheck_ids=recheck_ids,
+                    readback_ids=readback_ids, visual_report_rows=True)
+                if compact.preflight['maximum'] < prepared.preflight['maximum']:
+                    prepared = compact
+                    prepared.packing['visual_report_encoding'] = 'observation_rows'
+            prepared.packing.update(mode='three_level_text_reports' if self.visual.coordinated else 'two_level_text_reports',
+                                    visible_native_evidence_ids=sorted(visible_ids),
+                                    visual_report_ids=[report['report_id'] for report in reports],
+                                    delivered_visual_reports=reports,
+                                    archived_evidence_ids=projected['archived_evidence_ids'],
+                                    archived_visual_report_ids=projected['archived_visual_report_ids'],
+                                    native_state_unchanged=True)
+            if prepared.preflight['maximum'] < OUTPUT_LIMIT:
+                return prepared
+        for fallback in (3072, 2048, 1536):
+            if reserve > fallback:
+                return self._reported_payload(messages, schema, fallback, wire_schema,
+                                              allow_recheck=allow_recheck, allow_readback=allow_readback)
+        return prepared
+
+    def _qwen(self, tag, role, messages, schema, reserve=OUTPUT_RESERVE, wire_schema=None, quote_registry=None):
+        original_messages = deepcopy(messages)
+        reserve = min(reserve, OUTPUT_RESERVE if role not in ('parser', 'parser_repair') else 1600)
+        if role == 'semantic_consultant' and ('tentative-final' in tag or
+                (self.visual is None and re.search(r'-action-[1-9][0-9]*$', tag))):
+            reserve = min(reserve, 3072)
+        try:
+            if self.visual is not None and role == 'semantic_consultant' and self.context_state is not None:
+                prepared = self._reported_payload(messages, schema, reserve, wire_schema,
+                    allow_recheck='-action-' in tag and not self.visual.current_recheck_reports,
+                    allow_readback='-action-' in tag and self.visual.current_readback is None)
+            else:
+                prepared = prepare_qwen_payload(messages, schema, role, reserve,
+                    self.context_state if role == 'semantic_consultant' else None, wire_schema)
+                if role == 'semantic_consultant' and self.context_state is not None and prepared.preflight['maximum'] >= OUTPUT_LIMIT:
+                    prepared = self._selected_payload(tag, original_messages, schema, reserve, wire_schema)
+            payload, preflight, packing = prepared.payload, prepared.preflight, prepared.packing
+            messages = payload['messages']
+            if self.visual is not None:
+                if preflight['images'] and role != WORKER:
+                    raise EvidenceSelectionError(f'Only the visual worker may receive pixels, got {role}')
+                if role == WORKER and len(preflight['images']) != 1:
+                    raise EvidenceSelectionError('Each visual worker must receive exactly one original image')
+        except Exception as exc:
+            rejection = ('rejected_evidence_selection' if isinstance(exc, EvidenceSelectionError) else
+                         'rejected_after_selector_provider_capacity' if isinstance(exc, ProviderCapacityViolation) else 'rejected_context_packaging')
+            record = {'index': len(self.ledger) + 1, 'tag': tag, 'role': role,
+                      'http_sent': False, 'status': rejection,
+                      'error_type': type(exc).__name__, 'error': str(exc), 'output_reserved': reserve}
+            self.ledger.append(record)
+            if role in ('semantic_consultant', 'image_selector', 'evidence_selector', 'parser_repair', COORDINATOR, WORKER):
+                self.r_used += 1
+            folder = self.root / 'calls' / f"{record['index']:03d}-{tag}-{role}"
+            save(folder / 'receipt.json', redact(record))
+            save(folder / 'original-request-redacted.json', redact(original_messages))
+            save(self.root / 'model-ledger.json', self.ledger)
+            if isinstance(exc, (EvidenceSelectionError, ContextCapacityExceeded, ProviderCapacityViolation)): raise
+            raise RuntimeError('Context packaging failed before HTTP: ' + type(exc).__name__) from exc
+        if self.preview_only:
+            raise PreparedCall(payload, preflight, packing)
         if self.bootstrap_only:
+            if preflight['maximum'] >= OUTPUT_LIMIT:
+                raise RuntimeError('Offline bootstrap payload does not fit strict local32K bound')
             from eviground.query.query_syntax import syntax_settings
             from importlib.metadata import version
             save(self.root / 'bootstrap-check.json', {
@@ -523,17 +978,20 @@ class DirectCalls:
                 'dependencies': {name: version(name) for name in ('spacy', 'en_core_web_sm', 'requests', 'numpy', 'Pillow', 'jsonschema')},
                 'original_scene_and_category_loaded': True,
                 'worker_sample_fields': ['scene', 'csv_row', 'query'],
-                'annotation_target_supplied': False, 'real_provider_schema_validated': True})
+                'annotation_target_supplied': False, 'real_provider_schema_validated': True,
+                'strict_local_bound_passed': True, 'preflight': preflight,
+                'provider_count_contract_verified': False, 'local_capacity_ready': True})
             check = json.loads((self.root / 'bootstrap-check.json').read_text())
             check['actual_inputs'] = self.bootstrap_inputs
             save(self.root / 'bootstrap-check.json', check)
             raise BootstrapReady('Offline bootstrap completed before any HTTP attempt')
-        record = {'index': len(self.ledger) + 1, 'tag': tag, 'role': role, 'requested_model': MODEL, 'http_sent': False, 'preflight': preflight, 'output_reserved': reserve, 'status': 'preflight'}
+        record = {'index': len(self.ledger) + 1, 'tag': tag, 'role': role, 'requested_model': MODEL, 'http_sent': False, 'preflight': preflight, 'output_reserved': preflight['output_reserved'], 'status': 'preflight'}
         self.ledger.append(record)
         folder = self.root / 'calls' / f"{record['index']:03d}-{tag}-{role}"
         folder.mkdir(parents=True, exist_ok=False)
-        payload = {'model': MODEL, 'messages': messages, 'max_tokens': reserve, 'temperature': 0, 'enable_thinking': False, 'vl_high_resolution_images': False, 'response_format': response_format}
         save(folder / 'request-redacted.json', redact(payload))
+        save(folder / 'original-request-redacted.json', redact(original_messages))
+        save(folder / 'context-packing.json', packing)
         save(folder / 'original-response-schema.json', schema)
         record['input_images'] = []
         for message in messages:
@@ -548,8 +1006,29 @@ class DirectCalls:
                     raw = base64.b64decode(encoded, validate=True)
                     (folder / name).write_bytes(raw)
                     record['input_images'].append({'path': name, 'mime': mime, 'sha256': hashlib.sha256(raw).hexdigest()})
+        record['original_input_images'] = []
+        original_hashes = set()
+        for message in original_messages:
+            if not isinstance(message.get('content'), list): continue
+            for part in message['content']:
+                if part.get('type') != 'image_url': continue
+                header, encoded = part['image_url']['url'].split(',', 1)
+                mime = header.split(';', 1)[0].removeprefix('data:')
+                raw = base64.b64decode(encoded, validate=True)
+                sha = hashlib.sha256(raw).hexdigest()
+                if sha in original_hashes: continue
+                original_hashes.add(sha)
+                matching = next((row for row in record['input_images'] if row['sha256'] == sha), None)
+                if matching:
+                    name = matching['path']
+                else:
+                    suffix = {'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp'}.get(mime, '.bin')
+                    name = f"original-input-image-{len(record['original_input_images']):02d}{suffix}"
+                    (folder / name).write_bytes(raw)
+                with Image.open(io.BytesIO(raw)) as image: size = list(image.size)
+                record['original_input_images'].append({'path': name, 'mime': mime, 'sha256': sha, 'size': size})
         save(folder / 'receipt.json', record)
-        charged_role = role in ('semantic_consultant', 'image_selector', 'parser_repair')
+        charged_role = role in ('semantic_consultant', 'image_selector', 'evidence_selector', 'parser_repair', COORDINATOR, WORKER)
         if charged_role:
             if not self.record_only and self.r_used >= 6:
                 record.update(status='rejected_budget', error='R_budget_exhausted')
@@ -557,39 +1036,67 @@ class DirectCalls:
                 save(self.root / 'model-ledger.json', self.ledger)
                 raise RuntimeError('R budget exhausted before Qwen request')
             self.r_used += 1
-        if preflight['enforced'] and preflight['maximum'] > OUTPUT_LIMIT:
+        if preflight['enforced'] and preflight['maximum'] >= OUTPUT_LIMIT:
             record.update(status='rejected_preflight', error='capacity_bound_exceeds_limit')
             save(folder / 'receipt.json', record)
             save(self.root / 'model-ledger.json', self.ledger)
-            raise RuntimeError(f"Qwen preflight {preflight['maximum']} > {OUTPUT_LIMIT}; no request sent")
+            raise ContextCapacityExceeded(f"Qwen preflight {preflight['maximum']} >= {OUTPUT_LIMIT}; no request sent")
         started = time.monotonic()
         record['http_sent'] = True
         record['status'] = 'sent'
         save(folder / 'receipt.json', record)
-        self.progress("request_sent", call=record['index'], role=role)
+        self.progress("request_sent", call=record['index'], role=role,
+                      context_bound=preflight['maximum'], context_limit=OUTPUT_LIMIT)
         try:
             response = self.session.post(BASE_URL + '/chat/completions', json=payload, headers={'Authorization': 'Bearer ' + self.key}, timeout=(45, 180), allow_redirects=False)
-            (folder / 'provider-response.json').write_text(response.text.replace(self.key, '[REDACTED]'))
+            (folder / 'provider-response.json').write_text(response.text.replace(self.key, '[REDACTED]') if self.key else response.text)
             record['http_status'] = response.status_code
             try:
                 record['usage'] = response.json().get('usage')
             except (ValueError, AttributeError):
                 record['usage'] = None
             save(folder / 'receipt.json', record)
-            value = read_response(response, MODEL, preflight, reserve, enforce_32k=preflight['enforced'])
+            value = read_response(response, MODEL, preflight, preflight['output_reserved'], enforce_32k=preflight['enforced'])
             content = value['choices'][0]['message'].get('content') or ''
             answer = json.loads(content, object_pairs_hook=unique_json_object)
-            validate(answer, schema)
+            if role == WORKER and isinstance(answer, list):
+                if len(answer) == 1 and isinstance(answer[0], dict) and set(answer[0]) == {'image_id', 'findings'}:
+                    answer = answer[0]
+                    record['response_normalization'] = 'unwrapped_single_assigned_image_report'
+                else:
+                    # The request has exactly one image, so its ID comes from the assignment.
+                    answer = {'image_id': schema['properties']['image_id']['const'], 'findings': answer}
+                    record['response_normalization'] = 'wrapped_worker_findings_with_assigned_image_id'
+                content = packed(answer)
+            if role == 'semantic_consultant' and self.context_state is not None:
+                validate_visible_references(answer, packing['visible_native_evidence_ids'])
+            if self.visual is not None and role == 'semantic_consultant':
+                self.visual.check_image_citations(answer, packing['delivered_visual_reports'])
+            action = answer.get('action') if isinstance(answer, dict) else None
+            if isinstance(action, dict) and 'evidence_request' in action:
+                if (self.visual is None or role != 'semantic_consultant' or '-action-' not in tag
+                        or not self.visual.views or self.visual.current_recheck_reports):
+                    raise ValueError('Image recheck is available once per planning turn with registered images; choose a native action now')
+                validate(answer, obj({'state_version': schema['properties']['state_version'],
+                                      'action': recheck_action_schema(self.visual.views)}))
+            elif isinstance(action, dict) and 'read_evidence_page' in action:
+                if not packing['readback_ids']:
+                    raise ValueError('Archived evidence readback is unavailable in this decision')
+                validate(answer, obj({'state_version': schema['properties']['state_version'],
+                                      'action': readback_action_schema(packing['readback_ids'])}))
+            else:
+                validate(answer, schema)
             record.update(status='completed', usage=value.get('usage'), finish_reason=value['choices'][0].get('finish_reason'), request_id=response.headers.get('x-request-id'))
             (folder / 'response.json').write_text(content)
             save(folder / 'receipt.json', record)
             save(self.root / 'model-ledger.json', self.ledger)
             self.progress("response_saved", call=record['index'], role=role, http_status=response.status_code,
+                          context_bound=preflight['maximum'], context_limit=OUTPUT_LIMIT,
                           prompt_tokens=(value.get('usage') or {}).get('prompt_tokens'),
                           completion_tokens=(value.get('usage') or {}).get('completion_tokens'))
             return {'_content': content, 'usage': value.get('usage'), '_finish_reason': value['choices'][0].get('finish_reason'), '_request': {'model': MODEL, 'response_model': value.get('model'), 'http_status': response.status_code, 'request_id': record.get('request_id'), 'latency_s': round(time.monotonic() - started, 4), 'preflight': preflight}}
         except Exception as exc:
-            record.update(status='failed', error_type=type(exc).__name__, error=str(exc).replace(self.key, '[REDACTED]')[:1000], latency_s=round(time.monotonic() - started, 4))
+            record.update(status='failed', error_type=type(exc).__name__, error=(str(exc).replace(self.key, '[REDACTED]') if self.key else str(exc))[:1000], latency_s=round(time.monotonic() - started, 4))
             save(folder / 'receipt.json', record)
             save(self.root / 'model-ledger.json', self.ledger)
             self.progress("request_failed", call=record['index'], role=role, error_type=type(exc).__name__)
@@ -604,6 +1111,10 @@ class DirectCalls:
         state = extract_state(messages)
         if not state:
             raise ValueError("Missing original native controller state")
+        self.context_state = deepcopy(state)
+        if self.visual is not None:
+            self.visual.current_recheck_reports.clear()
+            self.visual.current_readback = None
         version = digest(state)
         folder = self.root / "controller-contracts" / f"t{self.t_used:02d}"
         native_schema = kwargs["response_schema"]["schema"]
@@ -615,7 +1126,7 @@ class DirectCalls:
             if (row.get("tool") in ("monitor_check", "finish_check") or row.get("no_evidence_acquired")) and index not in self.repair_observations_charged:
                 self.r_used += 1
                 self.repair_observations_charged.add(index)
-        # Keep every original text row and every actual image; no Laya input cap.
+        # Keep the original native state; only the final model payload is packed.
         visible = deepcopy(messages)
         visible[0]["content"] += (
             "\nDirect single-model contract: You interpret evidence, select exactly ONE native "
@@ -661,8 +1172,9 @@ class DirectCalls:
             branch["properties"]["monitor"] = deepcopy(monitor_schema)
         wire.pop("$defs", None)
         rejected, attempt = {}, 0
+        repair_patterns = Counter()
         decision = {"T": self.t_used, "state_version": version, "R_before": self.r_used,
-                    "mode": "single_qwen_direct_action", "image_policy": "all_actual_images"}
+                    "mode": "single_qwen_direct_action", "image_policy": "worker_only" if self.visual else "all_actual_images"}
         self.decisions.append(decision)
         try:
             while True:
@@ -670,11 +1182,35 @@ class DirectCalls:
                 try:
                     response = self._qwen(f"t{self.t_used:02d}-action-{attempt}", "semantic_consultant",
                                           visible, wire, reserve=OUTPUT_RESERVE, wire_schema=wire)
+                    if self.ledger and self.ledger[-1].get('role') == 'semantic_consultant':
+                        call_index = self.ledger[-1]['index']
                     answer = json.loads(response["_content"], object_pairs_hook=unique_json_object)
+                    if self.visual is not None and 'read_evidence_page' in answer['action']:
+                        self.visual.current_readback = answer['action']['read_evidence_page']
+                        repair_patterns.clear()
+                        save(folder / f'evidence-readback-{attempt}.json', {
+                            'source_id': self.visual.current_readback, 'source_call_index': call_index})
+                        visible = deepcopy(original_visible)
+                        attempt += 1
+                        continue
+                    if self.visual is not None and 'evidence_request' in answer['action']:
+                        request = answer['action']['evidence_request']
+                        self.visual.recheck(state, request)
+                        repair_patterns.clear()
+                        save(folder / f'image-recheck-{attempt}.json', {'request': request, 'source_call_index': call_index})
+                        visible = deepcopy(original_visible) + [{"role": "user", "content": packed({
+                            "image_recheck_completed": request,
+                            "instruction": "Use the returned findings to choose a native action now. "
+                                           "Use inspect for a different camera or measure for geometric evidence."})}]
+                        original_visible = deepcopy(visible)
+                        attempt += 1
+                        continue
                     action = answer["action"]
                     before_order = deepcopy(action["monitor"])
                     if "node_updates" in action["monitor"]:
                         action["monitor"] = canonical_monitor_updates(action["monitor"])
+                    elif self.visual is not None and self.monitor.plan is None:
+                        action["monitor"] = canonical_initial_monitor(action["monitor"])
                     validate(answer, direct_schema)
                     validate(action, native_schema)
                     save(folder / f"action-{attempt}-serialization.json", {
@@ -708,8 +1244,24 @@ class DirectCalls:
                     feedback = {"state_version": version, "no_action_or_monitor_accepted": True,
                                 "native_validation_errors": complete_validation_feedback(exc),
                                 "previous_raw_answer": raw,
-                                "instruction": "Correct your explicit action/Monitor against the original native contract. Same state, evidence and images. No new tool executed. AnyOf branches are alternatives. No program repair."}
+                                "instruction": "Correct your response against the supplied contract. No new native tool executed. AnyOf branches are alternatives. No program repair."}
                     save(folder / f"repair-{attempt}.json", feedback)
+                    if self.visual is not None:
+                        from qwen_step2_context import compact_feedback
+                        diagnostics = complete_validation_feedback(exc, concise=True)
+                        pattern = digest(sorted({packed((row['path'], row.get('schema_path'),
+                            row.get('validator', row['error']))) for row in diagnostics}))
+                        repair_patterns[pattern] += 1
+                        if identity in rejected or repair_patterns[pattern] >= 3:
+                            save(folder / "structural-stagnation.json", {
+                                "source_call": last['index'], "pattern_count": repair_patterns[pattern],
+                                "diagnostics": diagnostics, "next_decision": "model_tentative_final"})
+                            decision.update(status="repeated_structural_rejection", source_call_index=last['index'])
+                            return self.tentative_final(messages, state, "repeated_structural_rejection")
+                        feedback["native_validation_errors"] = diagnostics
+                        feedback = compact_feedback(feedback)
+                        feedback = {"repair": [[row["path"], row["error"]]
+                                               for row in feedback["native_validation_errors"][:6]]}
                     if identity in rejected:
                         raise RuntimeError("Repeated identical invalid direct action after exact model feedback") from exc
                     rejected[identity] = call_index
@@ -733,11 +1285,19 @@ def validate_tentative_answer(answer, schema, targets):
         raise ValueError("Tentative prediction must compare a main rival")
     for row in answer["main_rivals"]:
         if row["object_id"] == answer["predicted_id"]:
-            raise ValueError("Rival list contains predicted target")
+            raise TentativeRivalOverlap("Rival list contains predicted target")
 
 
 def build_frozen_manifest():
     sources = sorted([*PROJECT.glob("src/**/*.py"), Path(__file__),
+                      PROJECT / 'scripts/qwen_step2_context.py', PROJECT / 'scripts/check_qwen_step2_context.py',
+                      PROJECT / 'scripts/qwen_evidence_selector.py', PROJECT / 'scripts/qwen_visual_reports.py',
+                      PROJECT / 'tests/unit/test_qwen_visual_reports.py',
+                      PROJECT / 'tests/unit/test_qwen_evidence_selector.py',
+                      PROJECT / 'tests/fixtures/qwen_step2_exact_quotes.json',
+                      PROJECT / 'tests/fixtures/qwen_step2_worker_findings_array.json',
+                      PROJECT / 'tests/unit/test_qwen_step2_context.py', PROJECT / 'docs/qwen-step2-context.md',
+                      PROJECT / 'docs/qwen-step2-adaptive.md', PROJECT / 'tests/fixtures/qwen_step2_initial_monitor_wrapper.json',
                       PROJECT / "tests/unit/test_qwen_direct_fresh.py",
                       PROJECT / "tests/fixtures/qwen_direct_q00171_progress.json",
                       PROJECT / "docs/qwen-direct-v3-loop-fix.md",
@@ -745,19 +1305,26 @@ def build_frozen_manifest():
                       PROJECT / "docs/qwen-direct-source-provenance.json", PROJECT / "pyproject.toml"])
     files = [INPUTS / "nr3d/scene0565_00/scene.npz", INPUTS / "nr3d/scene0565_00/scene_instances.json",
              INPUTS / "nr3d/query.json", INPUTS / "categories/scene0565_00/objects_top5.json"]
-    return {"candidate": "single-qwen-direct-v3-historical-coverage", "branch": "codex/qwen-direct-fresh-20261120",
-            "baseline_commit": "7004d3cc5e33a00ec9f46ba11117a9bbf49864b6",
+    return {"candidate": "qwen-step2-three-level-visual-reports", "branch": "20261120_step2",
+            "baseline_commit": "8a44a23897687d8fb35a766b71bf67c008767940",
             "model": MODEL, "endpoint": BASE_URL, "scheduler_sha256": sha256(Path(__file__)),
             "source_closure": {str(p.relative_to(PROJECT)): sha256(p) for p in sources},
             "inputs": {str(p.relative_to(PROJECT)): sha256(p) for p in files},
             "python": sys.version, "packages": {d.metadata["Name"]: d.version for d in distributions() if d.metadata.get("Name")},
             "resource_budget_policy": {"mode": "record-only", "B_limit": None, "R_limit": None, "T_limit": None,
                                        "annealing_reference_turns_not_a_cap": 17},
-            "qwen_context_policy": {"policy": "provider", "local_32768_refusal_enforced": False,
-                                    "provider_context_limit_verified": False, "reference_bound": 32768, "output_reserve": OUTPUT_RESERVE},
-            "model_visibility": "Full original native text/history and ALL actual attached original images per consultation; no Laya cap, selector or extra reviewer. Each image copied with SHA in receipt. Current native Monitor plan/revision and latest rejection/rollback in one candidate block; full original observation/action history remains delivered.",
-            "decision_protocol": "Same Qwen direct native action/Monitor with exact compact delta/replace_plan schema visible and strict path unchanged. Historical acquisition coverage (sorted groups/context/15-degree bins/new visible IDs/raw measurement facts and frames) plus accepted Monitor states detects three consecutive no-progress transitions; engineering proxy only. Then, or on exact repeated native rejection, same Qwen once selects a tentative target from allowed∩active with at most one structural repair. No call cap. Native Monitor untouched, tentative accepted=false.",
-            "credential_policy": "Existing independent Git-external route config; secret never copied, printed or frozen; original shared config untouched.",
+            "qwen_context_policy": {"policy": "strict-local-32k", "local_32768_refusal_enforced": True, 'strict_operator': '<',
+                "provider_context_limit_verified": False, 'private_count_contract_verified': False, "reference_bound": 32768,
+                'requested_output_limits': {'parser': 1600, 'parser_repair': 1600, 'action': 4096,
+                    'action_capacity_fallbacks': [3072, 2048, 1536], 'structural_repair': 3072, 'tentative': 3072,
+                    'visual_coordinator_plan': 1024, 'visual_coordinator_review': 3072, 'visual_worker': 1024},
+                'output_overrun_cushion': OUTPUT_OVERRUN_ALLOWANCE,
+                'overflow_policy': 'Reversible text packing, smaller output reservations, then page out older reports and measurement groups. Retain current sources and index archived IDs for one explicit readback per decision. Reject before HTTP if these do not fit.',
+                'visual_worker_original_image_bytes': True,
+                'framing': '1024 base +128/message +16/part; engineering allowance only; no provider absolute proof'},
+            "model_visibility": "Three levels use the same model. Main and visual coordinator receive text only. Each visual worker reads one original image. The coordinator groups original findings by ID and flags conflict or gaps. The main receives reviewed textual reports and raw measurements. Complete original evidence stays local.",
+            "decision_protocol": "Native local Schema/Monitor and verbatim source quotes remain enforced. Main can ask for image rechecks independently of inspect/measure/finish. Visual calls are counted in R; B/R/T are record-only. Every request has strict local32K preflight and responses have provider usage audits.",
+            "credential_policy": "Git-external Token Plan config or run-scoped key override; key contents excluded from frozen metadata.",
             "scope": "Diagnostic new single run; not strict B10/R6/T17 comparison, formal score or paper update.",
             "fresh_start": True, "old_runtime_source_imports": [], "inherited_dag_answers_predictions": [],
             "server_model_requests": 0, "gt_read_before_prediction": False}
@@ -769,24 +1336,26 @@ def run(root, batch_request=None, bootstrap_check=False):
     if root.exists():
         raise FileExistsError(f"Run directory already exists: {root}")
     root.mkdir(parents=True)
-    calls = DirectCalls(root)
-    calls.bootstrap_only = bootstrap_check
     request = None
     if batch_request is not None:
-        request = json.loads(Path(batch_request).read_text())
+        request_path = Path(batch_request).resolve()
+        request = json.loads(request_path.read_text())
         if set(request) != {"sample", "scene_dir", "category_path", "shared_manifest", "input_hashes"} or set(request["sample"]) != {"scene", "csv_row", "query"}:
             raise ValueError("Unexpected worker input fields; target annotations are forbidden")
-        shared = json.loads(Path(request["shared_manifest"]).read_text())
+        shared_path = (request_path.parent / request["shared_manifest"]).resolve()
+        shared = json.loads(shared_path.read_text())
         manifest = {**shared["protocol"], "source_closure": shared["source_closure"],
-                    "shared_manifest": str(Path(request["shared_manifest"]).resolve()),
-                    "shared_manifest_sha256": sha256(Path(request["shared_manifest"])),
+                    "shared_manifest": str(shared_path),
+                    "shared_manifest_sha256": sha256(shared_path),
                     "sample": request["sample"], "inputs": request["input_hashes"]}
         for name, expected in request["input_hashes"].items():
             if sha256(Path(name)) != expected:
                 raise ValueError(f"Worker input changed: {name}")
-        calls.console_progress = True
     else:
         manifest = build_frozen_manifest()
+    calls = DirectCalls(root, visual_reports=True, visual_levels=manifest.get('visual_levels', 3))
+    calls.bootstrap_only = bootstrap_check
+    calls.console_progress = request is not None
     save(root / "frozen-manifest.json", manifest)
     for name, expected in (() if request else manifest["source_closure"].items()):
         source = PROJECT / name
@@ -903,6 +1472,16 @@ def run(root, batch_request=None, bootstrap_check=False):
         status = "interrupted"
         prediction = {"predicted_id": None, "failure_type": "KeyboardInterrupt",
                       "failure": "User interruption; started-only requests may have unknown remote execution. Do not automatically retry."}
+    except EvidenceSelectionError as exc:
+        status = 'evidence_selection_failed'
+        trace['termination_cause'] = status
+        prediction = {'predicted_id': None, 'terminal_mode': status, 'failure_type': type(exc).__name__,
+                      'failure': str(exc), 'automatic_retry': False}
+    except (ContextCapacityExceeded, ProviderCapacityViolation) as exc:
+        status = 'capacity_rejected' if isinstance(exc, ContextCapacityExceeded) else 'provider_capacity_violation'
+        trace['termination_cause'] = status
+        prediction = {'predicted_id': None, 'terminal_mode': status,
+                      'failure_type': type(exc).__name__, 'failure': str(exc), 'automatic_retry': False}
     except Exception as exc:
         status = "failed"
         prediction = {"predicted_id": None, "failure_type": type(exc).__name__,

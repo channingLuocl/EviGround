@@ -1,0 +1,22 @@
+[
+  {
+    "object_ids": [33],
+    "status": "observed",
+    "observation": "Object 33 is a bed visible in the upper right area of the scene."
+  },
+  {
+    "object_ids": [12],
+    "status": "observed",
+    "observation": "Object 12 is a lamp-like object located on the far left, separated from the bed at 33 by other furniture."
+  },
+  {
+    "object_ids": [34, 42],
+    "status": "observed",
+    "observation": "Objects 34 and 42 are located in the lower right area, appearing as seating or standing items distant from the bed at 33."
+  },
+  {
+    "object_ids": [12, 33, 34, 42],
+    "status": "unknown",
+    "observation": "Cannot definitively confirm which specific object is the 'lamp' described or verify all spatial relations to all beds (as only one bed at 33 is clearly marked) without further context."
+  }
+]

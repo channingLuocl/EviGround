@@ -225,6 +225,17 @@ def monitor_schema(known, allowed, available, requirements):
                 "reopen_node_ids": array(REASON), "revision_reason": REASON})
 
 
+def exact_source_quotes(query, requirements):
+    """The native compact-DAG quote domain, with literal punctuation preserved."""
+    return sorted({row['source_quote'] for row in requirements
+                   if row.get('source_quote') and row['source_quote'].casefold() in query.casefold()})
+
+
+def usable_evidence_observation(row):
+    return bool(row.get('evidence_id')) and not row.get('no_evidence_acquired') and \
+        row.get('tool') not in ('finish_check', 'monitor_check') and not row.get('error')
+
+
 class DagMonitor:
     """Validate snapshots; invalidate descendants rather than erasing observations."""
 
@@ -252,8 +263,7 @@ class DagMonitor:
             node["properties"]["depends_on"] = {**array(task_ids), "maxItems": 11}
             node["properties"]["bound_object_ids"]["maxItems"] = len(self.known)
             node["properties"]["excluded_target_ids"]["maxItems"] = len(self.allowed)
-            quotes = sorted({r["source_quote"] for r in self.requirements
-                             if r.get("source_quote") and r["source_quote"].casefold() in self.query.casefold()})
+            quotes = exact_source_quotes(self.query, self.requirements)
             node["properties"]["source_quotes"] = {
                 **array(enum(*quotes)), "minItems": 1, "maxItems": len(quotes)}
             evidence_task, verification = deepcopy(node), deepcopy(node)
@@ -388,10 +398,7 @@ class DagMonitor:
 
     @staticmethod
     def evidence_ids(observations):
-        return {"initial"} | {o["evidence_id"] for o in observations
-                              if o.get("evidence_id") and not o.get("no_evidence_acquired")
-                              and o.get("tool") not in ("finish_check", "monitor_check")
-                              and not o.get("error")}
+        return {"initial"} | {o["evidence_id"] for o in observations if usable_evidence_observation(o)}
 
     def evidence_objects(self, observations):
         """Object scope actually supplied by each usable observation."""

@@ -1,0 +1,530 @@
+{
+  "description": "'The lamp not next to the beds.'",
+  "monitor_requirements": [
+    {
+      "id": "q0",
+      "source_quote": "'The lamp not next to the beds.'",
+      "condition": "verify complete original description"
+    },
+    {
+      "source_quote": "not next to the beds",
+      "dimension": "unresolved",
+      "target_role": null,
+      "reference_role": null,
+      "condition": "unhandled",
+      "binding_status": "unbound",
+      "prerequisite_descriptions": [
+        "obtain quoted predicate evidence"
+      ],
+      "id": "q1"
+    },
+    {
+      "source_quote": "not",
+      "dimension": "unresolved",
+      "target_role": null,
+      "reference_role": null,
+      "condition": "negation",
+      "binding_status": "unbound",
+      "prerequisite_descriptions": [],
+      "id": "q2"
+    },
+    {
+      "source_quote": null,
+      "dimension": "unresolved",
+      "target_role": null,
+      "reference_role": null,
+      "condition": "coverage_gap",
+      "binding_status": "unbound",
+      "prerequisite_descriptions": [],
+      "id": "q3"
+    },
+    {
+      "source_quote": null,
+      "dimension": "unresolved",
+      "target_role": null,
+      "reference_role": null,
+      "condition": "coverage_gap",
+      "binding_status": "unbound",
+      "prerequisite_descriptions": [],
+      "id": "q4"
+    }
+  ],
+  "known_object_ids": [
+    0,
+    1,
+    2,
+    3,
+    5,
+    7,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    40,
+    41,
+    42,
+    46,
+    47,
+    48,
+    49,
+    50,
+    55,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    70,
+    72,
+    74,
+    75,
+    76,
+    77,
+    78,
+    79,
+    81,
+    82,
+    83,
+    84,
+    85,
+    4,
+    6,
+    8,
+    9,
+    25,
+    39,
+    43,
+    44,
+    45,
+    51,
+    52,
+    53,
+    54,
+    56,
+    69,
+    71,
+    73,
+    80
+  ],
+  "allowed_target_ids": [
+    12,
+    33,
+    34,
+    42
+  ],
+  "native_action_schema_source": "outputs/qwen-direct/step2-adaptive-smoke-20261120/q00171/episode/controller-contracts/t01/native-action-schema.json",
+  "native_action_schema_sha256": "d0a8eabe2bc1a46fc5101e67d91c334d3943d10e5e0793cae4ac32bcdb735ce8",
+  "bad_real_actions": [
+    {
+      "action": {
+        "action": "inspect",
+        "reason": "Verify lamp categories for active targets 12, 33, 34, 42 and identify beds to evaluate the 'not next to' constraint.",
+        "focus_ids": [
+          12,
+          33,
+          34,
+          42
+        ],
+        "context": "scene",
+        "azimuth_deg": 315,
+        "elevation_deg": 30,
+        "frame": null,
+        "predicted_id": null,
+        "evidence": [
+          {
+            "source_quote": "The lamp not next to the beds.",
+            "object_ids": [
+              12,
+              33,
+              34,
+              42
+            ],
+            "observation": "Targets are lamp candidates; need to verify category and spatial relation to beds."
+          }
+        ],
+        "unresolved": [
+          "Which target is the lamp?",
+          "Which objects are beds?",
+          "Which lamp is not next to the beds?"
+        ],
+        "monitor": {
+          "nodes": [
+            {
+              "id": "n0",
+              "goal": "Identify lamp among targets 12, 33, 34, 42",
+              "kind": "binding",
+              "source_quotes": [
+                "The lamp not next to the beds."
+              ],
+              "depends_on": [],
+              "allowed_actions": [
+                "inspect"
+              ],
+              "status": "pending",
+              "bound_object_ids": [],
+              "evidence_ids": [],
+              "conclusion": "",
+              "excluded_target_ids": []
+            },
+            {
+              "id": "n1",
+              "goal": "Identify beds in the scene",
+              "kind": "binding",
+              "source_quotes": [
+                "The lamp not next to the beds."
+              ],
+              "depends_on": [],
+              "allowed_actions": [
+                "inspect"
+              ],
+              "status": "pending",
+              "bound_object_ids": [],
+              "evidence_ids": [],
+              "conclusion": "",
+              "excluded_target_ids": []
+            },
+            {
+              "id": "n2",
+              "goal": "Determine which lamp is not next to the beds",
+              "kind": "relation",
+              "source_quotes": [
+                "The lamp not next to the beds."
+              ],
+              "depends_on": [
+                "n0",
+                "n1"
+              ],
+              "allowed_actions": [
+                "measure"
+              ],
+              "status": "pending",
+              "bound_object_ids": [],
+              "evidence_ids": [],
+              "conclusion": "",
+              "excluded_target_ids": []
+            }
+          ],
+          "verification": {
+            "id": "n11",
+            "goal": "Verify the selected lamp satisfies all constraints",
+            "kind": "verification",
+            "source_quotes": [
+              "The lamp not next to the beds."
+            ],
+            "depends_on": [
+              "n0",
+              "n1",
+              "n2"
+            ],
+            "allowed_actions": [
+              "finish"
+            ],
+            "status": "pending",
+            "bound_object_ids": [],
+            "evidence_ids": [],
+            "conclusion": "",
+            "excluded_target_ids": []
+          },
+          "requirement_nodes": {
+            "q0": [
+              "n0",
+              "n1",
+              "n2",
+              "n11"
+            ],
+            "q1": [
+              "n2"
+            ],
+            "q2": [
+              "n2"
+            ],
+            "q3": [
+              "n0",
+              "n1",
+              "n2"
+            ],
+            "q4": [
+              "n0",
+              "n1",
+              "n2"
+            ]
+          },
+          "current_node_id": "n0",
+          "reopen_node_ids": [],
+          "revision_reason": "Initial plan construction based on utterance and active targets."
+        }
+      },
+      "source": "outputs/qwen-direct/step2-adaptive-smoke-20261120/q00171/episode/calls/002-t01-action-0-semantic_consultant/provider-response.json",
+      "sha256": "83a25f653db88b4d2785cf3d11fcbf4d34b60f4362ac5d7882439b3af579ee90"
+    },
+    {
+      "action": {
+        "action": "inspect",
+        "reason": "Inspect active targets 12, 33, 34, 42 to confirm lamp categories and identify beds for the spatial constraint.",
+        "focus_ids": [
+          12,
+          33,
+          34,
+          42
+        ],
+        "context": "scene",
+        "azimuth_deg": 315,
+        "elevation_deg": 30,
+        "frame": null,
+        "predicted_id": null,
+        "evidence": [],
+        "unresolved": [
+          "Which target is the lamp?",
+          "Which objects are beds?",
+          "Which lamp is not next to the beds?"
+        ],
+        "monitor": {
+          "nodes": [
+            {
+              "id": "n0",
+              "goal": "Identify lamp among targets 12, 33, 34, 42",
+              "kind": "binding",
+              "source_quotes": [
+                "The lamp not next to the beds."
+              ],
+              "depends_on": [],
+              "allowed_actions": [
+                "inspect"
+              ],
+              "status": "pending",
+              "bound_object_ids": [],
+              "evidence_ids": [],
+              "conclusion": "",
+              "excluded_target_ids": []
+            },
+            {
+              "id": "n1",
+              "goal": "Identify beds in the scene",
+              "kind": "binding",
+              "source_quotes": [
+                "The lamp not next to the beds."
+              ],
+              "depends_on": [],
+              "allowed_actions": [
+                "inspect"
+              ],
+              "status": "pending",
+              "bound_object_ids": [],
+              "evidence_ids": [],
+              "conclusion": "",
+              "excluded_target_ids": []
+            },
+            {
+              "id": "n2",
+              "goal": "Determine which lamp is not next to the beds",
+              "kind": "relation",
+              "source_quotes": [
+                "The lamp not next to the beds."
+              ],
+              "depends_on": [
+                "n0",
+                "n1"
+              ],
+              "allowed_actions": [
+                "measure"
+              ],
+              "status": "pending",
+              "bound_object_ids": [],
+              "evidence_ids": [],
+              "conclusion": "",
+              "excluded_target_ids": []
+            }
+          ],
+          "verification": {
+            "id": "n11",
+            "goal": "Verify the selected lamp satisfies all constraints",
+            "kind": "verification",
+            "source_quotes": [
+              "The lamp not next to the beds."
+            ],
+            "depends_on": [
+              "n0",
+              "n1",
+              "n2"
+            ],
+            "allowed_actions": [
+              "finish"
+            ],
+            "status": "pending",
+            "bound_object_ids": [],
+            "evidence_ids": [],
+            "conclusion": "",
+            "excluded_target_ids": []
+          },
+          "requirement_nodes": {
+            "q0": [
+              "n0",
+              "n1",
+              "n2",
+              "n11"
+            ],
+            "q1": [
+              "n2"
+            ],
+            "q2": [
+              "n2"
+            ],
+            "q3": [
+              "n0",
+              "n1",
+              "n2"
+            ],
+            "q4": [
+              "n0",
+              "n1",
+              "n2"
+            ]
+          },
+          "current_node_id": "n0",
+          "reopen_node_ids": [],
+          "revision_reason": "Initial plan construction based on utterance and active targets."
+        }
+      },
+      "source": "outputs/qwen-direct/step2-adaptive-smoke-20261120/q00171/episode/calls/005-t01-action-3-semantic_consultant/provider-response.json",
+      "sha256": "2e4e4b1048768e72194ec92290469e8dd58e8b8d857e56a5f632b96157707d5b"
+    }
+  ],
+  "positive_real_action": {
+    "action": {
+      "reason": "Inspect the lamp candidates (12, 33, 34, 42) and bed references (20, 21) to confirm their identities and spatial arrangement before measuring distances.",
+      "action": "inspect",
+      "predicted_id": null,
+      "monitor": {
+        "nodes": [
+          {
+            "id": "n0",
+            "goal": "Identify lamp candidates and bed references",
+            "kind": "binding",
+            "source_quotes": [
+              "'The lamp not next to the beds.'"
+            ],
+            "depends_on": [],
+            "allowed_actions": [
+              "inspect"
+            ],
+            "status": "pending",
+            "bound_object_ids": [],
+            "evidence_ids": [],
+            "conclusion": "",
+            "excluded_target_ids": []
+          },
+          {
+            "id": "n1",
+            "goal": "Measure distances between lamps and beds to determine 'next to' relationship",
+            "kind": "relation",
+            "source_quotes": [
+              "not next to the beds"
+            ],
+            "depends_on": [
+              "n0"
+            ],
+            "allowed_actions": [
+              "measure"
+            ],
+            "status": "pending",
+            "bound_object_ids": [],
+            "evidence_ids": [],
+            "conclusion": "",
+            "excluded_target_ids": []
+          }
+        ],
+        "current_node_id": "n0",
+        "reopen_node_ids": [],
+        "revision_reason": "Initial plan to resolve bindings and relations with corrected source quotes",
+        "verification": {
+          "id": "n11",
+          "goal": "Verify the lamp not next to the beds",
+          "kind": "verification",
+          "source_quotes": [
+            "'The lamp not next to the beds.'"
+          ],
+          "depends_on": [
+            "n0",
+            "n1"
+          ],
+          "allowed_actions": [
+            "finish"
+          ],
+          "status": "pending",
+          "bound_object_ids": [],
+          "evidence_ids": [],
+          "conclusion": "",
+          "excluded_target_ids": []
+        },
+        "requirement_nodes": {
+          "q0": [
+            "n11"
+          ],
+          "q1": [
+            "n1"
+          ],
+          "q2": [
+            "n1"
+          ],
+          "q3": [
+            "n0"
+          ],
+          "q4": [
+            "n0"
+          ]
+        }
+      },
+      "focus_ids": [
+        12,
+        33,
+        34,
+        42,
+        20,
+        21
+      ],
+      "context": "scene",
+      "azimuth_deg": null,
+      "elevation_deg": null,
+      "frame": null,
+      "evidence": [],
+      "unresolved": [
+        "Which lamp is not next to the beds?"
+      ]
+    },
+    "source": "outputs/qwen-direct/full-nr3d-20261120-v3/q00171/episode/calls/003-t01-action-1-semantic_consultant/provider-response.json",
+    "sha256": "d57e19f4d581442a7ce21f5ef1f04d0041a591bc35a71d4e2aef09e93a159d65"
+  },
+  "GT_read": false,
+  "no_quote_or_evidence_correction_performed": true
+}

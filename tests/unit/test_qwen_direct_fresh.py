@@ -3,6 +3,10 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import base64
+import io
+import pytest
+from PIL import Image
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -10,6 +14,47 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
 import qwen_direct_fresh as fresh
 from tests.unit import test_dag_delta as fixtures
 from tests.unit.test_dag_monitor import action
+
+
+@pytest.fixture(autouse=True)
+def native_fixture_image_adapter(monkeypatch):
+    """Native fixture uses image-name stubs; supply explicit synthetic test pixels."""
+    original = fresh.compact_call
+    stream = io.BytesIO(); Image.new('RGB', (512, 512)).save(stream, format='PNG')
+    url = 'data:image/png;base64,' + base64.b64encode(stream.getvalue()).decode()
+    def adapt(messages, state=None, **kwargs):
+        messages = fresh.deepcopy(messages)
+        for message in messages:
+            if isinstance(message.get('content'), list):
+                for i, part in enumerate(message['content']):
+                    if set(part) == {'image'}:
+                        message['content'][i] = {'type': 'image_url', 'image_url': {'url': url}}
+        return original(messages, state, **kwargs)
+    monkeypatch.setattr(fresh, 'compact_call', adapt)
+
+
+def test_repair_diagnostic_does_not_pin_an_undelivered_measurement(tmp_path, monkeypatch):
+    direct = fresh.DirectCalls(tmp_path, visual_reports=True)
+    measurements = [{'evidence_id': f'observation_{i}', 'tool': 'measure'} for i in range(1, 4)]
+    direct.context_state = {'observations': measurements}
+    direct.visual.current_readback = 'observation_2'
+    units = [{'id': 'initial', 'raw': {'tool': 'render'}, 'object_group': []}]
+    units.extend({'id': row['evidence_id'], 'raw': row, 'object_group': [1]} for row in measurements)
+    monkeypatch.setattr(direct.visual, 'collect_new', lambda *_: units)
+    feedback = {'role': 'user', 'content': json.dumps({
+        'repair': [[[], "Claim cites archived/unseen evidence: ['observation_1']"]]
+    })}
+
+    def prepare(messages, schema, role, reserve, state, *args, **kwargs):
+        assert feedback in messages
+        bound = fresh.OUTPUT_LIMIT if 'observation_1' in state['supporting_evidence_ids'] else 1000
+        return SimpleNamespace(preflight={'maximum': bound}, packing={})
+
+    monkeypatch.setattr(fresh, 'prepare_qwen_payload', prepare)
+    prepared = direct._reported_payload([feedback], {}, fresh.OUTPUT_RESERVE)
+    assert prepared.preflight['maximum'] < fresh.OUTPUT_LIMIT
+    assert prepared.packing['archived_evidence_ids'] == ['initial', 'observation_1']
+    assert prepared.packing['visible_native_evidence_ids'] == ['observation_2', 'observation_3']
 
 
 def test_single_qwen_explicit_native_action_roundtrip_no_laya():
@@ -33,7 +78,7 @@ def test_single_qwen_explicit_native_action_roundtrip_no_laya():
         assert fresh.BASE_URL in post.call_args.args[0]
         assert json.loads(result['_content']) == native_action
         assert direct.r_used == 9 and direct.t_used == 21
-        assert direct.ledger[0]['preflight']['enforced'] is False
+        assert direct.ledger[0]['preflight']['enforced'] is True
         assert not list(Path(root).glob('*laya*'))
         wire = post.call_args.kwargs['json']
         assert 'options' not in wire['response_format']['json_schema']['schema']['properties']
@@ -63,7 +108,7 @@ def test_latest_native_feedback_visible_and_exact_repeat_schedules_tentative_wit
             direct.choose(messages, **request.kwargs)
         assert post.call_count == 2
         payload = post.call_args.kwargs['json']
-        assert 'Original native rejection: active rivals remain' in payload['messages'][-1]['content']
+        assert 'Original native rejection: active rivals remain' in json.dumps(payload['messages'])
         assert direct.r_used == 3 and direct.t_used == 2
         assert (Path(root)/'controller-contracts/t02/no-progress-stop.json').exists()
         assert direct.pending_tentative_progress == direct.last_progress_identity
@@ -91,6 +136,33 @@ def test_progress_and_domain_use_accepted_state_not_candidate_count_alone():
         assert contract['current_active_targets']['ids'] == [1, 2]
         assert contract['legal_current_prediction_ids'] == [1, 2]
         assert 'do NOT' in contract['current_active_targets']['meaning']
+
+
+def test_repeated_structural_repair_pattern_transitions_without_repeating_forever(tmp_path):
+    harness = fixtures.DagDeltaTests()
+    harness.setUp()
+    native_action = action() | {'monitor': harness.monitor.encode(harness.start)}
+    _, calls = harness.run_ground([native_action,
+        action('finish', 1) | {'monitor': fixtures.delta(harness.finished(), {'n1', 'n11'})}])
+    request = calls[0]
+    direct = fresh.DirectCalls(tmp_path, visual_reports=True)
+    direct.monitor = harness.new_monitor()
+
+    def invalid_answer(tag, role, *_args, **_kwargs):
+        index = len(direct.ledger) + 1
+        answer = {'state_version': f'wrong-version-{index}', 'action': native_action}
+        raw = json.dumps(answer)
+        direct.ledger.append({'index': index, 'tag': tag, 'role': role, 'http_sent': True})
+        fresh.save(tmp_path/'calls'/f'{index:03d}-{tag}-{role}'/'provider-response.json',
+                   {'choices': [{'message': {'content': raw}}]})
+        return {'_content': raw}
+
+    with patch.object(direct, '_qwen', side_effect=invalid_answer) as call, \
+         patch.object(direct, 'tentative_final', return_value={'tentative': True}) as final:
+        assert direct.choose(request.args[0], **request.kwargs) == {'tentative': True}
+    assert call.call_count == 3
+    assert final.call_args.args[2] == 'repeated_structural_rejection'
+    assert (tmp_path/'controller-contracts/t01/structural-stagnation.json').is_file()
 
 
 def test_tentative_final_is_model_owned_once_and_monitor_never_completed():
@@ -151,6 +223,49 @@ def test_tentative_has_only_one_exact_structural_repair_and_preserves_originals(
         assert direct.monitor.plan is None and direct.monitor.history == []
         assert len(list(Path(root).glob('calls/*/provider-response.json'))) == 2
         assert not (Path(root)/'tentative-final/frozen-model-prediction.json').exists()
+
+
+@pytest.mark.parametrize('duplicate_citation', [False, True])
+def test_tentative_rival_repair_constrains_the_model_chosen_target(tmp_path, duplicate_citation):
+    targets = list(range(1, 10))
+    state = {'description': 'the chair', 'allowed_target_ids': targets, 'active_target_ids': targets,
+             'objects': [{'id': oid} for oid in targets], 'observations': []}
+    direct = fresh.DirectCalls(tmp_path)
+    direct.monitor = SimpleNamespace(plan=None, history=[], active_ids=lambda: targets)
+    answer = {'state_version': fresh.digest(state), 'predicted_id': 2, 'reason': 'Chair 2 matches.',
+              'evidence': [{'source_quote': 'the chair', 'object_ids': [2], 'evidence_ids': ['initial'],
+                            'observation': 'The overview shows chair 2.'}],
+              'main_rivals': [{'object_id': 2, 'evidence_ids': ['initial'], 'comparison': 'Check rival.'}],
+              'unresolved': []}
+    if duplicate_citation:
+        answer['evidence'][0]['evidence_ids'].append('initial')
+
+    def respond(tag, role, messages, schema, **_kwargs):
+        index = len(direct.ledger) + 1
+        if index == 2:
+            prepared = fresh.prepare_qwen_payload(messages, schema, role, 1024, state)
+            wire = prepared.payload['response_format']['json_schema']['schema']
+            with pytest.raises(fresh.ValidationError):
+                fresh.validate(answer, wire)
+            answer['main_rivals'][0]['object_id'] = 1
+            answer['evidence'][0]['evidence_ids'] = ['initial']
+            fresh.validate(answer, wire)
+        raw = json.dumps(answer)
+        direct.ledger.append({'index': index, 'tag': tag, 'role': role})
+        fresh.save(tmp_path/'calls'/f'{index:03d}-{tag}-{role}'/'provider-response.json',
+                   {'choices': [{'message': {'content': raw}}]})
+        return {'_content': raw}
+
+    messages = [{'role': 'system', 'content': 'native'}, {'role': 'user', 'content': json.dumps(state)}]
+    with patch.object(direct, '_qwen', side_effect=respond) as calls:
+        with pytest.raises(fresh.TentativeFinal) as done:
+            direct.tentative_final(messages, state, 'fixture')
+    assert calls.call_count == 2 and done.value.answer['predicted_id'] == 2
+    assert done.value.answer['main_rivals'][0]['object_id'] == 1
+    errors = json.loads((tmp_path/'tentative-final/structural-rejection-0.json').read_text())['errors']
+    assert any('Rival list contains predicted target' in row['error'] for row in errors)
+    if duplicate_citation:
+        assert any(row.get('validator') == 'uniqueItems' for row in errors)
 
 
 def view_row(azimuth=315, elevation=10, focus=(1, 2), context='isolated', pixels=None):

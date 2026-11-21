@@ -12,6 +12,35 @@ import qwen_direct_batch as batch
 import qwen_direct_fresh as fresh
 
 
+def test_step2_capacity_terminal_stops_and_does_not_resume_or_skip(tmp_path):
+    rows, assets = fixture(tmp_path, 2); calls = []
+    result = batch.run_batch(tmp_path, {}, rows, assets,
+                            worker_command=worker_of(['capacity_rejected', 'strict_right'], calls))
+    assert calls == [0] and len(result) == 1
+    summary = batch.read(tmp_path/'summary.json')
+    assert summary['state'] == 'attention_context_capacity'
+    assert summary['failed'] == 1 and summary['capacity_rejected'] == 1
+    with patch.object(batch, 'parent_evaluate', side_effect=AssertionError('No repeated scoring')):
+        batch.run_batch(tmp_path, {}, rows, assets,
+                        worker_command=lambda *a: pytest.fail('No silent skip/retry after saved capacity terminal'))
+
+
+def test_full_selection_keeps_local_refusal_and_pauses_before_disk_fills(tmp_path):
+    rows, assets = fixture(tmp_path, 3); calls = []
+    manifest = {'protocol': {'full_selection': True}}
+    space = lambda free: type('Space', (), {'free': free})()
+    statuses = ['capacity_rejected', 'strict_right', 'strict_right']
+    with patch.object(batch.shutil, 'disk_usage', side_effect=[space(2**30), space(0)]):
+        batch.run_batch(tmp_path, manifest, rows, assets, worker_command=worker_of(statuses, calls))
+    assert calls == [0]
+    assert batch.read(tmp_path/'summary.json')['state'] == 'attention_output_storage'
+    with patch.object(batch.shutil, 'disk_usage', return_value=space(2**30)):
+        batch.run_batch(tmp_path, manifest, rows, assets, worker_command=worker_of(statuses, calls))
+    assert calls == [0, 1, 2]
+    summary = batch.read(tmp_path/'summary.json')
+    assert summary['state'] == 'completed' and summary['capacity_rejected'] == 1 and summary['correct'] == 2
+
+
 def fixture(tmp_path, count=5):
     rows = [{'scene': 'scene_fake', 'csv_row': i, 'query': f'raw utterance{i}'} for i in range(count)]
     assets = {'scene_entries': {'scene_fake': {'paths': {'scene.npz': str(tmp_path/'scene.npz'),
@@ -193,3 +222,31 @@ def test_real_worker_bootstrap_failure_is_fail_closed_before_batch(tmp_path, mon
         batch.bootstrap_worker(tmp_path, rows, assets)
     assert batch.read(tmp_path/'worker-bootstrap-status.json')['ready'] is False
     assert not list(tmp_path.glob('q[0-9]*'))
+
+
+def test_bootstrap_request_survives_output_relocation(tmp_path):
+    original = tmp_path/'original'
+    rows, assets = fixture(original, 1)
+    script = original/'source/scripts/qwen_direct_fresh.py'
+    script.parent.mkdir(parents=True)
+    script.write_text("""import argparse, json
+from pathlib import Path
+p = argparse.ArgumentParser()
+p.add_argument('--run-dir')
+p.add_argument('--worker-input')
+p.add_argument('--bootstrap-check', action='store_true')
+a = p.parse_args()
+request_path = Path(a.worker_input)
+request = json.loads(request_path.read_text())
+assert json.loads((request_path.parent / request['shared_manifest']).read_text()) == {'frozen_fake': True}
+d = Path(a.run_dir)
+d.mkdir()
+(d/'bootstrap-check.json').write_text(json.dumps({'ready': True}))
+(d/'result.json').write_text(json.dumps({'status': 'bootstrap_ready', 'model_call_attempts': 0}))
+""")
+    first = batch.bootstrap_worker(original, rows, assets)
+    relocated = original.rename(tmp_path/'relocated')
+    second = batch.bootstrap_worker(relocated, rows, assets)
+    assert first['shared_manifest_sha256'] == second['shared_manifest_sha256']
+    assert first['model_calls'] == second['model_calls'] == 0
+    assert len(list((relocated/'offline-bootstrap').glob('attempt-*'))) == 2

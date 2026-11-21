@@ -26,7 +26,7 @@ ASSETS = ROOT / 'data/qwen_direct/full-assets.json'
 SCENES = Path('/Volumes/KESU/论文/paper/reproductions/SeeGround/local_outputs')
 EXPORT = Path('/Users/luocl/Desktop/seeground/outputs/20261020_r8_object_predictions')
 CACHE = Path('/Volumes/KESU/EviGround/experiments/nr3d_dag_monitor_qwen_v5/runs/E0/key_slot_1/category_inputs')
-OUTPUT = ROOT / 'outputs/qwen-direct/full-nr3d-20261120-v3'
+OUTPUT = ROOT / 'outputs/qwen-direct/step2-three-level-smoke-20261121-v27'
 EXPECTED_PREDICTIONS = '34aa94cbc455324fdd28ddfd21a3832bba743eac25c32d58037c9bc460b1da9e'
 EXPECTED_CONFIG = 'de36aaaaea37c20062c3e4f9c9cc9b5fb039a810ddfa644b9a40f124dd6d6dba'
 
@@ -172,6 +172,15 @@ def asset_preflight(selection, scene_root, cache_root, export, asset_file):
 
 def source_closure():
     paths = [*ROOT.glob('src/**/*.py'), ROOT / 'scripts/qwen_direct_fresh.py', Path(__file__),
+             ROOT / 'scripts/qwen_step2_context.py', ROOT / 'scripts/check_qwen_step2_context.py',
+             ROOT / 'scripts/qwen_evidence_selector.py', ROOT / 'scripts/qwen_visual_reports.py',
+             ROOT / 'scripts/run_qwen_step2_three_level_smoke.command', ROOT / 'tests/unit/test_qwen_visual_reports.py',
+             ROOT / 'tests/unit/test_qwen_evidence_selector.py', ROOT / 'tests/fixtures/qwen_step2_exact_quotes.json',
+             ROOT / 'tests/fixtures/qwen_step2_worker_findings_array.json',
+             ROOT / 'scripts/run_qwen_step2_smoke.command', ROOT / 'tests/unit/test_qwen_step2_context.py',
+             ROOT / 'docs/qwen-step2-context.md',
+             ROOT / 'docs/qwen-step2-adaptive.md', ROOT / 'scripts/run_qwen_step2_adaptive_smoke.command',
+             ROOT / 'tests/fixtures/qwen_step2_initial_monitor_wrapper.json',
              ROOT / 'scripts/run_qwen_direct_full.command',
              ROOT / 'data/qwen_direct/known-gt-exposure.json',
              ROOT / 'tests/unit/test_qwen_direct_fresh.py', ROOT / 'tests/unit/test_qwen_direct_batch.py',
@@ -181,7 +190,7 @@ def source_closure():
     return {str(p.relative_to(ROOT)): sha(p) for p in sorted(paths)}
 
 
-def freeze_run(output, selection, assets_path):
+def freeze_run(output, selection, assets_path, sample_rows=None, visual_levels=3):
     from qwen_direct_fresh import build_frozen_manifest
     assets = read(assets_path)
     if not assets['ready'] or assets['selection_sha256'] != sha(selection):
@@ -189,6 +198,11 @@ def freeze_run(output, selection, assets_path):
     rows = inference_selection(selection)
     if {r['scene'] for r in rows} != set(assets['scene_entries']):
         raise ValueError('Asset scene domain differs from selected7805 queries')
+    if sample_rows is not None:
+        wanted = set(sample_rows)
+        rows = [row for row in rows if row['csv_row'] in wanted]
+        if not wanted or {row['csv_row'] for row in rows} != wanted:
+            raise ValueError('Requested smoke rows missing from sanitized selection')
     missing = [path for entry in assets['scene_entries'].values() for path in entry['hashes'] if not Path(path).is_file()]
     if missing:
         raise ValueError(f'Asset not mounted or missing: {missing[:5]}')
@@ -203,12 +217,16 @@ def freeze_run(output, selection, assets_path):
     # Single-sample local input IDs do not describe this run; shared asset hashes do.
     for key in ('source_closure', 'inputs', 'scheduler_sha256'):
         protocol.pop(key, None)
-    protocol.update(candidate='qwen-direct-full-v3-historical-coverage-explicit-replanning',
-                    scope='User-started full7805 Nr3D local exploration; diagnostic only, not official/paper score',
+    protocol.update(candidate=f'qwen-step2-{visual_levels}-level-visual-reports', visual_levels=visual_levels,
+                    full_selection=sample_rows is None,
+                    scope='Full Nr3D research run' if sample_rows is None else 'Selected Nr3D diagnostic rows',
                     shared_scene_storage='Read-only public scene refs checked against asset hashes',
                     worker_isolation='One fresh subprocess per sample; workers=1; no shared monkeypatch/Monitor',
                     scoring='Parent evaluator after immutable per-sample prediction/failure freeze; null/errors count wrong',
                     development_sample={'csv_row': 12, 'scene': 'scene0565_00', 'GT_revealed_before_full_run': True})
+    if visual_levels == 2:
+        protocol['model_visibility'] = ('Main receives only worker text findings and raw measurements. '
+                                        'Each worker reads one original image. No coordinator calls.')
     protocol['previously_gt_revealed_samples'] = read(ROOT/'data/qwen_direct/known-gt-exposure.json')['samples']
     protocol['diagnostic_trace_seen_without_gt'] = [{'csv_row': 171,
         'scope': 'v2 interrupted trace; no annotation read during v3 offline loop regression',
@@ -216,7 +234,7 @@ def freeze_run(output, selection, assets_path):
     manifest = {'protocol': protocol, 'source_closure': closure, 'selection_sha256': sha(selection),
                 'assets_sha256': sha(assets_path), 'python_executable': sys.executable,
                 'python_prefix': sys.prefix,
-                'workers': 1, 'total': len(rows)}
+                'workers': 1, 'total': len(rows), 'sample_rows': sorted(sample_rows) if sample_rows is not None else None}
     path = output / 'manifest.json'
     if path.exists():
         if read(path) != manifest:
@@ -251,13 +269,36 @@ def call_accounting(directory):
         except ValueError:
             return {'ambiguous_journal': True, 'client_attempts': None, 'http_responses': None, 'unknown_usage': [str(file)]}
         rows.append(row)
+    def known_tokens(row, field):
+        usage = row.get('usage')
+        value = usage.get(field) if isinstance(usage, dict) else None
+        return value if type(value) is int and value >= 0 else 0
+    def valid_usage(row):
+        usage = row.get('usage')
+        return isinstance(usage, dict) and all(type(usage.get(k)) is int and usage[k] >= 0
+                                               for k in ('prompt_tokens', 'completion_tokens'))
     return {'client_attempts': sum(bool(r.get('http_sent')) for r in rows),
             'http_responses': sum(r.get('http_status') is not None for r in rows),
-            'unknown_usage': [r.get('tag') for r in rows if r.get('http_sent') and r.get('usage') is None],
+            'max_sent_context_bound': max((r.get('preflight', {}).get('maximum', 0)
+                                           for r in rows if r.get('http_sent')), default=0),
+            'max_reported_context_used': max((known_tokens(r, 'prompt_tokens') + known_tokens(r, 'completion_tokens')
+                                              for r in rows if valid_usage(r)), default=0),
+            'unknown_usage': [r.get('tag') for r in rows if r.get('http_sent') and not valid_usage(r)],
             'remote_execution_unknown': [r.get('tag') for r in rows if r.get('http_sent') and r.get('http_status') is None],
             'request_errors': sum(r.get('status') == 'failed' for r in rows),
-            'known_prompt_tokens': sum((r.get('usage') or {}).get('prompt_tokens', 0) for r in rows),
-            'known_completion_tokens': sum((r.get('usage') or {}).get('completion_tokens', 0) for r in rows),
+            'capacity_rejections': sum(r.get('status') == 'rejected_preflight' for r in rows),
+            'packaging_rejections': sum(r.get('status') == 'rejected_context_packaging' for r in rows),
+            'evidence_selector_client_attempts': sum(r.get('role') == 'evidence_selector' and bool(r.get('http_sent')) for r in rows),
+            'evidence_selector_http_responses': sum(r.get('role') == 'evidence_selector' and r.get('http_status') is not None for r in rows),
+            'evidence_selector_known_prompt_tokens': sum(known_tokens(r, 'prompt_tokens') for r in rows if r.get('role') == 'evidence_selector'),
+            'evidence_selector_known_completion_tokens': sum(known_tokens(r, 'completion_tokens') for r in rows if r.get('role') == 'evidence_selector'),
+            'visual_calls': {role: {'http_sent': sum(r.get('role') == role and bool(r.get('http_sent')) for r in rows),
+                                    'prompt_tokens': sum(known_tokens(r, 'prompt_tokens') for r in rows if r.get('role') == role),
+                                    'completion_tokens': sum(known_tokens(r, 'completion_tokens') for r in rows if r.get('role') == role)}
+                             for role in ('visual_coordinator', 'visual_worker')},
+            'selection_rejections': sum(r.get('status') == 'rejected_evidence_selection' for r in rows),
+            'known_prompt_tokens': sum(known_tokens(r, 'prompt_tokens') for r in rows),
+            'known_completion_tokens': sum(known_tokens(r, 'completion_tokens') for r in rows),
             'structural_repairs': len(list(directory.glob('controller-contracts/*/repair-*.json'))) + len(list(directory.glob('tentative-final/structural-rejection-*.json')))}
 
 
@@ -305,6 +346,8 @@ class StopState:
 
 def worker_environment(command):
     environment = {k: v for k, v in os.environ.items() if not k.startswith(('EVIGROUND_', 'SEEGROUND_'))}
+    if 'EVIGROUND_DIRECT_QWEN_TOKEN_PLAN_KEY' in os.environ:
+        environment['EVIGROUND_DIRECT_QWEN_TOKEN_PLAN_KEY'] = os.environ['EVIGROUND_DIRECT_QWEN_TOKEN_PLAN_KEY']
     environment.update(PYTHONPATH=str(Path(command[1]).parents[1] / 'src'), PYTHONUNBUFFERED='1',
                        PYTHON_DOTENV_DISABLED='1', PYTHONDONTWRITEBYTECODE='1')
     return environment
@@ -342,7 +385,7 @@ def bootstrap_worker(output, rows, assets):
     row = rows[0]
     entry = assets['scene_entries'][row['scene']]
     request = {'sample': row, 'scene_dir': str(Path(entry['paths']['scene.npz']).parent),
-               'category_path': entry['paths']['category'], 'shared_manifest': str(output/'manifest.json'),
+               'category_path': entry['paths']['category'], 'shared_manifest': '../manifest.json',
                'input_hashes': entry['hashes']}
     directory = output/'offline-bootstrap'
     directory.mkdir(exist_ok=True)
@@ -391,7 +434,12 @@ def totals(results, total, state):
             'strict': sum(bool(r['strict']) for r in results),
             'tentative': sum(r['terminal_mode'] == 'tentative' for r in results),
             'abstained': sum(r['predicted_id'] is None and r['status'] in ('abstained', 'tentative_abstained') for r in results),
-            'failed': statuses['failed'],
+            'failed': statuses['failed'] + statuses['capacity_rejected'] + statuses['provider_capacity_violation'] + statuses['evidence_selection_failed'],
+            'evidence_selection_failed': statuses['evidence_selection_failed'],
+            'capacity_rejected': statuses['capacity_rejected'],
+            'provider_capacity_violation': statuses['provider_capacity_violation'],
+            'max_sent_context_bound': max((r['usage'].get('max_sent_context_bound', 0) for r in results), default=0),
+            'max_reported_context_used': max((r['usage'].get('max_reported_context_used', 0) for r in results), default=0),
             'client_attempts_known': sum(r['usage'].get('client_attempts') or 0 for r in results),
             'http_responses_known': sum(r['usage'].get('http_responses') or 0 for r in results),
             'structural_repairs': sum(r['usage'].get('structural_repairs', 0) for r in results),
@@ -404,6 +452,10 @@ def totals(results, total, state):
 
 def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluator=parent_evaluate, stop=None):
     stop = stop or StopState(); results = []; manifest_hash = sha(output / 'manifest.json')
+    full_selection = manifest.get('protocol', {}).get('full_selection', False)
+    pause_statuses = {'provider_capacity_violation'}
+    if not full_selection:
+        pause_statuses.update({'capacity_rejected', 'evidence_selection_failed'})
     summary_path = output / 'summary.json'
     def checkpoint(state):
         summary = totals(results, len(rows), state)
@@ -434,6 +486,13 @@ def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluat
     progress = BatchProgress(len(rows), initial_results=results)
     done_ids = {r['csv_row'] for r in results}
     checkpoint('running')
+    if any(r['status'] in pause_statuses for r in results):
+        evidence_failed = 'evidence_selection_failed' in pause_statuses and any(
+            r['status'] == 'evidence_selection_failed' for r in results)
+        checkpoint('attention_evidence_selection' if evidence_failed else 'attention_context_capacity')
+        label = 'EVIDENCE' if evidence_failed else 'CAPACITY'
+        print(f'[{label} previously saved; scheduling paused] Inspect the preserved case; no retry or silent skip.', flush=True)
+        return results
     startup_failures = [r for r in results if r['status'] == 'failed' and r['usage'].get('client_attempts') == 0]
     if startup_failures:
         checkpoint('attention_global_zero_api_startup_failure')
@@ -446,6 +505,10 @@ def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluat
             break
         if row['csv_row'] in done_ids:
             continue
+        if full_selection and shutil.disk_usage(output).free < 512 * 1024**2:
+            checkpoint('attention_output_storage')
+            print('[STORAGE; scheduling paused] Less than 512 MiB free on the output volume.', flush=True)
+            return results
         directory = output / f"q{row['csv_row']:05d}"
         result_path = directory / 'result.json'
         directory.mkdir(parents=True, exist_ok=True)
@@ -461,7 +524,7 @@ def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluat
         if not result_path.exists():
             entry = assets['scene_entries'][row['scene']]
             request = {'sample': row, 'scene_dir': str(Path(entry['paths']['scene.npz']).parent),
-                       'category_path': entry['paths']['category'], 'shared_manifest': str((output / 'manifest.json').resolve()),
+                       'category_path': entry['paths']['category'], 'shared_manifest': '../manifest.json',
                        'input_hashes': entry['hashes']}
             request_path = directory / 'worker-input.json'; save(request_path, request)
             command = [sys.executable, str(output / 'source/scripts/qwen_direct_fresh.py'), '--run-dir', str(directory/'episode'), '--worker-input', str(request_path)]
@@ -503,6 +566,12 @@ def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluat
               f" | 已完成 {summary['completed']}/{len(rows)} | " + json.dumps(details, ensure_ascii=False), flush=True)
         with (output/'progress.jsonl').open('a') as log:
             log.write(json.dumps(details, ensure_ascii=False)+'\n'); log.flush(); os.fsync(log.fileno())
+        if value['status'] in pause_statuses:
+            evidence_failed = value['status'] == 'evidence_selection_failed'
+            checkpoint('attention_evidence_selection' if evidence_failed else 'attention_context_capacity')
+            label = 'EVIDENCE' if evidence_failed else 'CAPACITY'
+            print(f'[{label}; scheduling paused] Saved complete receipts/state; no automatic retry, no forced target.', flush=True)
+            return results
         if value['status'] == 'failed' and value['usage'].get('client_attempts') == 0:
             checkpoint('attention_global_zero_api_startup_failure')
             print('[FATAL STARTUP; scheduling paused] ' + json.dumps({
@@ -529,6 +598,8 @@ def main():
     parser.add_argument('--assets-file', type=Path, default=ASSETS)
     parser.add_argument('--output', type=Path, default=OUTPUT)
     parser.add_argument('--workers', type=int, choices=[1], default=1, help='Sequential fresh subprocesses only; no shared global Monitor')
+    parser.add_argument('--sample-rows', type=int, nargs='+', help='Explicit diagnostic csv_row IDs; not a model/API budget')
+    parser.add_argument('--visual-levels', type=int, choices=[2, 3], default=3)
     args = parser.parse_args()
     if args.preflight:
         report = asset_preflight(args.manifest, args.scene_root, args.category_cache, args.prediction_export, args.assets_file)
@@ -542,7 +613,8 @@ def main():
             raise ValueError('Another parent is already running this output; do not duplicate API requests')
         with (output/'runner.log').open('a', buffering=1) as logfile:
             with contextlib.redirect_stdout(ConsoleLog(sys.stdout, logfile)), contextlib.redirect_stderr(ConsoleLog(sys.stderr, logfile)):
-                manifest, rows, assets = freeze_run(output, args.manifest, args.assets_file)
+                manifest, rows, assets = freeze_run(output, args.manifest, args.assets_file,
+                                                  args.sample_rows, args.visual_levels)
                 bootstrap_worker(output, rows, assets)
                 if args.prepare_only:
                     print(f'Prepared {len(rows)} samples; one shared frozen source, zero workers/model calls.', flush=True)
