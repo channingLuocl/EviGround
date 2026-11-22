@@ -168,10 +168,8 @@ class VisualReports:
                               {'description': state['description'], 'task': task,
                                'evidence_id': row['evidence_id'], 'view': row['view'],
                                'known_object_ids': sorted(known)}, schema, 1024, row['image'])
+            self.check_worker_findings(result['findings'], known, marked)
             for raw in result['findings']:
-                self.check_objects(raw, known)
-                if raw['status'] == 'observed' and set(raw['object_ids']) - marked:
-                    raise EvidenceSelectionError('Visual worker claimed an observed object ID without a label in its image')
                 findings.append({**raw, 'finding_id': f'{run_id}_f{len(findings) + 1:02d}',
                                  'image_id': image_id, 'image_sha256': row['sha256'],
                                  'evidence_id': row['evidence_id'], 'question': task['question']})
@@ -205,6 +203,13 @@ class VisualReports:
         ids = row['object_ids']
         if set(ids) - known or len(ids) != len(set(ids)):
             raise EvidenceSelectionError('Visual report or task names an unknown or duplicate object ID')
+
+    @staticmethod
+    def check_worker_findings(findings, known, marked):
+        for finding in findings:
+            VisualReports.check_objects(finding, known)
+            if finding['status'] == 'observed' and set(finding['object_ids']) - marked:
+                raise EvidenceSelectionError('Visual worker claimed an observed object ID without a label in its image')
 
     def ask(self, tag, role, rules, context, schema, reserve, image=None):
         content = packed(context) if image is None else [{'type': 'text', 'text': packed(context)}, deepcopy(image)]

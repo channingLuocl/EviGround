@@ -33,6 +33,147 @@ def native_fixture_image_adapter(monkeypatch):
     monkeypatch.setattr(fresh, 'compact_call', adapt)
 
 
+def test_bigmodel_visual_request_uses_bearer_and_keeps_local_schema_validation(tmp_path, monkeypatch):
+    for name in ('MODEL', 'BASE_URL', 'OUTPUT_LIMIT'):
+        monkeypatch.setattr(fresh, name, getattr(fresh, name))
+    fresh.configure_bigmodel()
+    monkeypatch.setattr(fresh, 'API_KEY', 'mock-bigmodel-key')
+    pixels = io.BytesIO()
+    Image.new('RGB', (8, 8)).save(pixels, format='PNG')
+    encoded = base64.b64encode(pixels.getvalue()).decode()
+    messages = [{'role': 'system', 'content': 'Look at the image.'},
+                {'role': 'user', 'content': [
+                    {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + encoded}},
+                ]}]
+    schema = fresh.obj({'answer': {'type': 'string'}})
+    direct = fresh.DirectCalls(tmp_path)
+
+    def post(url, *, json, headers, **kwargs):
+        assert url == 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+        assert headers == {'Authorization': 'Bearer mock-bigmodel-key'}
+        assert kwargs['allow_redirects'] is False
+        assert json['model'] == 'glm-4.5v' and json['thinking'] == {'type': 'disabled'}
+        assert 'response_format' not in json and 'chat_template_kwargs' not in json
+        assert '"required":["answer"]' in json['messages'][0]['content']
+        assert json['messages'][1]['content'][0]['image_url']['url'] == encoded
+        value = {'model': 'glm-4.5v', 'usage': {'prompt_tokens': 150, 'completion_tokens': 15},
+                 'choices': [{'message': {'content': content}, 'finish_reason': 'stop'}]}
+        return SimpleNamespace(status_code=200, headers={}, json=lambda: value, text=fresh.packed(value))
+
+    monkeypatch.setattr(direct.session, 'post', post)
+    content = '<think>reasoning</think><|begin_of_box|>{"answer":"blue"}<|end_of_box|>'
+    result = direct._qwen('accepted', 'visual_worker', messages, schema)
+    assert json.loads(result['_content']) == {'answer': 'blue'}
+    call = tmp_path / 'calls/001-accepted-visual_worker'
+    assert (call / 'input-image-00.png').read_bytes() == pixels.getvalue()
+    recorded = (call / 'request-redacted.json').read_text()
+    assert 'mock-bigmodel-key' not in recorded and '[IMAGE_REDACTED]' in recorded
+    content = '{"answer":1}'
+    with pytest.raises(fresh.ValidationError):
+        direct._qwen('rejected', 'visual_worker', messages, schema)
+
+
+def test_bigmodel_accepts_only_matching_misplaced_action_version(tmp_path, monkeypatch):
+    monkeypatch.setattr(fresh, 'MODEL', fresh.BIGMODEL_MODEL)
+    direct = fresh.DirectCalls(tmp_path)
+    schema = fresh.obj({'state_version': {'const': 'current'},
+                        'action': fresh.obj({'action': {'const': 'inspect'}})})
+    messages = [{'role': 'system', 'content': 'Choose an action.'}]
+
+    def post(url, *, json, **kwargs):
+        assert 'exactly two top-level keys' in json['messages'][-1]['content']
+        value = {'model': fresh.MODEL, 'usage': {'prompt_tokens': 150, 'completion_tokens': 15},
+                 'choices': [{'message': {'content': fresh.packed(answer)}, 'finish_reason': 'stop'}]}
+        return SimpleNamespace(status_code=200, headers={}, json=lambda: value, text=fresh.packed(value))
+
+    monkeypatch.setattr(direct.session, 'post', post)
+    answer = {'action': {'action': 'inspect', 'state_version': 'current'}}
+    result = direct._qwen('accepted', 'semantic_consultant', messages, schema)
+    assert json.loads(result['_content']) == {'state_version': 'current', 'action': {'action': 'inspect'}}
+    assert direct.ledger[-1]['response_normalization'] == 'lifted_matching_action_state_version'
+    assert answer['action']['state_version'] == 'current'
+    for rejected in ({'action': {'action': 'inspect', 'state_version': 'stale'}},
+                     {'action': {'action': 'inspect'}},
+                     {'action': {'action': 'invalid', 'state_version': 'current'}}):
+        answer = rejected
+        with pytest.raises(fresh.ValidationError):
+            direct._qwen('rejected', 'semantic_consultant', messages, schema)
+
+
+def test_bigmodel_visual_format_repair_preserves_task_image_and_audit(tmp_path, monkeypatch):
+    from collections import Counter
+    from audit_qwen_nr3d_context import audit_visual_batches
+    from tests.unit.test_qwen_visual_reports import controller_input, child_reply, read_context
+
+    monkeypatch.setattr(fresh, 'MODEL', fresh.BIGMODEL_MODEL)
+    raw, state, messages, *_ = controller_input()
+    state['views'][0]['marked_ids'] = [12]
+    direct = fresh.DirectCalls(tmp_path, visual_reports=True)
+    attempts = Counter()
+
+    def post(_url, *, json, **_kwargs):
+        ctx = read_context(json)
+        operation = 'plan' if 'images' in ctx else 'review' if 'findings' in ctx else 'worker'
+        attempts[operation] += 1
+        role = fresh.WORKER if operation == 'worker' else fresh.COORDINATOR
+        reply = child_reply(role, ctx)
+        text = fresh.packed(reply)
+        if operation == 'plan' and attempts[operation] == 1:
+            text = text.replace('"object_ids":[12]', '"object_ids":[33],"object_ids":[12]')
+        if operation == 'worker':
+            assert base64.b64decode(json['messages'][1]['content'][1]['image_url']['url']) == raw
+            if attempts[operation] == 1:
+                reply['findings'][0].update(object_ids=[33], status='observed')
+                text = fresh.packed(reply)
+        if attempts[operation] == 2:
+            assert 'original' in json['messages'][-1]['content']
+            assert 'Duplicate JSON field' in json['messages'][-1]['content'] if operation == 'plan' else (
+                'without a label' in json['messages'][-1]['content'])
+        value = {'model': fresh.MODEL, 'usage': {'prompt_tokens': 100, 'completion_tokens': 20},
+                 'choices': [{'message': {'content': text}, 'finish_reason': 'stop'}]}
+        return SimpleNamespace(status_code=200, headers={}, json=lambda: value, text=fresh.packed(value))
+
+    monkeypatch.setattr(direct.session, 'post', post)
+    direct.visual.collect_new(state, messages)
+    direct._save_visual_report('registry', 'images.json', direct.visual.catalog())
+    assert attempts == {'plan': 2, 'worker': 2, 'review': 1}
+    assert [row['status'] for row in direct.ledger] == ['failed', 'completed', 'failed', 'completed', 'completed']
+    assert [row['index'] for row in direct.ledger if row['tag'].endswith('-format-repair')] == [2, 4]
+    stats = Counter()
+    audit_visual_batches(tmp_path, 3, stats)
+    assert stats['visual_batches_verified'] == 1
+
+
+@pytest.mark.parametrize('failure', ['recoverable', 'still_invalid', 'timeout'])
+def test_bigmodel_parser_format_repair_is_bounded_to_known_response(tmp_path, monkeypatch, failure):
+    monkeypatch.setattr(fresh, 'MODEL', fresh.BIGMODEL_MODEL)
+    direct = fresh.DirectCalls(tmp_path)
+    schema = fresh.obj({'relation': {'enum': ['near', 'back']}})
+    messages = [{'role': 'system', 'content': 'Parse relation.'}, {'role': 'user', 'content': 'Behind a chair.'}]
+    requests = []
+
+    def post(_url, *, json, **_kwargs):
+        requests.append(json)
+        if failure == 'timeout':
+            raise fresh.requests.exceptions.ReadTimeout('HTTP outcome unknown')
+        answer = {'relation': 'back' if failure == 'recoverable' and len(requests) == 2 else 'behind'}
+        value = {'model': fresh.MODEL, 'usage': {'prompt_tokens': 100, 'completion_tokens': 20},
+                 'choices': [{'message': {'content': fresh.packed(answer)}, 'finish_reason': 'stop'}]}
+        return SimpleNamespace(status_code=200, headers={}, json=lambda: value, text=fresh.packed(value))
+
+    monkeypatch.setattr(direct.session, 'post', post)
+    if failure == 'recoverable':
+        result = direct.parser_chat(messages, response_schema={'schema': schema})
+        assert json.loads(result['_content']) == {'relation': 'back'}
+        assert [row['role'] for row in direct.ledger] == ['parser', 'parser_repair']
+        assert 'behind' in requests[1]['messages'][-1]['content']
+    else:
+        expected = fresh.requests.exceptions.ReadTimeout if failure == 'timeout' else fresh.ValidationError
+        with pytest.raises(expected):
+            direct.parser_chat(messages, response_schema={'schema': schema})
+    assert len(requests) == (1 if failure == 'timeout' else 2)
+
+
 def test_repair_diagnostic_does_not_pin_an_undelivered_measurement(tmp_path, monkeypatch):
     direct = fresh.DirectCalls(tmp_path, visual_reports=True)
     measurements = [{'evidence_id': f'observation_{i}', 'tool': 'measure'} for i in range(1, 4)]
@@ -201,6 +342,24 @@ def test_tentative_final_is_model_owned_once_and_monitor_never_completed():
             pass
 
 
+def test_empty_category_pool_tentative_finish_limits_predictions_to_inspected_targets(tmp_path):
+    direct = fresh.DirectCalls(tmp_path)
+    direct.monitor = SimpleNamespace(plan=None, history=[], active_ids=lambda: [1, 2])
+    direct.ledger.append({'index': 1})
+    state = {'description': 'the red shoes', 'allowed_target_ids': [1, 2],
+             'objects': [{'id': 1}, {'id': 2}], 'expanded_target_pool': True,
+             'observations': [{'tool': 'render', 'evidence_id': 'observation_1',
+                               'views': [{'marked_ids': [1]}]}]}
+    answer = {'state_version': fresh.digest(state), 'predicted_id': None, 'reason': 'Color uncertain',
+              'evidence': [], 'main_rivals': [], 'unresolved': ['Could not establish red color']}
+    with patch.object(direct, '_qwen', return_value={'_content': json.dumps(answer)}) as call:
+        with pytest.raises(fresh.TentativeFinal):
+            direct.tentative_final([{'role': 'system', 'content': 'native'}], state, 'test')
+    fields = call.call_args.args[3]['properties']
+    assert fields['predicted_id']['enum'] == [1, None]
+    assert fields['main_rivals']['items']['properties']['object_id']['enum'] == [1, 2]
+
+
 def test_tentative_has_only_one_exact_structural_repair_and_preserves_originals():
     from types import SimpleNamespace
     import requests
@@ -351,6 +510,51 @@ def test_q00171_actual_acquisitions_trigger_without_gt_or_model_calls(tmp_path):
     assert triggers[0] == 26
     assert direct.ledger == []
     assert len(fixture['decisions']) == 66
+
+
+def test_glm_repeat_rejected_before_tool_runs(tmp_path):
+    direct = fresh.DirectCalls(tmp_path, visual_reports=True)
+    acquired = {'action': 'inspect', 'focus_ids': [1, 2], 'context': 'isolated',
+                'azimuth_deg': 315, 'elevation_deg': 30}
+    proposal = {**acquired, 'focus_ids': [2, 1], 'azimuth_deg': None, 'elevation_deg': None}
+    state = {'unavailable_evidence_actions': [acquired]}
+    with pytest.raises(ValueError, match='tool request already ran'):
+        direct.check_glm_evidence_action(proposal, state, {})
+    direct.check_glm_evidence_action({**proposal, 'context': 'scene'}, state, {})
+
+
+def test_glm_abstention_gets_one_followup_when_evidence_tools_are_available(tmp_path):
+    direct = fresh.DirectCalls(tmp_path, visual_reports=True)
+    abstain = {'action': 'finish', 'predicted_id': None}
+    state = {'active_target_ids': [1, 2]}
+    tools = {'anyOf': [{'properties': {'action': {'enum': ['measure']}}}]}
+    direct.check_glm_evidence_action(abstain, state, {})
+    direct.check_glm_evidence_action(abstain, {'active_target_ids': [1]}, tools)
+    with pytest.raises(ValueError, match='one focused evidence attempt'):
+        direct.check_glm_evidence_action(abstain, state, tools)
+    direct.check_glm_evidence_action(abstain, state, tools)
+
+
+@pytest.mark.parametrize('final_binding', ([], [1]))
+def test_glm_repairs_null_finish_only_after_verified_unique_target(final_binding):
+    h = fixtures.DagDeltaTests()
+    h.setUp()
+    plan = h.finished()
+    plan['nodes'][-1]['bound_object_ids'] = final_binding
+    proposal = action('finish', None) | {
+        'evidence': [{'object_ids': [1]}],
+        'unresolved': ['The task is complete.'],
+        'monitor': fixtures.delta(plan, {'n1', 'n11'}),
+    }
+    state = {'observations': h.observations()}
+    before = fresh.deepcopy(h.monitor.plan)
+    with pytest.raises(ValueError, match='only object 1, but predicted_id is null'):
+        fresh.check_glm_abstention(proposal, h.monitor, state)
+    assert h.monitor.plan == before
+
+    plan['nodes'][1]['excluded_target_ids'] = []
+    proposal['monitor'] = fixtures.delta(plan, {'n1', 'n11'})
+    fresh.check_glm_abstention(proposal, h.monitor, state)
 
 
 def test_explicit_model_replanning_adds_measure_stage_without_program_completion(tmp_path):

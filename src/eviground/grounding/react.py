@@ -9,6 +9,8 @@ from eviground.categories.hypotheses import CATEGORY_INSTRUCTIONS
 from eviground.categories.retrieval import distance_pair_metrics
 from eviground.api.client import chat, image_part, parse_json_object
 from eviground.grounding.bindings import matching_hypotheses
+from eviground.grounding.evidence_followup import EvidenceFollowup, was_attempted
+from eviground.grounding.measurement_guard import ComparisonContradiction
 from eviground.geometry.measurements import frame_coordinates, precision_evidence
 from eviground.api.response_schemas import (
     obj,
@@ -539,7 +541,8 @@ def constrained_action_schema(schema, available, pending_node_ids=()):
     return result
 
 
-def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace, limit):
+def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace, limit,
+           *, expanded_target_pool=False):
     from eviground.rendering.inspection import render_action
     from eviground.rendering.overview import scene_views, validate_decision
     from eviground.grounding.action_repetition import exclude_acquired_actions
@@ -654,6 +657,12 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
         "category_policy": "Target pool and class ranks come only from the classifier; parser bindings are hypotheses.",
         "view_policy": "Initial overview and top-down view are inspection cameras, not a speaker frame.",
     }
+    if expanded_target_pool:
+        payload["category_policy"] = (
+            "The requested class has no classifier match. Catalog IDs are unverified candidates. "
+            "Use a focused inspect to verify a plausible target's category before selecting it."
+        )
+        payload["expanded_target_pool"] = True
     payload["target_category_bindings"] = [
         {
             "id": o["bbox_id"],
@@ -854,6 +863,7 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             user_content.append({"type": "text", "text": json.dumps(
                 feedback, ensure_ascii=False, separators=(",", ":"))})
         request_started = perf_counter()
+        followup = None
         try:
             response = chat(
             [
@@ -868,52 +878,88 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             json_mode=True,
             **schema_kwargs("react_action", action_schema),
             )
+        except EvidenceFollowup as exc:
+            followup = exc
         finally:
             timings["model_requests"] = timings.get("model_requests", 0) + perf_counter() - request_started
-        call.update(
-            response=response["_content"],
-            usage=response.get("usage"),
-            **response.get("_request", {}),
-        )
-        save_progress()
-        if dialogue_history:
-            dialogue.extend([{"role": "user", "content": user_content},
-                             {"role": "assistant", "content": response["_content"]}])
-            sent_views, sent_observations = len(views), len(observations)
-        if response.get("_finish_reason") != "stop":
-            raise ValueError("ReAct action response is incomplete")
-        action = parse_json_object(response["_content"])
-        actions.append(action)
-        if action.get("action") not in available:
-            raise ValueError("ReAct returned an unavailable action")
-        if monitor is not None or successful_budget:
-            try:
+        action = None
+        try:
+            if followup is not None:
+                raise followup
+            call.update(response=response["_content"], usage=response.get("usage"), **response.get("_request", {}))
+            save_progress()
+            if dialogue_history:
+                dialogue.extend([{"role": "user", "content": user_content},
+                                 {"role": "assistant", "content": response["_content"]}])
+                sent_views, sent_observations = len(views), len(observations)
+            if response.get("_finish_reason") != "stop":
+                raise ValueError("ReAct action response is incomplete")
+            action = parse_json_object(response["_content"])
+            actions.append(action)
+            if action.get("action") not in available:
+                raise ValueError("ReAct returned an unavailable action")
+            if monitor is not None or successful_budget:
                 if action["action"] == "finish":
                     validate_decision(action, query, allowed, known)
                 if monitor is not None:
                     action["monitor"] = monitor.decode(action.get("monitor"))
                     event = monitor.update(action.get("monitor"), action, observations)
                     trace["dag_monitor_current_node_id"] = event["current_node_id"]
-            except ValueError as exc:
-                repair_failures += 1
-                if monitor is not None and monitor.plan is not None:
-                    trace["dag_monitor_current_node_id"] = monitor.plan["current_node_id"]
-                observation = {"tool": "monitor_check" if monitor is not None else "finish_check", "error": str(exc),
-                               "no_evidence_acquired": True}
-                observations.append(observation)
-                trace["steps"].append({"action": action, "observation": observation})
-                if last_decision or (repair_limit is not None and repair_failures > repair_limit):
-                    decision = {"predicted_id": None, "reason": repair_reason,
-                                "evidence": [], "unresolved": [str(exc)]}
-                    termination_reason = "repair_exhausted"
-                    break
+        except ValueError as exc:
+            if (action is None and followup is None) or (action is not None and action.get("action") not in available):
+                raise
+            if monitor is None and not successful_budget:
+                raise
+            repair_failures += 1
+            if monitor is not None and monitor.plan is not None:
+                trace["dag_monitor_current_node_id"] = monitor.plan["current_node_id"]
+            observation = {"tool": "monitor_check" if monitor is not None else "finish_check", "error": str(exc),
+                           "no_evidence_acquired": True}
+            if isinstance(exc, ComparisonContradiction):
+                observation["measured_comparison"] = {
+                    "condition_id": exc.condition_id, "candidate_ids": exc.focus_ids,
+                    "anchor_id": exc.anchor_id, "rank": exc.ordinal, "supported_id": exc.supported_id,
+                }
+            observations.append(observation)
+            trace["steps"].append({"action": action, "observation": observation})
+            if last_decision or (repair_limit is not None and repair_failures > repair_limit):
+                decision = {"predicted_id": None, "reason": repair_reason,
+                            "evidence": [], "unresolved": [str(exc)]}
+                termination_reason = "repair_exhausted"
+                break
+            if not isinstance(exc, EvidenceFollowup):
                 continue
+            details = exc.details()
+            observation["required_evidence_followup"] = details
+            if remaining_tools == 0 or exc.tool not in available or was_attempted(details, observations):
+                if followup is not None:
+                    observation["evidence_followup"] = details
+                continue
+            action = {"action": exc.tool, "focus_ids": exc.focus_ids, "frame": exc.frame, "reason": str(exc)}
+            if exc.tool == "inspect":
+                if len(exc.focus_ids) > 6:
+                    observation["evidence_followup"] = details
+                    continue
+                action.update(context="scene", elevation_deg=25)
+                for azimuth in (45, 135, 225, 315):
+                    action["azimuth_deg"] = azimuth
+                    if json.dumps(evidence_action_key(action), sort_keys=True) not in signatures:
+                        break
+            if json.dumps(evidence_action_key(action), sort_keys=True) in signatures:
+                if followup is not None:
+                    observation["evidence_followup"] = details
+                continue
+            followup = exc
         if action.get("action") == "finish":
             decision = validate_decision(action, query, allowed, known)
             oid = decision["predicted_id"]
-            if (policy["category_inspection_required"]
-                    and best_ranks.get(oid) in (2, 3, 4, 5) and oid not in inspected):
-                gap = "The selected target is an alternative-only category match and has not been visibly inspected. Inspect it with plausible primary matches; distance alone is not category evidence."
+            if (oid is not None and oid not in inspected
+                    and (expanded_target_pool or (policy["category_inspection_required"]
+                         and best_ranks.get(oid) in (2, 3, 4, 5)))):
+                gap = ("The selected target has no classifier category match. Verify its category "
+                       "with a focused inspection of it and plausible rivals." if expanded_target_pool else
+                       "The selected target is an alternative-only category match and has not been visibly inspected. "
+                       "Inspect it with plausible primary matches; distance alone is not category evidence.")
                 if (remaining_tools is None or remaining_tools > 0) and not last_decision:
                     if monitor is not None and (repair_limit is None or repair_failures < repair_limit) and "inspect" in available:
                         required_inspections.add(oid)
@@ -1031,7 +1077,10 @@ def ground(query, parsed, objects, candidates, xyz, rgb, ids, out, calls, trace,
             }
         if monitor is not None:
             observation["evidence_id"] = f"observation_{step + 1}"
-            observation["monitor_node_id"] = monitor.plan["current_node_id"]
+            if monitor.plan is not None:
+                observation["monitor_node_id"] = monitor.plan["current_node_id"]
+        if followup is not None:
+            observation["evidence_followup"] = followup.details()
         if not observation.get("no_evidence_acquired"):
             tool_calls_used += 1
         elif successful_budget:

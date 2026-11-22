@@ -54,6 +54,11 @@ class EvidenceTests(unittest.TestCase):
         match_retrieval_categories(parsed["References"][0]["category"], objects)
         self.assertEqual(parsed["References"][0]["category"], "entrance door")
 
+    def test_shoes_match_singular_frozen_category_without_guessing_other_classes(self):
+        objects = [{"bbox_id": 23, "category_hypotheses": [{"category": "shoe", "rank": 1}]},
+                   {"bbox_id": 24, "target": "shoebox"}]
+        self.assertEqual(match_retrieval_categories(["shoes"], objects), [objects[0]])
+
     def test_category_normalization_is_idempotent_for_supported_aliases(self):
         names = list(ALIASES) + ["double doors", "carts", "photocopier", "photocopiers"]
         for name in names:

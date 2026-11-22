@@ -13,6 +13,7 @@ import shutil
 import signal
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -190,8 +191,9 @@ def source_closure():
     return {str(p.relative_to(ROOT)): sha(p) for p in sorted(paths)}
 
 
-def freeze_run(output, selection, assets_path, sample_rows=None, visual_levels=3):
-    from qwen_direct_fresh import build_frozen_manifest
+def freeze_run(output, selection, assets_path, sample_rows=None, visual_levels=3, reuse_from=None,
+               resume_frozen=False, reuse_correct_from=None, continue_from=None):
+    from qwen_direct_fresh import GLM_MODELS, build_frozen_manifest
     assets = read(assets_path)
     if not assets['ready'] or assets['selection_sha256'] != sha(selection):
         raise ValueError('Missing/stale asset preflight; use --preflight first')
@@ -212,12 +214,15 @@ def freeze_run(output, selection, assets_path, sample_rows=None, visual_levels=3
             raise ValueError(f'Changed shared input: {scene}; no worker was started')
         if i % 20 == 0 or i == len(assets['scene_entries']):
             print(f'[startup input integrity] {i}/{len(assets["scene_entries"])} scenes; no inference yet', flush=True)
-    closure = source_closure()
+    path = output / 'manifest.json'
+    if resume_frozen and not path.is_file():
+        raise ValueError('--resume-frozen requires an existing frozen output')
+    closure = read(path)['source_closure'] if resume_frozen else source_closure()
     protocol = build_frozen_manifest(include_single_sample_inputs=False)
     # Single-sample local input IDs do not describe this run; shared asset hashes do.
     for key in ('source_closure', 'inputs', 'scheduler_sha256'):
         protocol.pop(key, None)
-    family = 'glm' if protocol['model'] == 'GLM-4.5V' else 'qwen-step2'
+    family = 'glm' if protocol['model'] in GLM_MODELS else 'qwen-step2'
     protocol.update(candidate=f'{family}-{visual_levels}-level-visual-reports', visual_levels=visual_levels,
                     full_selection=sample_rows is None,
                     scope='Full Nr3D research run' if sample_rows is None else 'Selected Nr3D diagnostic rows',
@@ -236,7 +241,39 @@ def freeze_run(output, selection, assets_path, sample_rows=None, visual_levels=3
                 'assets_sha256': sha(assets_path), 'python_executable': sys.executable,
                 'python_prefix': sys.prefix,
                 'workers': 1, 'total': len(rows), 'sample_rows': sorted(sample_rows) if sample_rows is not None else None}
-    path = output / 'manifest.json'
+    if continue_from is not None:
+        if (sample_rows is not None or continue_from == output or resume_frozen
+                or reuse_from is not None or reuse_correct_from is not None):
+            raise ValueError('Continuation requires a separate full output with the current worker')
+        manifest['reused_results'] = plan_full_reuse(continue_from, manifest, correct_only=False)
+    elif reuse_correct_from is not None:
+        if sample_rows is not None or reuse_correct_from == output or resume_frozen or reuse_from is not None:
+            raise ValueError('Correct-only reuse requires a separate full output with the current worker')
+        manifest['reused_results'] = plan_full_reuse(reuse_correct_from, manifest, correct_only=True)
+    elif reuse_from is not None:
+        source_manifest = reuse_from / 'manifest.json'
+        subset = read(source_manifest)
+        subset_rows = subset['sample_rows']
+        if (sample_rows is not None or reuse_from == output or not subset_rows
+                or subset_rows != sorted(set(subset_rows))
+                or not set(subset_rows) <= {row['csv_row'] for row in rows}):
+            raise ValueError('Reuse requires a separate, completed subset of the full selection')
+        # The batch script owns reuse/scoring. All frozen worker code must match.
+        expected = {**manifest, 'total': len(subset_rows), 'sample_rows': subset_rows,
+                    'protocol': {**protocol, 'full_selection': False, 'scope': 'Selected Nr3D diagnostic rows'},
+                    'source_closure': {**closure, 'scripts/qwen_direct_batch.py':
+                                       subset['source_closure']['scripts/qwen_direct_batch.py']}}
+        if subset != expected:
+            raise ValueError('Reuse source differs in frozen inference code, protocol, inputs, or runtime')
+        summary = read(reuse_from/'summary.json')
+        if summary['state'] != 'completed' or summary['completed'] != len(subset_rows):
+            raise ValueError('Reuse source did not finish its selected rows')
+        manifest['reused_results'] = {'directory': str(reuse_from), 'manifest_sha256': sha(source_manifest),
+            'evaluations': {str(row): sha(reuse_from/f'q{row:05d}/evaluation.json') for row in subset_rows}}
+    elif path.exists():
+        existing = read(path)
+        if 'reused_results' in existing:
+            manifest['reused_results'] = existing['reused_results']
     if path.exists():
         if read(path) != manifest:
             raise ValueError('Frozen source/selection/assets/runtime changed; choose a new output. Old results not overwritten.')
@@ -300,10 +337,12 @@ def call_accounting(directory):
             'selection_rejections': sum(r.get('status') == 'rejected_evidence_selection' for r in rows),
             'known_prompt_tokens': sum(known_tokens(r, 'prompt_tokens') for r in rows),
             'known_completion_tokens': sum(known_tokens(r, 'completion_tokens') for r in rows),
-            'structural_repairs': len(list(directory.glob('controller-contracts/*/repair-*.json'))) + len(list(directory.glob('tentative-final/structural-rejection-*.json')))}
+            'structural_repairs': len(list(directory.glob('controller-contracts/*/repair-*.json')))
+            + len(list(directory.glob('tentative-final/structural-rejection-*.json')))
+            + sum(r.get('tag', '').endswith('-format-repair') and bool(r.get('http_sent')) for r in rows)}
 
 
-def parent_evaluate(row, directory, annotation_path, manifest_sha):
+def parent_evaluate(row, directory, annotation_path, manifest_sha, shared_manifest=None):
     prediction_path = directory / 'result.json'
     result = read(prediction_path)
     if result.get('status') == 'interrupted':
@@ -320,7 +359,8 @@ def parent_evaluate(row, directory, annotation_path, manifest_sha):
     if len(annotation) != 1 or any(annotation[0][k] != row[k] for k in ('scene', 'query')):
         raise ValueError('Annotation identity mismatch')
     target = int(annotation[0]['target_id'])
-    shared = read(directory.parent/'manifest.json') if (directory.parent/'manifest.json').exists() else {}
+    shared_manifest = shared_manifest or directory.parent/'manifest.json'
+    shared = read(shared_manifest) if shared_manifest.exists() else {}
     exposed = shared.get('protocol', {}).get('previously_gt_revealed_samples', [{'scene': 'scene0565_00', 'csv_row': 12}])
     valid = result['status'] in ('completed', 'tentative', 'abstained', 'tentative_abstained')
     predicted = result.get('predicted_id')
@@ -336,6 +376,139 @@ def parent_evaluate(row, directory, annotation_path, manifest_sha):
             'full_semantic_evidence_sufficient': 'not_independently_audited_in_batch', 'formal_result': False}
 
 
+def reuse_manifest_hash(reuse, row_id):
+    return reuse.get('worker_manifests', {}).get(str(row_id), reuse['manifest_sha256'])
+
+
+def reuse_manifest_path(output, reuse, source_hash):
+    if source_hash == reuse['manifest_sha256']:
+        return output/'reused-manifest.json'
+    return output/'reused-manifests'/f'{source_hash}.json'
+
+
+def reused_episode_path(reuse, row_id):
+    root = reuse.get('episode_roots', {}).get(str(row_id), reuse['directory'])
+    return Path(root)/f'q{int(row_id):05d}'/'episode'
+
+
+def plan_full_reuse(original, manifest, *, correct_only):
+    path = original/'manifest.json'
+    source = read(path)
+    fields = ('selection_sha256', 'assets_sha256', 'python_executable', 'python_prefix', 'total', 'sample_rows')
+    if any(source[key] != manifest[key] for key in fields):
+        raise ValueError('Full-run reuse requires matching selection, assets and runtime')
+    protocol = source['protocol']
+    current = manifest['protocol']
+    if (correct_only and protocol != current) or any(
+            protocol[key] != current[key] for key in ('model', 'endpoint', 'visual_levels', 'scoring')):
+        raise ValueError('Source run has an incompatible inference or scoring protocol')
+    ledger = read(original/'results.json')
+    summary = read(original/'summary.json')
+    results = ledger['results']
+    correct = [value for value in results if value['correct'] is True]
+    if (ledger['summary'] != summary or len(results) != summary['completed']
+            or not results or len(correct) != summary['correct'] or (correct_only and not correct)
+            or len({value['csv_row'] for value in results}) != len(results)):
+        raise ValueError('Source run results and summary do not agree')
+    if not correct_only and (summary['state'] not in ('stopped', 'attention_output_storage', 'completed')
+                             or summary['unfinished_cases']):
+        raise ValueError('Continuation requires a cleanly stopped run with no unfinished samples')
+    root_hash = sha(path)
+    reuse = {'directory': str(original), 'manifest_sha256': root_hash,
+             'evaluations': {}, 'correct_only': correct_only, 'worker_manifests': {}}
+    if not correct_only:
+        reuse['continuation'] = True
+    previous = source.get('reused_results')
+    for value in (correct if correct_only else results):
+        row_id = value['csv_row']
+        evaluation = original/f'q{row_id:05d}'/'evaluation.json'
+        if read(evaluation) != value:
+            raise ValueError(f'Source evaluation and results ledger differ: {evaluation}')
+        evaluation_hash = sha(evaluation)
+        worker_hash = value['shared_manifest_sha256']
+        if worker_hash != root_hash:
+            if (not previous or evaluation_hash != previous['evaluations'].get(str(row_id))
+                    or worker_hash != reuse_manifest_hash(previous, row_id)):
+                raise ValueError(f'Source evaluation has no worker provenance: {evaluation}')
+            reuse['worker_manifests'][str(row_id)] = worker_hash
+            if previous.get('continuation'):
+                reuse.setdefault('episode_roots', {})[str(row_id)] = str(
+                    reused_episode_path(previous, row_id).parent.parent)
+        reuse['evaluations'][str(row_id)] = evaluation_hash
+    return reuse
+
+
+def import_reused_results(output, manifest, rows):
+    reuse = manifest['reused_results']
+    original = Path(reuse['directory'])
+    source_hash = reuse['manifest_sha256']
+    continuation = reuse.get('continuation', False)
+    if not set(reuse['evaluations']) <= {str(row['csv_row']) for row in rows}:
+        raise ValueError('Reused rows are outside the current run')
+    source = output/'reused-manifest.json'
+    for worker_hash in dict.fromkeys([source_hash, *reuse.get('worker_manifests', {}).values()]):
+        if len(worker_hash) != 64 or any(char not in '0123456789abcdef' for char in worker_hash):
+            raise ValueError('Invalid reused manifest digest')
+        archived = reuse_manifest_path(output, reuse, worker_hash)
+        if not archived.exists():
+            origin = original/'manifest.json'
+            if worker_hash != source_hash:
+                origin = reuse_manifest_path(original, read(source)['reused_results'], worker_hash)
+            archived.parent.mkdir(parents=True, exist_ok=True)
+            with TemporaryDirectory(prefix='.reuse-', dir=archived.parent) as scratch:
+                staged = Path(scratch)/archived.name
+                shutil.copyfile(origin, staged)
+                if sha(staged) != worker_hash:
+                    raise ValueError('Reuse source manifest changed')
+                staged.rename(archived)
+        if sha(archived) != worker_hash:
+            raise ValueError('Reuse source manifest changed')
+    chosen = read(source)['sample_rows']
+    if (chosen is not None if reuse.get('correct_only') or continuation
+            else set(reuse['evaluations']) != set(map(str, chosen or []))):
+        raise ValueError('Reused manifest changed')
+    for row in rows:
+        row_id = str(row['csv_row'])
+        if row_id not in reuse['evaluations']:
+            continue
+        worker_hash = reuse_manifest_hash(reuse, row_id)
+        archived = reuse_manifest_path(output, reuse, worker_hash)
+        directory = output/f"q{row['csv_row']:05d}"
+        def validate(candidate):
+            evaluation = candidate/'evaluation.json'
+            freeze = candidate/'prediction-freeze.json'
+            result = candidate/'result.json'
+            episode = reused_episode_path(reuse, row_id) if continuation else candidate/'episode'
+            if sha(evaluation) != reuse['evaluations'][row_id] or not freeze.is_file():
+                raise ValueError(f'Reused evaluation changed: {evaluation}')
+            value = read(evaluation)
+            context = read(episode/'frozen-manifest.json')
+            expected = parent_evaluate(row, candidate, output/'parent-evaluation/selection.json', worker_hash, archived)
+            expected['usage'] = call_accounting(episode)
+            if ((not continuation and value['status'] not in ('completed', 'tentative', 'abstained', 'tentative_abstained'))
+                    or (reuse.get('correct_only') and value['correct'] is not True)
+                    or any(value.get(key) != item for key, item in expected.items())
+                    or value['usage'].get('remote_execution_unknown') or value['usage'].get('ambiguous_journal')
+                    or sha(episode/'result.json') != sha(result)
+                    or context['sample'] != row or context['shared_manifest_sha256'] != worker_hash):
+                raise ValueError(f'Reused result does not match its original run: {candidate}')
+        if directory.exists():
+            validate(directory)
+        else:
+            with TemporaryDirectory(prefix='.reuse-', dir=output) as scratch:
+                staged = Path(scratch)/directory.name
+                if continuation:
+                    staged.mkdir()
+                    for name in ('result.json', 'prediction-freeze.json', 'evaluation.json'):
+                        shutil.copyfile(original/directory.name/name, staged/name)
+                else:
+                    shutil.copytree(original/directory.name, staged)
+                    if row_id in reuse.get('episode_roots', {}):
+                        shutil.copytree(reused_episode_path(reuse, row_id), staged/'episode')
+                validate(staged)
+                staged.rename(directory)
+
+
 class StopState:
     def __init__(self):
         self.requested = False; self.interrupts = 0
@@ -347,8 +520,12 @@ class StopState:
 
 def worker_environment(command):
     environment = {k: v for k, v in os.environ.items() if not k.startswith(('EVIGROUND_', 'SEEGROUND_'))}
-    if 'EVIGROUND_DIRECT_QWEN_TOKEN_PLAN_KEY' in os.environ:
-        environment['EVIGROUND_DIRECT_QWEN_TOKEN_PLAN_KEY'] = os.environ['EVIGROUND_DIRECT_QWEN_TOKEN_PLAN_KEY']
+    key_names = ('EVIGROUND_DIRECT_QWEN_TOKEN_PLAN_KEY',)
+    if '--bootstrap-check' not in command:
+        key_names += ('EVIGROUND_BIGMODEL_API_KEY',)
+    for name in key_names:
+        if name in os.environ:
+            environment[name] = os.environ[name]
     environment.update(PYTHONPATH=str(Path(command[1]).parents[1] / 'src'), PYTHONUNBUFFERED='1',
                        PYTHON_DOTENV_DISABLED='1', PYTHONDONTWRITEBYTECODE='1')
     return environment
@@ -427,9 +604,9 @@ def bootstrap_worker(output, rows, assets):
         raise
 
 
-def totals(results, total, state):
+def totals(results, total, state, reuse=None):
     statuses = Counter(r['status'] for r in results)
-    return {'state': state, 'completed': len(results), 'total': total,
+    summary = {'state': state, 'completed': len(results), 'total': total,
             'correct': sum(r['correct'] for r in results),
             'accuracy_completed': sum(r['correct'] for r in results) / len(results) if results else None,
             'strict': sum(bool(r['strict']) for r in results),
@@ -449,17 +626,31 @@ def totals(results, total, state):
             'known_prompt_tokens': sum(r['usage'].get('known_prompt_tokens', 0) for r in results),
             'known_completion_tokens': sum(r['usage'].get('known_completion_tokens', 0) for r in results),
             'formal_result': False, 'includes_known_development_sample': True, 'updated_utc': now()}
+    if reuse:
+        reused = [r for r in results if str(r['csv_row']) in reuse['evaluations']]
+        summary['reused'] = len(reused)
+        for key in ('client_attempts', 'known_prompt_tokens', 'known_completion_tokens'):
+            summary[f'reused_{key}'] = sum(r['usage'][key] for r in reused)
+        if reuse.get('correct_only') or reuse.get('continuation'):
+            new_completed = len(results) - len(reused)
+            new_correct = summary['correct'] - sum(r['correct'] for r in reused)
+            summary.update(new_completed=new_completed, new_correct=new_correct,
+                           accuracy_new=new_correct / new_completed if new_completed else None)
+    return summary
 
 
 def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluator=parent_evaluate, stop=None):
     stop = stop or StopState(); results = []; manifest_hash = sha(output / 'manifest.json')
+    reuse = manifest.get('reused_results')
+    if reuse:
+        import_reused_results(output, manifest, rows)
     full_selection = manifest.get('protocol', {}).get('full_selection', False)
     pause_statuses = {'provider_capacity_violation'}
     if not full_selection:
         pause_statuses.update({'capacity_rejected', 'evidence_selection_failed'})
     summary_path = output / 'summary.json'
     def checkpoint(state):
-        summary = totals(results, len(rows), state)
+        summary = totals(results, len(rows), state, reuse)
         completed_ids = {r['csv_row'] for r in results}
         unfinished = []
         for row in rows:
@@ -472,14 +663,18 @@ def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluat
         summary['known_prompt_tokens_including_unfinished'] = summary['known_prompt_tokens'] + sum(r['usage'].get('known_prompt_tokens', 0) for r in unfinished)
         summary['known_completion_tokens_including_unfinished'] = summary['known_completion_tokens'] + sum(r['usage'].get('known_completion_tokens', 0) for r in unfinished)
         save(summary_path, summary)
-        save(output/'results.json', {'summary': summary, 'results': results})
+        by_id = {r['csv_row']: r for r in results}
+        ordered = [by_id[r['csv_row']] for r in rows if r['csv_row'] in by_id]
+        save(output/'results.json', {'summary': summary, 'results': ordered})
         return summary
     for row in rows:
         directory = output / f"q{row['csv_row']:05d}"
         cached = directory / 'evaluation.json'
         if cached.exists():
             value = read(cached)
-            if (value['shared_manifest_sha256'] != manifest_hash or value['scene'] != row['scene']
+            expected_hash = (reuse_manifest_hash(reuse, row['csv_row']) if reuse and str(row['csv_row']) in reuse['evaluations']
+                             else manifest_hash)
+            if (value['shared_manifest_sha256'] != expected_hash or value['scene'] != row['scene']
                     or value['csv_row'] != row['csv_row'] or sha(directory/'result.json') != value['frozen_result_sha256']
                     or sha(directory/'prediction-freeze.json') != value['prediction_freeze_sha256']):
                 raise ValueError(f'Cached evaluation changed identity: {cached}')
@@ -567,6 +762,10 @@ def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluat
               f" | 已完成 {summary['completed']}/{len(rows)} | " + json.dumps(details, ensure_ascii=False), flush=True)
         with (output/'progress.jsonl').open('a') as log:
             log.write(json.dumps(details, ensure_ascii=False)+'\n'); log.flush(); os.fsync(log.fileno())
+        if value.get('failure_type') == 'BigModelRequestError':
+            checkpoint('attention_bigmodel_http_error')
+            print('[ATTENTION] BigModel returned an HTTP error. Scheduling paused. ' + str(value['error']), flush=True)
+            return results
         if value['status'] in pause_statuses:
             evidence_failed = value['status'] == 'evidence_selection_failed'
             checkpoint('attention_evidence_selection' if evidence_failed else 'attention_context_capacity')
@@ -602,8 +801,14 @@ def main():
     parser.add_argument('--output', type=Path, default=OUTPUT)
     parser.add_argument('--workers', type=int, choices=[1], default=1, help='Sequential fresh subprocesses only; no shared global Monitor')
     parser.add_argument('--sample-rows', type=int, nargs='+', help='Explicit diagnostic csv_row IDs; not a model/API budget')
+    parser.add_argument('--reuse-results-from', type=Path, help='Reuse a completed subset with matching inference inputs and protocol')
+    parser.add_argument('--reuse-correct-from', type=Path, help='Reuse only correct results from an earlier full run with matching inputs')
+    parser.add_argument('--continue-from', type=Path, help='Carry over all terminal rows from a stopped full run and use the current worker for new rows')
+    parser.add_argument('--resume-frozen', action='store_true', help='Resume an existing output using its verified frozen worker code')
     parser.add_argument('--visual-levels', type=int, choices=[2, 3], default=3)
-    parser.add_argument('--glm-url', help='GLM-4.5V vLLM endpoint through a local SSH tunnel, ending in /v1')
+    provider = parser.add_mutually_exclusive_group()
+    provider.add_argument('--glm-url', help='GLM-4.5V vLLM endpoint through a local SSH tunnel, ending in /v1')
+    provider.add_argument('--bigmodel', action='store_true', help='Use the paid BigModel China glm-4.5v API')
     args = parser.parse_args()
     if args.preflight:
         report = asset_preflight(args.manifest, args.scene_root, args.category_cache, args.prediction_export, args.assets_file)
@@ -614,6 +819,12 @@ def main():
             parser.error('--glm-url requires a separate --output directory')
         fresh.configure_glm(args.glm_url)
         fresh.check_glm_service()
+    if args.bigmodel:
+        if args.output == OUTPUT:
+            parser.error('--bigmodel requires a separate --output directory')
+        if not args.prepare_only and not os.environ.get(fresh.BIGMODEL_KEY_ENV, '').strip():
+            parser.error(f'Set {fresh.BIGMODEL_KEY_ENV} before running a BigModel batch')
+        fresh.configure_bigmodel()
     output = args.output.resolve(); ensure_run_writable(output); output.mkdir(parents=True, exist_ok=True)
     with (output/'.batch.lock').open('a') as lock:
         try:
@@ -622,11 +833,19 @@ def main():
             raise ValueError('Another parent is already running this output; do not duplicate API requests')
         with (output/'runner.log').open('a', buffering=1) as logfile:
             with contextlib.redirect_stdout(ConsoleLog(sys.stdout, logfile)), contextlib.redirect_stderr(ConsoleLog(sys.stderr, logfile)):
+                reuse_from = args.reuse_results_from.resolve() if args.reuse_results_from else None
+                reuse_correct_from = args.reuse_correct_from.resolve() if args.reuse_correct_from else None
+                continue_from = args.continue_from.resolve() if args.continue_from else None
                 manifest, rows, assets = freeze_run(output, args.manifest, args.assets_file,
-                                                  args.sample_rows, args.visual_levels)
+                                                  args.sample_rows, args.visual_levels, reuse_from,
+                                                  resume_frozen=args.resume_frozen,
+                                                  reuse_correct_from=reuse_correct_from,
+                                                  continue_from=continue_from)
                 bootstrap_worker(output, rows, assets)
                 if args.prepare_only:
-                    print(f'Prepared {len(rows)} samples; one shared frozen source, zero workers/model calls.', flush=True)
+                    if manifest.get('reused_results'):
+                        import_reused_results(output, manifest, rows)
+                    print(f'Prepared {len(rows)} samples; zero model calls.', flush=True)
                     return
                 stop = StopState(); old = signal.signal(signal.SIGINT, stop.signal)
                 old_term = signal.signal(signal.SIGTERM, stop.signal)

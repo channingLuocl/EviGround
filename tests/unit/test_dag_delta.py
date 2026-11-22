@@ -13,6 +13,7 @@ import numpy as np
 
 from eviground.grounding import react
 from eviground.grounding.dag_monitor import DagMonitor, NODE_STATE_FIELDS
+from eviground.grounding.evidence_followup import EvidenceFollowup
 from eviground.grounding.settings import dag_wire_format, settings
 from tests.helpers import parsed, response
 from tests.unit.test_dag_monitor import QUERY, action, plan
@@ -420,7 +421,7 @@ class DagDeltaTests(unittest.TestCase):
         self.assertTrue(all(n["status"] == "pending" and not n["excluded_target_ids"]
                             and not n["evidence_ids"] and not n["conclusion"] for n in self.monitor.plan["nodes"]))
 
-    def run_ground(self, answers, category=False, repairs=0):
+    def run_ground(self, answers, category=False, repairs=0, expanded_target_pool=False):
         objects = [{"bbox_id": i, "target": "chair", "bbox_3d": [i, 0, .5, 1, 1, 1],
                     "category_hypotheses": [{"category": "chair", "rank": 1, "gap_from_top1": 0}]}
                    for i in (1, 2, 3)]
@@ -435,10 +436,39 @@ class DagDeltaTests(unittest.TestCase):
         with (tempfile.TemporaryDirectory() as out, patch.dict(os.environ, env),
               patch("eviground.rendering.overview.scene_views", return_value=[{"image": "a.png"}, {"image": "b.png"}]),
               patch.object(react, "image_part", side_effect=lambda p: {"image": p}),
-              patch.object(react, "chat", side_effect=[response(a) for a in answers]) as chat):
+              patch.object(react, "chat", side_effect=[a if isinstance(a, Exception) else response(a)
+                                                       for a in answers]) as chat):
             result = react.ground(QUERY, parsed(), objects, objects[:2], np.zeros((3, 3)),
-                                  np.zeros((3, 3)), np.arange(3), Path(out), [], trace, 10)
+                                  np.zeros((3, 3)), np.arange(3), Path(out), [], trace, 10,
+                                  expanded_target_pool=expanded_target_pool)
         return result, chat.call_args_list
+
+    def test_rejected_finish_runs_joint_measurement_without_accepting_the_plan(self):
+        def require_measurement(plan, observations, action):
+            if not any(row["tool"] == "measure" for row in observations):
+                raise EvidenceFollowup("Measure alternatives together", focus_ids=[1, 2, 3])
+
+        premature = action("finish", 1) | {"monitor": self.monitor.encode(self.finished("initial"))}
+        verified = action("finish", 1) | {"monitor": self.monitor.encode(self.finished("observation_1"))}
+        with patch.object(DagMonitor, "check_exclusion_evidence", side_effect=require_measurement):
+            result, calls = self.run_ground([premature, verified], repairs=1)
+        self.assertEqual(result["predicted_id"], 1)
+        feedback = json.loads(calls[1].args[0][1]["content"][-1]["text"])
+        self.assertEqual(feedback["active_target_ids"], [1, 2])
+        measured = expand(feedback["observations"])[-1]
+        self.assertEqual(measured["tool"], "measure")
+        self.assertEqual(measured["evidence_followup"]["focus_ids"], [1, 2, 3])
+
+    def test_tentative_conflict_gets_one_joint_scene_view_before_another_answer(self):
+        gap = EvidenceFollowup("Conflicting views of both candidates", focus_ids=[1, 2, 3], tool="inspect")
+        verified = action("finish", 1) | {"monitor": self.monitor.encode(self.finished("observation_1"))}
+        view = {"image": "joint.png", "marked_ids": [1, 2, 3], "context": "scene"}
+        with patch("eviground.rendering.inspection.render_action", return_value=view) as render:
+            result, calls = self.run_ground([gap, verified], repairs=1)
+        self.assertEqual(result["predicted_id"], 1)
+        render.assert_called_once()
+        self.assertEqual(render.call_args.args[0]["focus_ids"], [1, 2, 3])
+        self.assertIn({"image": "joint.png"}, calls[1].args[0][1]["content"])
 
     def test_rejected_delta_survives_feedback_and_can_be_repaired(self):
         duplicate = delta(self.start, {"n1"})
@@ -528,6 +558,13 @@ class DagDeltaTests(unittest.TestCase):
         result, _ = self.run_ground(answers, category=True)
         self.assertIsNone(result["predicted_id"])
         self.assertIn("alternative-only", result["scene_evidence"]["unresolved"][0])
+
+    def test_expanded_target_pool_requires_focused_category_inspection(self):
+        answers = [action() | {"monitor": self.monitor.encode(self.start)},
+                   action("finish", 1) | {"monitor": delta(self.finished(), {"n1", "n11"})}]
+        result, _ = self.run_ground(answers, expanded_target_pool=True)
+        self.assertIsNone(result["predicted_id"])
+        self.assertIn("no classifier category match", result["scene_evidence"]["unresolved"][0])
 
     def test_opt_in_is_recorded_and_invalid_configuration_fails(self):
         with patch.dict(os.environ, {}, clear=True):

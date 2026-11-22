@@ -565,6 +565,7 @@ class DagMonitor:
         current = by_id.get(plan["current_node_id"])
         if current is None:
             raise ValueError("Current monitor stage is absent")
+        self.check_exclusion_evidence(plan, observations, action)
         before, after = set(self.active_ids()), set(self.active_ids(plan))
         event = {"revision": len(self.history) + 1, "current_node_id": current["id"],
                  "invalidated_node_ids": sorted(invalidated),
@@ -615,3 +616,6 @@ class DagMonitor:
         self.plan = plan
         self.history.append(event)
         return event
+
+    def check_exclusion_evidence(self, plan, observations, action):
+        """Optional evidence checks supplied by a grounding workflow."""

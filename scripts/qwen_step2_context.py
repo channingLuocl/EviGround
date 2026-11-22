@@ -143,7 +143,8 @@ def unpack_measurements(state):
     return state
 
 
-def compact_wire_schema(schema, state=None, *, text_visual_reports=False, compact_replacement=False):
+def compact_wire_schema(schema, state=None, *, text_visual_reports=False, compact_replacement=False,
+                        native_finish=False):
     """Only generation hints shrink; exact original Schema still validates locally."""
     if state is not None and 'action' in schema.get('properties', {}):
         string = {'type': 'string'}
@@ -222,11 +223,14 @@ def compact_wire_schema(schema, state=None, *, text_visual_reports=False, compac
             action['properties']['monitor'] = {'anyOf': [delta, obj({'replace_plan': replacement})]}
         focus_limits = {}
         inspect_angles = {}
+        finish_fields = []
         for variant in schema['properties']['action'].get('anyOf', []):
             native = variant.get('properties', {})
             kinds = native.get('action', {}).get('enum', [])
             if kinds == ['inspect']:
                 inspect_angles = {key: native[key] for key in ('azimuth_deg', 'elevation_deg') if key in native}
+            if native_finish and kinds == ['finish']:
+                finish_fields.append({key: native[key] for key in ('predicted_id', 'evidence', 'unresolved')})
             limit = native.get('focus_ids', {}).get('maxItems')
             if len(kinds) == 1 and limit is not None:
                 focus_limits[kinds[0]] = limit
@@ -247,6 +251,12 @@ def compact_wire_schema(schema, state=None, *, text_visual_reports=False, compac
                                   elevation_deg={'type': 'null'})
                 if kind == 'finish':
                     fields.update(focus_ids={'const': []}, frame={'type': 'null'})
+                    if finish_fields:
+                        for terminal in finish_fields:
+                            finish = deepcopy(branch)
+                            finish['properties'].update(deepcopy(terminal))
+                            branches.append(finish)
+                        continue
                 else:
                     fields['focus_ids'] = {**ids, 'minItems': 1, 'maxItems': focus_limits.get(kind, 8)}
                     if not initial:

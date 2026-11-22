@@ -58,7 +58,7 @@ def audit_requests(episode, frozen, levels, stats, roles):
             require(hashlib.sha256(raw).hexdigest() == img['sha256'] and img['sha256'] in original,
                     path, 'delivered image differs from original')
             part['image_url']['url'] = f"data:{img['mime']};base64," + base64.b64encode(raw).decode('ascii')
-        actual = frozen.qwen_preflight(payload['messages'], payload['response_format'], payload['max_tokens'])
+        actual = frozen.qwen_preflight(payload['messages'], payload.get('response_format'), payload['max_tokens'])
         recorded = receipt['preflight']
         require(recorded['enforced'] and recorded['limit'] == frozen.OUTPUT_LIMIT
                 and all(recorded[key] == actual[key] for key in ('maximum', 'images', 'text_bytes', 'output_reserved'))
@@ -96,12 +96,28 @@ def audit_visual_batches(episode, levels, stats):
     if not paths:
         return
     images = {row['image_id']: row for row in read(registry_path)}
-    calls = {}
+    calls, repairs = {}, {}
     for path in (episode/'calls').glob('*/receipt.json'):
         receipt = read(path)
         if receipt['role'] in ('visual_coordinator', 'visual_worker'):
-            require(receipt['tag'] not in calls, path, 'duplicate visual call tag')
-            calls[receipt['tag']] = (path.parent, receipt)
+            tag = receipt['tag']
+            table = repairs if tag.endswith('-format-repair') else calls
+            original_tag = tag.removesuffix('-format-repair')
+            require(original_tag not in table, path, 'duplicate visual call tag')
+            table[original_tag] = (path.parent, receipt)
+    for tag, (folder, repair) in repairs.items():
+        require(tag in calls, folder, 'visual format repair has no original call')
+        original_folder, original = calls[tag]
+        original_request = read(original_folder/'original-request-redacted.json')
+        repaired_request = read(folder/'original-request-redacted.json')
+        require(original['index'] + 1 == repair['index'] and original['role'] == repair['role']
+                and original['status'] == 'failed' and original.get('http_status') == 200
+                and original['error_type'] in ('ValidationError', 'JSONDecodeError', 'ValueError', 'EvidenceSelectionError')
+                and repaired_request[:-1] == original_request and repaired_request[-1]['role'] == 'user'
+                and read(original_folder/'original-response-schema.json') == read(folder/'original-response-schema.json'),
+                folder, 'visual format repair must retain its failed original task and schema')
+        if repair['status'] == 'completed':
+            calls[tag] = (folder, repair)
     for path in paths:
         report = read(path)
         batch = report['report_id']
@@ -193,10 +209,17 @@ def audit_readbacks(episode, frozen, stats):
         stats['readbacks_verified'] += 1
 
 
-def iter_episodes(root, archives):
+def iter_episodes(root, archives, reuse=None):
     missing = {}
     for sample in sorted(root.glob('q[0-9]*')):
         episode = sample/'episode'
+        if reuse and reuse.get('continuation') and str(int(sample.name[1:])) in reuse['evaluations']:
+            from qwen_direct_batch import reused_episode_path
+            require(not episode.exists(), sample, 'continued sample has a new local episode')
+            episode = reused_episode_path(reuse, int(sample.name[1:]))
+            require(episode.is_dir(), episode, 'continued episode unavailable at its original path')
+            yield sample, episode
+            continue
         if archives and not episode.exists() and (sample/'evaluation.json').is_file():
             missing[sample.name] = sample
         else:
@@ -247,7 +270,9 @@ def main():
     levels = protocol['visual_levels']
     if protocol['model'] == 'GLM-4.5V':
         frozen.configure_glm(protocol['endpoint'])
-    expected_limit = {'qwen3.8-max': 32768, 'GLM-4.5V': 65536}.get(protocol['model'])
+    elif protocol['model'] == 'glm-4.5v':
+        frozen.configure_bigmodel()
+    expected_limit = {'qwen3.8-max': 32768, 'GLM-4.5V': 65536, 'glm-4.5v': 65536}.get(protocol['model'])
     require(levels in (2, 3) and protocol['model'] == frozen.MODEL
             and protocol['endpoint'] == frozen.BASE_URL and frozen.OUTPUT_LIMIT == expected_limit
             and protocol['qwen_context_policy']['reference_bound'] == expected_limit,
@@ -264,20 +289,44 @@ def main():
               if row['csv_row'] in selected]
     require(selection == {'rows': wanted, 'GT_fields': []} and len(wanted) == manifest['total'],
             root/'inference-selection.json', 'inference selection or annotation isolation check failed')
+    reuse = manifest.get('reused_results')
+    reused = reuse['evaluations'] if reuse else {}
+    if reuse:
+        reused_manifest = root/'reused-manifest.json'
+        archived_rows = read(reused_manifest)['sample_rows']
+        right_scope = (archived_rows is None if reuse.get('correct_only') or reuse.get('continuation')
+                       else set(reused) == set(map(str, archived_rows or [])))
+        require(chosen is None and sha(reused_manifest) == reuse['manifest_sha256'] and right_scope
+                and set(map(int, reused)) <= selected, reused_manifest, 'reused subset provenance changed')
+        if reuse.get('correct_only') or reuse.get('continuation'):
+            from qwen_direct_batch import reuse_manifest_path
+            worker_manifests = reuse['worker_manifests']
+            require(set(worker_manifests) <= set(reused), reused_manifest, 'unexpected inherited rows')
+            for digest in set(worker_manifests.values()):
+                require(len(digest) == 64 and all(char in '0123456789abcdef' for char in digest),
+                        reused_manifest, 'invalid worker manifest digest')
+                archived = reuse_manifest_path(root, reuse, digest)
+                require(sha(archived) == digest, archived, 'inherited worker manifest changed')
     stats, roles, evaluated = Counter(), Counter(), {}
-    for sample, episode in iter_episodes(root, args.episode_archive):
+    for sample, episode in iter_episodes(root, args.episode_archive, reuse):
         row_id = int(sample.name[1:])
         require(row_id in selected, sample, 'sample outside frozen selection')
+        reused_hash = reused.get(str(row_id))
+        sample_manifest_hash = (reuse.get('worker_manifests', {}).get(str(row_id), reuse['manifest_sha256'])
+                                if reused_hash else manifest_hash)
         record = episode/'frozen-manifest.json'
         if record.exists():
             context = read(record)
-            require(context['shared_manifest_sha256'] == manifest_hash
+            require(context['shared_manifest_sha256'] == sample_manifest_hash
                     and context['sample'] == {k: source_rows[row_id][k] for k in ('scene', 'csv_row', 'query')},
                     record, 'worker input or manifest identity changed')
         sent = audit_requests(episode, frozen, levels, stats, roles)
         audit_visual_batches(episode, levels, stats)
         audit_readbacks(episode, frozen, stats)
         evaluation = sample/'evaluation.json'
+        if reused_hash:
+            require(record.exists() and evaluation.exists() and sha(evaluation) == reused_hash,
+                    sample, 'reused evaluation or original worker record changed')
         if not evaluation.exists():
             continue
         value = read(evaluation)
@@ -288,11 +337,13 @@ def main():
         prediction_hash = sha(result_path)
         correct = result['status'] in ('completed', 'tentative', 'abstained', 'tentative_abstained') and (
             result['predicted_id'] == target)
+        if reused_hash and reuse.get('correct_only'):
+            require(correct, evaluation, 'correct-only reuse contains a wrong prediction')
         require(read(freeze_path) == {'result_sha256': prediction_hash,
                 'sample': {key: source_rows[row_id][key] for key in ('scene', 'csv_row', 'query')},
-                'shared_manifest_sha256': manifest_hash, 'annotation_read': False},
+                'shared_manifest_sha256': sample_manifest_hash, 'annotation_read': False},
                 freeze_path, 'prediction freeze no longer matches sample and result')
-        require(value['shared_manifest_sha256'] == manifest_hash and value['csv_row'] == row_id
+        require(value['shared_manifest_sha256'] == sample_manifest_hash and value['csv_row'] == row_id
                 and value['target_id'] == target and value['correct'] is correct
                 and value['predicted_id'] == result['predicted_id'] and value['status'] == result['status']
                 and value['strict'] == result.get('strict_monitor_accepted', False)
@@ -310,9 +361,17 @@ def main():
         ledger = read(root/'results.json')
         require(ledger == {'summary': summary, 'results': [evaluated[row['csv_row']] for row in wanted]},
                 root/'results.json', 'terminal results differ from per-sample evaluations')
-        recomputed = totals(list(evaluated.values()), len(selected), 'completed')
+        if reuse and (reuse.get('correct_only') or reuse.get('continuation')):
+            recomputed = totals(list(evaluated.values()), len(selected), 'completed', reuse)
+        else:
+            recomputed = totals(list(evaluated.values()), len(selected), 'completed')
         require(all(summary[key] == value for key, value in recomputed.items() if key != 'updated_utc'),
                 root/'summary.json', 'terminal summary differs from per-sample evaluations')
+        if reuse:
+            require(summary['reused'] == len(reused) and all(summary[f'reused_{key}'] ==
+                    sum(evaluated[int(row)]['usage'][key] for row in reused)
+                    for key in ('client_attempts', 'known_prompt_tokens', 'known_completion_tokens')),
+                    root/'summary.json', 'reused call accounting differs from original evaluations')
     print(json.dumps({'state': summary['state'], 'levels': levels, 'samples_evaluated': len(evaluated),
                       'samples_selected': len(selected), 'requests_sent': sum(roles.values()), 'roles': dict(roles),
                       **{k: stats[k] for k in ('preflight_refusals', 'pending_or_unknown_http', 'http_errors',

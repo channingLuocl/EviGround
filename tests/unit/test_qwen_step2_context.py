@@ -105,11 +105,12 @@ def test_compact_inspect_keeps_native_angle_bounds():
         fresh.validate(0, inspect['elevation_deg'])
 
 
-def test_glm_tentative_schema_requires_evidence_or_explained_abstention(glm_backend):
-    fields = {'predicted_id': {'enum': [12, 33, None]},
+def test_glm_tentative_schema_requires_evidence_and_legal_rivals_or_explained_abstention(glm_backend):
+    candidates = [12, 33, 34, 35, 36, 37]
+    fields = {'predicted_id': {'enum': candidates + [None]},
               'evidence': {'type': 'array'},
               'main_rivals': {'type': 'array', 'items': {'type': 'object', 'properties': {
-                  'object_id': {'enum': [12, 33]}}}},
+                  'object_id': {'enum': candidates}}}},
               'unresolved': {'type': 'array'}}
     schema = {'type': 'object', 'properties': fields, 'required': list(fields)}
     prepared = fresh.prepare_qwen_payload([], schema, 'semantic_consultant', 1024)
@@ -119,6 +120,36 @@ def test_glm_tentative_schema_requires_evidence_or_explained_abstention(glm_back
         fresh.validate(answer, wire)
     fresh.validate({**answer, 'predicted_id': None}, wire)
     fresh.validate({**answer, 'evidence': ['image'], 'main_rivals': [{'object_id': 33}]}, wire)
+    with pytest.raises(fresh.ValidationError):
+        fresh.validate({**answer, 'evidence': ['image'], 'main_rivals': [{'object_id': 7}]}, wire)
+
+
+def test_glm_planner_wire_keeps_both_native_finish_contracts():
+    native = {'properties': {'state_version': {'const': 'v'}, 'action': {'anyOf': [
+        {'properties': {'action': {'enum': ['finish']}, 'predicted_id': {'type': 'null'},
+                        'unresolved': {'type': 'array', 'minItems': 1}, 'evidence': {'type': 'array'}}},
+        {'properties': {'action': {'enum': ['finish']}, 'predicted_id': {'enum': [11, 12]},
+                        'unresolved': {'type': 'array', 'maxItems': 0},
+                        'evidence': {'type': 'array', 'minItems': 1}}}
+    ]}}}
+    wire = context.compact_wire_schema(native, {'description': 'A lamp'}, text_visual_reports=True,
+                                       native_finish=True)
+    finishes = [branch['properties'] for branch in wire['properties']['action']['anyOf']
+                if branch['properties']['action']['const'] == 'finish']
+    assert [f['predicted_id'] for f in finishes] == [{'type': 'null'}, {'enum': [11, 12]}]
+    with pytest.raises(fresh.ValidationError):
+        fresh.validate([], finishes[0]['unresolved'])
+    with pytest.raises(fresh.ValidationError):
+        fresh.validate([], finishes[1]['evidence'])
+
+
+def test_glm_tentative_rejects_visual_evidence_assigned_to_wrong_object():
+    scopes = {'observation_1': [0], 'observation_2': [7]}
+    answer = {'evidence': [{'evidence_ids': ['observation_1'], 'object_ids': [7]}]}
+    with pytest.raises(ValueError, match='does not cover object IDs'):
+        fresh.validate_tentative_coverage(answer, scopes)
+    fresh.validate_tentative_coverage(
+        {'evidence': [{'evidence_ids': ['observation_1', 'observation_2'], 'object_ids': [0, 7]}]}, scopes)
 
 
 def measurement():

@@ -114,6 +114,54 @@ def test_ctrl_c_drains_current_and_stops_scheduling_then_resumes(tmp_path):
     assert calls == [0, 1, 2] and len(result) == 3
 
 
+def test_current_worker_continues_only_pending_rows_across_frozen_manifests(tmp_path):
+    previous = tmp_path/'previous'
+    output = tmp_path/'next'
+    rows, assets = fixture(previous, 5)
+    fixture(output, 5)
+    protocol = {'model': 'test', 'endpoint': 'test', 'visual_levels': 3, 'scoring': 'test',
+                'full_selection': True}
+    manifest = {'protocol': protocol, 'selection_sha256': 'selection', 'assets_sha256': 'assets',
+                'python_executable': 'py', 'python_prefix': 'prefix', 'total': 5, 'sample_rows': None}
+    batch.save(previous/'manifest.json', manifest)
+    calls = []
+    kinds = ['strict_wrong', 'strict_right', 'evidence_selection_failed', 'null', 'strict_right']
+
+    def worker(path, finish_at):
+        def wrapped(command, directory, stop):
+            sample = batch.read(command[-1])['sample']
+            batch.save(directory/'episode/frozen-manifest.json', {
+                'sample': sample, 'shared_manifest_sha256': batch.sha(path/'manifest.json')})
+            result = worker_of(kinds, calls)(command, directory, stop)
+            if sample['csv_row'] == finish_at:
+                stop.requested = True
+            return result
+        return wrapped
+
+    batch.run_batch(previous, manifest, rows, assets, worker_command=worker(previous, 3))
+    resume_manifest = {**manifest, 'protocol': {**protocol, 'decision_protocol': 'updated worker'}}
+    resume_manifest['reused_results'] = batch.plan_full_reuse(previous, resume_manifest, correct_only=False)
+    batch.save(output/'manifest.json', resume_manifest)
+    result = batch.run_batch(output, resume_manifest, rows, assets, worker_command=worker(output, None))
+    assert calls == [0, 1, 2, 3, 4]
+    assert [row['status'] for row in result] == ['completed', 'completed', 'evidence_selection_failed',
+                                                  'abstained', 'completed']
+    summary = batch.read(output/'summary.json')
+    assert (summary['reused'], summary['new_completed'], summary['accuracy_new']) == (4, 1, 1)
+    assert summary['accuracy_completed'] == 2/5
+    assert not (output/'q00000/episode').exists()
+    assert batch.reused_episode_path(resume_manifest['reused_results'], 0) == previous/'q00000/episode'
+    assert max(int(p.name[1:]) for p in previous.glob('q*')) == 3
+
+    subsequent = tmp_path/'subsequent'
+    fixture(subsequent, 5)
+    again = {**manifest, 'reused_results': batch.plan_full_reuse(output, manifest, correct_only=False)}
+    batch.save(subsequent/'manifest.json', again)
+    batch.run_batch(subsequent, again, rows, assets, worker_command=worker(subsequent, None))
+    assert calls == [0, 1, 2, 3, 4]
+    assert batch.reused_episode_path(again['reused_results'], 0) == previous/'q00000/episode'
+
+
 def test_interrupted_and_unknown_are_not_blindly_resent_or_in_denominator(tmp_path):
     rows, assets = fixture(tmp_path, 1); stop = batch.StopState(); calls = []
     def after(s):
@@ -194,6 +242,11 @@ def test_freeze_resume_identity_and_gt_not_in_worker_selection(tmp_path, monkeyp
     assert 'target_id' not in (output/'inference-selection.json').read_text()
     assert 'target_id' not in (output/'manifest.json').read_text()
     assert (output/'source/pyproject.toml').exists()
+    monkeypatch.setattr(batch, 'source_closure', lambda: {'pyproject.toml': 'new-worker-version'})
+    with pytest.raises(ValueError, match='Frozen source'):
+        batch.freeze_run(output, selection, assets_path)
+    resumed, _, _ = batch.freeze_run(output, selection, assets_path, resume_frozen=True)
+    assert resumed == one
     cloud.write_bytes(b'changed cloud')
     with pytest.raises(ValueError, match='Changed shared input'):
         batch.freeze_run(output, selection, assets_path)

@@ -32,6 +32,10 @@ BASE_URL = "https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1"
 OUTPUT_LIMIT = 32768  # strict local engineering gate; provider usage audited separately
 GLM_MODEL = "GLM-4.5V"
 GLM_CONTEXT = 65536
+BIGMODEL_MODEL = "glm-4.5v"
+BIGMODEL_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4"
+BIGMODEL_KEY_ENV = "EVIGROUND_BIGMODEL_API_KEY"
+GLM_MODELS = (GLM_MODEL, BIGMODEL_MODEL)
 # Deployed processor maximum: 9,633,792 pixels / (14 * 2)^2, plus template markers.
 GLM_IMAGE_BOUND = 12288 + 16
 OUTPUT_RESERVE = 4096
@@ -40,6 +44,9 @@ IMAGE_MAX_PIXELS = 2621440
 API_KEY = ""
 sys.path.insert(0, str(PROJECT / "src"))
 from eviground.evaluation.run_storage import write_json
+from eviground.grounding.evidence_followup import EvidenceFollowup, was_attempted
+from eviground.grounding.measurement_guard import check_measured_exclusions
+from eviground.grounding.visual_conflicts import unresolved_visual_conflict
 
 
 def packed(value):
@@ -96,6 +103,11 @@ def configure_glm(endpoint):
             or url.username is not None or url.query or url.fragment or url.path != '/v1'):
         raise ValueError('GLM requires a loopback vLLM API base ending in /v1')
     MODEL, BASE_URL, OUTPUT_LIMIT = GLM_MODEL, endpoint, GLM_CONTEXT
+
+
+def configure_bigmodel():
+    global MODEL, BASE_URL, OUTPUT_LIMIT
+    MODEL, BASE_URL, OUTPUT_LIMIT = BIGMODEL_MODEL, BIGMODEL_ENDPOINT, GLM_CONTEXT
 
 
 def check_glm_service():
@@ -165,6 +177,9 @@ def qwen_preflight(messages, response_format, reserve, allow_legacy_image_fields
                     raise ValueError("Invalid image dimensions")
                 if getattr(image, 'n_frames', 1) != 1 or max(width, height) / min(width, height) > 200:
                     raise ValueError('Only static images with aspect ratio<=200 have a supported local vision bound')
+                if MODEL == BIGMODEL_MODEL and (image.format not in ('JPEG', 'PNG')
+                        or len(raw) >= 5_000_000 or max(width, height) > 6000):
+                    raise ValueError('BigModel requires original JPEG/PNG images below 5 MB and at most 6000 pixels per side')
             images.append({
                 "sha256": hashlib.sha256(raw).hexdigest(),
                 "width": width,
@@ -173,7 +188,7 @@ def qwen_preflight(messages, response_format, reserve, allow_legacy_image_fields
             })
             part["image_url"]["url"] = "[actual image bytes counted separately]"
     # Count the actual text strings, not their doubly escaped HTTP JSON envelope.
-    text_bytes = len(packed(response_format).encode("utf-8"))
+    text_bytes = len(packed(response_format).encode("utf-8")) if response_format is not None else 0
     for message in clean_messages:
         content = message.get("content")
         if isinstance(content, str):
@@ -197,20 +212,21 @@ def qwen_preflight(messages, response_format, reserve, allow_legacy_image_fields
         "output_reserved": reserve + OUTPUT_OVERRUN_ALLOWANCE,
         "maximum": maximum,
         "limit": OUTPUT_LIMIT,
-        "image_bound_source": ("Deployed GLM-4.5V-AWQ preprocessor_config.json" if MODEL == GLM_MODEL
+        "image_bound_source": ("Public GLM-4.5V processor settings, used as a local estimate" if MODEL == BIGMODEL_MODEL
+                               else "Deployed GLM-4.5V-AWQ preprocessor_config.json" if MODEL == GLM_MODEL
                                else "https://help.aliyun.com/zh/model-studio/vision"),
-        "image_bound_contract": ("GLM processor maximum 12288 image patches plus 16 markers" if MODEL == GLM_MODEL else
+        "image_bound_contract": ("GLM processor maximum 12288 image patches plus 16 markers" if MODEL in GLM_MODELS else
                                  "Conditional Qwen-style smart resize bound, factor32, conservative minimum512*512, max_pixels2621440 and two image markers; exact private endpoint preprocessing not verified"),
         "provider_count_contract_verified": False,
         'historical_legacy_image_param_audit': allow_legacy_image_fields,
         "counting_assumptions": ["one text token consumes at least one original UTF8 byte (private tokenizer not supplied)",
             "response Schema counted once plus explicit framing allowance (private chat template/Schema linearization not supplied)",
             ("Deployed GLM processor uses its configured pixel ceiling and 28-pixel spatial merge"
-             if MODEL == GLM_MODEL else "documented Qwen-family vision preprocessing applies to this private endpoint")],
+             if MODEL in GLM_MODELS else "documented Qwen-family vision preprocessing applies to this private endpoint")],
     }
 
 def image_token_bound(width, height):
-    if MODEL == GLM_MODEL:
+    if MODEL in GLM_MODELS:
         return GLM_IMAGE_BOUND
     factor, minimum, maximum = 32, 512 * 512, IMAGE_MAX_PIXELS
     h = max(factor, round(height / factor) * factor)
@@ -535,8 +551,16 @@ class TentativeRivalOverlap(ValueError):
     pass
 
 
+class UnresolvedTentativeEvidence(ValueError):
+    pass
+
+
 class ProviderCapacityViolation(RuntimeError):
     pass
+
+
+class BigModelRequestError(RuntimeError):
+    """The paid endpoint returned an HTTP error."""
 
 
 class PreparedCall(Exception):
@@ -554,20 +578,39 @@ def prepare_qwen_payload(messages, schema, role, reserve, state=None, wire_schem
         for part in message['content']:
             if part.get('type') == 'image_url':
                 part['image_url'].pop('max_pixels', None)
-                if MODEL == GLM_MODEL:
+                if MODEL in GLM_MODELS:
                     part.pop('max_pixels', None)
                 else:
                     part['max_pixels'] = IMAGE_MAX_PIXELS
     generated = compact_wire_schema(wire_schema if wire_schema is not None else schema,
                                     state if role == 'semantic_consultant' else None,
                                     text_visual_reports=text_visual_reports,
-                                    compact_replacement=visual_report_rows)
-    if MODEL == GLM_MODEL and role == 'semantic_consultant' and 'main_rivals' in generated.get('properties', {}):
+                                    compact_replacement=visual_report_rows,
+                                    native_finish=MODEL in GLM_MODELS)
+    if MODEL in GLM_MODELS and text_visual_reports and 'action' in generated.get('properties', {}):
+        visible[0]['content'] += (
+            "\nUse ready_node_ids for the next tool. If you switch to a dependent node, complete its "
+            "prerequisites with cited evidence in the same action. For a missing visual reference, "
+            "inspect a scene view containing the plausible reference IDs and the target candidates. "
+            "For unresolved size, distance or position, measure the remaining candidates and their "
+            "common reference in one request. A null finish requires a nonempty unresolved list.")
+    if MODEL in GLM_MODELS and role == 'semantic_consultant' and 'main_rivals' in generated.get('properties', {}):
         fields = generated['properties']
-        targets = [target for target in fields['predicted_id'].get('enum', []) if target is not None]
-        selected = fields['predicted_id'].get('const')
+        original = schema['properties']
+        targets = [target for target in original['predicted_id'].get('enum', []) if target is not None]
+        selected = original['predicted_id'].get('const')
         if selected is not None:
             targets = [selected]
+        rival_fields = fields['main_rivals']['items']['properties']
+        rival_fields['object_id'] = original['main_rivals']['items']['properties']['object_id']
+        if state is not None and text_visual_reports:
+            visible[0]['content'] += (
+                "\nFirst identify the target noun and name the references separately in your reason. "
+                "Choose the target object ID, never its reference. Preserve negation and the named comparison group. "
+                "For visual claims, copy the object IDs from the exact observed finding and cite its finding ID. "
+                "For geometry, use the same measured frame and show the compared values in the reason. "
+                "Vertical height cannot establish front or back. A bed's bounding box does not identify its foot. "
+                "If the necessary relationship is unobserved, name the gap instead of assuming the result.")
         no_target = deepcopy(generated)
         no_target['properties']['predicted_id'] = {'type': 'null'}
         no_target['properties']['unresolved']['minItems'] = 1
@@ -588,20 +631,65 @@ def prepare_qwen_payload(messages, schema, role, reserve, state=None, wire_schem
     generated = provider_schema(factor_schema(generated))
     Draft202012Validator.check_schema(generated)
     response_format = {'type': 'json_schema', 'json_schema': {'name': role + '_answer', 'strict': True, 'schema': generated}}
+    if MODEL == BIGMODEL_MODEL:
+        visible[0]['content'] += (
+            '\nReturn only JSON matching this JSON Schema. Do not include Markdown or extra text.\n'
+            + packed(generated))
+        if 'action' in schema.get('properties', {}) and 'state_version' in schema['properties']:
+            version = schema['properties']['state_version']['const']
+            visible.append({'role': 'user', 'content': (
+                f'Return a JSON object with exactly two top-level keys: "state_version" set to "{version}", '
+                'and "action" containing the complete action object. Do not put "state_version" inside "action".')})
+        response_format = None
     preflight = qwen_preflight(visible, response_format, reserve)
     visible, packing, preflight = original_resolution_pack(visible, response_format, reserve, packing,
         preflight, qwen_preflight, OUTPUT_LIMIT)
-    preflight.update(enforced=True, context_policy='strict-local-64k' if MODEL == GLM_MODEL else 'strict-local-32k',
-                     provider_context_limit=GLM_CONTEXT if MODEL == GLM_MODEL else None)
-    payload = {'model': MODEL, 'messages': visible, 'max_tokens': reserve, 'temperature': 0,
-               'response_format': response_format}
+    preflight.update(enforced=True, context_policy='strict-local-64k' if MODEL in GLM_MODELS else 'strict-local-32k',
+                     provider_context_limit=GLM_CONTEXT if MODEL in GLM_MODELS else None)
+    payload = {'model': MODEL, 'messages': visible, 'max_tokens': reserve, 'temperature': 0}
+    if response_format is not None:
+        payload['response_format'] = response_format
     if MODEL == GLM_MODEL:
         payload['chat_template_kwargs'] = {'enable_thinking': False}
+    elif MODEL == BIGMODEL_MODEL:
+        payload['thinking'] = {'type': 'disabled'}
     else:
         payload.update(enable_thinking=False, vl_high_resolution_images=False)
     packing['visible_native_evidence_ids'] = ['initial'] + packing.get('all_raw_evidence_ids', []) if state is not None else []
     packing['readback_ids'] = list(readback_ids)
     return PreparedCall(payload, preflight, packing)
+
+
+def bigmodel_wire_payload(payload):
+    wire = deepcopy(payload)
+    for message in wire['messages']:
+        if isinstance(message['content'], list):
+            for part in message['content']:
+                if part['type'] == 'image_url':
+                    part['image_url']['url'] = part['image_url']['url'].split(',', 1)[1]
+    return wire
+
+
+def bigmodel_json_text(content):
+    if not isinstance(content, str):
+        raise ValueError('BigModel response must contain a JSON text answer')
+    content = re.sub(r'^\s*<think>.*?</think>\s*', '', content, count=1, flags=re.DOTALL).strip()
+    if content.startswith('<|begin_of_box|>') and content.endswith('<|end_of_box|>'):
+        content = content.removeprefix('<|begin_of_box|>').removesuffix('<|end_of_box|>').strip()
+    fence = re.fullmatch(r'```(?:json)?\s*\n(.*?)\n\s*```', content, re.IGNORECASE | re.DOTALL)
+    return fence[1].strip() if fence else content
+
+
+def lift_bigmodel_action_version(answer, schema):
+    fields = schema.get('properties', {})
+    if ('action' not in fields or 'state_version' not in fields
+            or not isinstance(answer, dict) or set(answer) != {'action'}):
+        return False
+    action = answer['action']
+    if not isinstance(action, dict) or action.get('state_version') != fields['state_version']['const']:
+        return False
+    answer['state_version'] = action.pop('state_version')
+    return True
 
 
 def recheck_action_schema(image_ids):
@@ -617,7 +705,7 @@ class DirectCalls:
         self.root = root
         self.key = API_KEY
         self.record_only = True
-        self.qwen_context_policy = "strict-local-64k" if MODEL == GLM_MODEL else "strict-local-32k"
+        self.qwen_context_policy = "strict-local-64k" if MODEL in GLM_MODELS else "strict-local-32k"
         self.context_state = None
         self.session = requests.Session()
         self.session.trust_env = False
@@ -633,6 +721,7 @@ class DirectCalls:
         self.covered_evidence_keys = set()
         self.tentative_evaluation_started = False
         self.pending_tentative_progress = None
+        self.glm_abstention_followup_requested = False
         self.console_progress = False
         self.trace = None
         self.bootstrap_only = False
@@ -673,6 +762,58 @@ class DirectCalls:
             "policy": "Historical sorted groups/context/15-degree camera coverage and newly visible IDs; raw measurement facts/frames. Pixel counts, file paths and receipt IDs are not novelty. Engineering proxy, not evidence sufficiency."})
         return self.stagnant_transitions >= 3
 
+    def check_visual_conflict(self, candidate_ids, winner, state):
+        if self.visual is None:
+            return
+        conflict = unresolved_visual_conflict(self.visual.reports.values(), self.visual.views,
+                                              candidate_ids, winner, description=state['description'])
+        if conflict is None:
+            return
+        focus = sorted(set(conflict['candidate_ids']) | set(conflict['reference_ids']))
+        description = f"{conflict['criterion']} for candidates {conflict['candidate_ids']}"
+        if conflict.get('refuted'):
+            raise UnresolvedTentativeEvidence(
+                f"Joint visual evidence {conflict['finding_ids']} refutes the proposed ID {winner} for {description}.")
+        gap = EvidenceFollowup(
+            f"Conflicting visual findings {conflict['finding_ids']} for {description}. "
+            f"Reinspect IDs {focus} together before eliminating a candidate.",
+            focus_ids=focus, tool='inspect',
+        )
+        if was_attempted(gap.details(), state['observations']):
+            raise UnresolvedTentativeEvidence(str(gap))
+        raise gap
+
+    def check_tentative_measurements(self, state, answer):
+        winner = answer['predicted_id']
+        cited = {source for row in (*answer['evidence'], *answer['main_rivals'])
+                 for source in row['evidence_ids']}
+        expanded = expand_history_references(state)
+        comparisons = {}
+        for row in expanded['observations']:
+            details = row.get('required_evidence_followup')
+            rank = row.get('measured_comparison')
+            if details and details['condition_id']:
+                comparisons[details['condition_id']] = details
+            if rank:
+                comparisons[rank['condition_id']] = {'focus_ids': rank['candidate_ids'] +
+                    ([rank['anchor_id']] if rank['anchor_id'] is not None else [])}
+        for condition_id, details in comparisons.items():
+            focus = set(details['focus_ids'])
+            group = focus & set(state['allowed_target_ids'])
+            if winner not in group or len(group) < 2:
+                continue
+            node = {'id': 'comparison', 'condition_ids': [condition_id], 'depends_on': [],
+                    'status': 'completed', 'bound_object_ids': sorted({winner} | (focus - group)),
+                    'excluded_target_ids': sorted(group - {winner}), 'evidence_ids': sorted(cited)}
+            try:
+                check_measured_exclusions(
+                    self.monitor.requirements, group, {'nodes': [node]}, expanded['observations'],
+                    state.get('reference_category_bindings', []), state.get('parsed_target_categories', []),
+                    observer=getattr(self.monitor, 'observer', None),
+                )
+            except ValueError as exc:
+                raise UnresolvedTentativeEvidence(str(exc)) from exc
+
     def tentative_final(self, messages, state, trigger):
         self.context_state = deepcopy(state)
         if self.tentative_evaluation_started:
@@ -680,13 +821,19 @@ class DirectCalls:
         self.tentative_evaluation_started = True
         version = digest(state)
         targets = sorted(set(state["allowed_target_ids"]) & set(self.monitor.active_ids()))
+        eligible_targets = targets
+        if state.get("expanded_target_pool"):
+            inspected = {object_id for row in expand_history_references(state).get("observations", [])
+                         if row.get("tool") == "render" and not row.get("no_evidence_acquired")
+                         for view in row.get("views", []) for object_id in view.get("marked_ids", [])}
+            eligible_targets = [target for target in targets if target in inspected]
         known = [row["id"] for row in state["objects"]]
         evidence_ids = ["initial"] + [row["evidence_id"] for row in state.get("observations", [])
             if row.get("evidence_id") and not row.get("no_evidence_acquired")]
         text = {"type": "string", "minLength": 1}
         schema = {"type": "object", "properties": {
             "state_version": {"const": version},
-            "predicted_id": {"type": ["integer", "null"], "enum": targets + [None]},
+            "predicted_id": {"type": ["integer", "null"], "enum": eligible_targets + [None]},
             "reason": text,
             "evidence": {"type": "array", "items": {"type": "object", "properties": {
                 "source_quote": {"const": state["description"]},
@@ -724,8 +871,10 @@ class DirectCalls:
             "Explain any frame assumption explicitly, never reverse numeric order. Fixed allowed "
             "and current active IDs are distinct from known references. Multiple active IDs do NOT "
             "make a proposed ID illegal and must remain recorded. Return only the supplied Schema."}
+        contract = candidate_contract(state, self.monitor.plan, len(self.monitor.history))
+        contract["legal_current_prediction_ids"] = eligible_targets
         visible.append({"role": "user", "content": packed({"state_version": version,
-            "trigger": trigger, "candidate_contract": candidate_contract(state, self.monitor.plan, len(self.monitor.history)),
+            "trigger": trigger, "candidate_contract": contract,
             "terminal_status": "tentative; strict_monitor_accepted=false; evidence_sufficiency independently audited"})})
         original_visible = deepcopy(visible)
         for attempt in range(2):
@@ -734,6 +883,9 @@ class DirectCalls:
                                       visible, schema, reserve=OUTPUT_RESERVE)
                 answer = json.loads(response["_content"], object_pairs_hook=unique_json_object)
                 validate_tentative_answer(answer, schema, targets)
+                if MODEL == BIGMODEL_MODEL and answer["predicted_id"] is not None:
+                    self.check_visual_conflict(state["allowed_target_ids"], answer["predicted_id"], state)
+                    self.check_tentative_measurements(state, answer)
                 if snapshot != {"plan": self.monitor.plan, "history": self.monitor.history, "active_target_ids": self.monitor.active_ids()}:
                     raise RuntimeError("Tentative evaluator mutated native Monitor")
                 self.decisions[-1].update(status="legal_tentative_terminal", R_after=self.r_used,
@@ -743,11 +895,21 @@ class DirectCalls:
                     "strict_monitor_accepted": False, "source_call_index": self.ledger[-1]["index"],
                     "answer": answer, "unchanged_native_snapshot": snapshot})
                 raise TentativeFinal(answer, version, snapshot)
+            except EvidenceFollowup as exc:
+                self.tentative_evaluation_started = False
+                self.decisions[-1].update(status="evidence_followup_required", R_after=self.r_used)
+                save(self.root / "decision-ledger.json", self.decisions)
+                save(folder / "required-evidence-followup.json", exc.details())
+                raise
             except (ValueError, ValidationError) as exc:
                 self.r_used += 1
                 feedback = {"errors": complete_validation_feedback(exc), "instruction": "ONE exact structural repair only. Same evidence and candidates; fix your own fields. No Monitor changes or semantic executor repair."}
+                if isinstance(exc, UnresolvedTentativeEvidence):
+                    feedback["instruction"] = "Use the measured ordering and resolve the cited evidence conflict. If it is still unresolved, choose null and explain the missing evidence."
                 save(folder / f"structural-rejection-{attempt}.json", feedback)
                 if attempt:
+                    if isinstance(exc, UnresolvedTentativeEvidence):
+                        raise EvidenceSelectionError(f'Tentative prediction still lacks required evidence: {exc}') from exc
                     raise RuntimeError("Tentative evaluation still structurally invalid after one model repair") from exc
                 call = self.ledger[-1]
                 raw = self.root / "calls" / f"{call['index']:03d}-{call['tag']}-{call['role']}" / "provider-response.json"
@@ -758,7 +920,8 @@ class DirectCalls:
                     proposal = {}
                 selected = proposal.get('predicted_id') if isinstance(proposal, dict) else None
                 proposed_rivals = proposal.get('main_rivals') if isinstance(proposal, dict) else None
-                if (type(selected) is int and selected in targets and proposal.get('state_version') == version
+                if (not isinstance(exc, UnresolvedTentativeEvidence) and type(selected) is int
+                        and selected in eligible_targets and proposal.get('state_version') == version
                         and isinstance(proposed_rivals, list)
                         and any(isinstance(row, dict) and row.get('object_id') == selected for row in proposed_rivals)):
                     # Keep the model's explicit target and constrain the rival IDs on its repair.
@@ -865,9 +1028,34 @@ class DirectCalls:
     def _save_visual_report(self, run_id, name, value):
         save(self.root / 'visual-reports' / run_id / name, value)
 
+    def _structured_call(self, tag, role, messages, schema, reserve, *, repair_role=None, answer_check=None):
+        try:
+            return self._qwen(tag, role, messages, schema, reserve=reserve, answer_check=answer_check)
+        except (ValueError, ValidationError, EvidenceSelectionError) as exc:
+            failed = self.ledger[-1] if self.ledger else {}
+            if (MODEL != BIGMODEL_MODEL or failed.get('tag') != tag or failed.get('role') != role
+                    or failed.get('http_status') != 200 or failed.get('status') != 'failed'
+                    or not failed.get('usage')):
+                raise
+            feedback = {'errors': complete_validation_feedback(exc, concise=True)[:3],
+                        'instruction': 'Return a valid replacement for the same task using its original '
+                                       'evidence and schema. Use each JSON key only once.'}
+            return self._qwen(tag + '-format-repair', repair_role or role,
+                              [*messages, {'role': 'user', 'content': packed(feedback)}],
+                              schema, reserve=reserve, answer_check=answer_check)
+
     def _visual_call(self, tag, role, messages, schema, reserve):
         try:
-            answer = self._qwen(tag, role, messages, schema, reserve=reserve)
+            answer_check = None
+            if MODEL == BIGMODEL_MODEL and role == WORKER:
+                request = json.loads(messages[1]['content'][0]['text'])
+                known = set(request['known_object_ids'])
+                marked = set(request['view'].get('marked_ids', []))
+
+                def answer_check(answer):
+                    VisualReports.check_worker_findings(answer['findings'], known, marked)
+
+            answer = self._structured_call(tag, role, messages, schema, reserve, answer_check=answer_check)
             return json.loads(answer['_content'], object_pairs_hook=unique_json_object)
         except (ValueError, ValidationError) as exc:
             raise EvidenceSelectionError(f'{role} returned an invalid visual report: {exc.message if isinstance(exc, ValidationError) else exc}') from exc
@@ -984,6 +1172,8 @@ class DirectCalls:
                                     archived_evidence_ids=projected['archived_evidence_ids'],
                                     archived_visual_report_ids=projected['archived_visual_report_ids'],
                                     native_state_unchanged=True)
+            if MODEL in GLM_MODELS and 'main_rivals' in schema.get('properties', {}):
+                prepared.packing['tentative_evidence_objects'] = projected['supporting_evidence_objects']
             if prepared.preflight['maximum'] < OUTPUT_LIMIT:
                 return prepared
         for fallback in (3072, 2048, 1536):
@@ -992,7 +1182,8 @@ class DirectCalls:
                                               allow_recheck=allow_recheck, allow_readback=allow_readback)
         return prepared
 
-    def _qwen(self, tag, role, messages, schema, reserve=OUTPUT_RESERVE, wire_schema=None, quote_registry=None):
+    def _qwen(self, tag, role, messages, schema, reserve=OUTPUT_RESERVE, wire_schema=None, quote_registry=None,
+              answer_check=None):
         original_messages = deepcopy(messages)
         reserve = min(reserve, OUTPUT_RESERVE if role not in ('parser', 'parser_repair') else 1600)
         if role == 'semantic_consultant' and ('tentative-final' in tag or
@@ -1046,7 +1237,7 @@ class DirectCalls:
                 'dependencies': {name: version(name) for name in ('spacy', 'en_core_web_sm', 'requests', 'numpy', 'Pillow', 'jsonschema')},
                 'original_scene_and_category_loaded': True,
                 'worker_sample_fields': ['scene', 'csv_row', 'query'],
-                'annotation_target_supplied': False, 'real_provider_schema_validated': True,
+                'annotation_target_supplied': False, 'real_provider_schema_validated': MODEL != BIGMODEL_MODEL,
                 'strict_local_bound_passed': True, 'preflight': preflight,
                 'provider_count_contract_verified': False, 'local_capacity_ready': True})
             check = json.loads((self.root / 'bootstrap-check.json').read_text())
@@ -1132,7 +1323,8 @@ class DirectCalls:
                       context_bound=preflight['maximum'], context_limit=OUTPUT_LIMIT)
         try:
             headers = {'Authorization': 'Bearer ' + self.key} if self.key else {}
-            response = self.session.post(BASE_URL + '/chat/completions', json=payload, headers=headers, timeout=(45, 180), allow_redirects=False)
+            wire = bigmodel_wire_payload(payload) if MODEL == BIGMODEL_MODEL else payload
+            response = self.session.post(BASE_URL + '/chat/completions', json=wire, headers=headers, timeout=(45, 180), allow_redirects=False)
             (folder / 'provider-response.json').write_text(response.text.replace(self.key, '[REDACTED]') if self.key else response.text)
             record['http_status'] = response.status_code
             try:
@@ -1140,11 +1332,18 @@ class DirectCalls:
             except (ValueError, AttributeError):
                 record['usage'] = None
             save(folder / 'receipt.json', record)
+            if MODEL == BIGMODEL_MODEL and response.status_code != 200:
+                raise BigModelRequestError(f'BigModel HTTP {response.status_code}; see {folder / "provider-response.json"}')
             value = read_response(response, MODEL, preflight, preflight['output_reserved'], enforce_32k=preflight['enforced'])
             if 'server_prompt_count' in record and value['usage']['prompt_tokens'] != record['server_prompt_count']:
                 raise ProviderCapacityViolation('GLM completion prompt usage differs from pre-send tokenization')
             content = value['choices'][0]['message'].get('content') or ''
+            if MODEL == BIGMODEL_MODEL:
+                content = bigmodel_json_text(content)
             answer = json.loads(content, object_pairs_hook=unique_json_object)
+            if MODEL == BIGMODEL_MODEL and lift_bigmodel_action_version(answer, schema):
+                record['response_normalization'] = 'lifted_matching_action_state_version'
+                content = packed(answer)
             if role == WORKER and isinstance(answer, list):
                 if len(answer) == 1 and isinstance(answer[0], dict) and set(answer[0]) == {'image_id', 'findings'}:
                     answer = answer[0]
@@ -1172,6 +1371,10 @@ class DirectCalls:
                                       'action': readback_action_schema(packing['readback_ids'])}))
             else:
                 validate(answer, schema)
+                if 'tentative_evidence_objects' in packing:
+                    validate_tentative_coverage(answer, packing['tentative_evidence_objects'])
+            if answer_check is not None:
+                answer_check(answer)
             record.update(status='completed', usage=value.get('usage'), finish_reason=value['choices'][0].get('finish_reason'), request_id=response.headers.get('x-request-id'))
             (folder / 'response.json').write_text(content)
             save(folder / 'receipt.json', record)
@@ -1190,7 +1393,8 @@ class DirectCalls:
 
     def parser_chat(self, messages, **kwargs):
         role = "parser_repair" if messages[0].get("content", "").startswith("Recover only omitted") else "parser"
-        return self._qwen("query-parse", role, messages, kwargs["response_schema"]["schema"], kwargs.get("max_tokens", 1600))
+        return self._structured_call("query-parse", role, messages, kwargs["response_schema"]["schema"],
+                                     kwargs.get("max_tokens", 1600), repair_role="parser_repair")
 
     def choose(self, messages, **kwargs):
         self.t_used += 1
@@ -1232,11 +1436,21 @@ class DirectCalls:
             "To replan, explicitly use the native complete replace_plan form. Legal null finish "
             "states missing evidence; no forced target. "
             "This record-only protocol is exploratory, not strict B10/R6/T17 comparison.")
-        if MODEL == GLM_MODEL:
+        if MODEL in GLM_MODELS:
             visible[0]["content"] += (
                 "\nFor inspect, set elevation_deg to null for the default view, or choose a value "
                 "from 10 to 75 degrees inclusive. Set azimuth_deg to null or a value from 0 up to "
                 "but excluding 360 degrees.")
+        if MODEL == BIGMODEL_MODEL:
+            visible[0]["content"] += (
+                "\nKeep comparison nodes pending until you can cite a measure observation containing "
+                "the proposed winner, each rival excluded by that comparison, and the same named "
+                "reference when applicable. For far left/right or a stated observer viewpoint, "
+                "measure in the frame implied by the description; world axes are not speaker axes. "
+                "Use a separate node per comparison when different conditions eliminate different rivals. "
+                "Apply size ranks to the described group only. If volume and footprint disagree, "
+                "seek corroborating evidence. A failed comparison check leaves the prior plan active; "
+                "propose a pending inspect/measure node or revise the plan to acquire the missing facts.")
         native_feedback = [row for row in state.get("observations", []) if row.get("no_evidence_acquired")]
         visible.append({"role": "user", "content": packed({"state_version": version,
             "candidate_contract": candidate_contract(state, self.monitor.plan, len(self.monitor.history))})})
@@ -1304,6 +1518,10 @@ class DirectCalls:
                         action["monitor"] = canonical_initial_monitor(action["monitor"])
                     validate(answer, direct_schema)
                     validate(action, native_schema)
+                    if MODEL in GLM_MODELS:
+                        check_glm_abstention(action, self.monitor, state)
+                        if self.visual is not None:
+                            self.check_glm_evidence_action(action, state, native_schema)
                     save(folder / f"action-{attempt}-serialization.json", {
                         "model_original_monitor": before_order, "serialized_monitor": action["monitor"],
                         "semantic_fields_added": [], "explicit_action": action})
@@ -1363,6 +1581,60 @@ class DirectCalls:
             decision["R_after"] = self.r_used
             save(self.root / "decision-ledger.json", self.decisions)
 
+    def check_glm_evidence_action(self, action, state, native_schema):
+        from eviground.grounding.react import evidence_action_key
+
+        if action['action'] in ('inspect', 'measure'):
+            if evidence_action_key(action) in state.get('unavailable_evidence_actions', []):
+                raise ValueError(
+                    "This tool request already ran. For a visual relationship, include the reference "
+                    "and candidates in a different scene view. For a geometric relationship, measure "
+                    "the candidate group together with the reference.")
+            return
+        active = state.get('active_target_ids', state.get('allowed_target_ids', []))
+        if action['predicted_id'] is not None or len(active) <= 1 or self.glm_abstention_followup_requested:
+            return
+        can_acquire = any(branch.get('properties', {}).get('action', {}).get('enum') in (['inspect'], ['measure'])
+                          for branch in native_schema.get('anyOf', []))
+        if can_acquire:
+            self.glm_abstention_followup_requested = True
+            raise ValueError(
+                "Several target candidates remain. Make one focused evidence attempt before abstaining. "
+                "Use a new scene view including a missing reference, or measure the candidates in a "
+                "common reference frame. If neither can resolve the specific missing fact, explain why.")
+
+
+def check_glm_abstention(action, monitor, state):
+    if action['action'] != 'finish' or action['predicted_id'] is not None or not action['evidence']:
+        return
+    proposed = deepcopy(monitor)
+    try:
+        proposed.update(proposed.decode(action['monitor']), action, expand_history_references(state)['observations'])
+    except ValueError:
+        return  # Leave invalid Monitor proposals to the normal rejection path.
+    nodes = proposed.plan['nodes']
+    final = next(node for node in nodes if node['kind'] == 'verification')
+    targets = proposed.active_ids()
+    if (len(targets) == 1 and proposed.plan['current_node_id'] == final['id']
+            and final['bound_object_ids'] in ([], targets)
+            and all(node['status'] == 'completed' for node in nodes)
+            and any(row['object_ids'] == targets for row in action['evidence'])):
+        raise ValueError(
+            f"Your completed verification and cited evidence support only object {targets[0]}, "
+            "but predicted_id is null. Set predicted_id to that object and unresolved to [], or keep "
+            "verification pending and state the specific missing evidence that prevents a choice.")
+
+
+def validate_tentative_coverage(answer, scopes):
+    for row in answer.get("evidence", []):
+        sources = row.get("evidence_ids", [])
+        if not sources or "initial" in sources:
+            continue
+        covered = {oid for source in sources for oid in scopes.get(source, [])}
+        unsupported = set(row.get("object_ids", [])) - covered
+        if unsupported:
+            raise ValueError(f"Tentative evidence {sources} does not cover object IDs {sorted(unsupported)}")
+
 
 def validate_tentative_answer(answer, schema, targets):
     validate(answer, schema)
@@ -1396,7 +1668,7 @@ def build_frozen_manifest(*, include_single_sample_inputs=True):
                       PROJECT / "docs/qwen-direct-source-provenance.json", PROJECT / "pyproject.toml"])
     files = [INPUTS / "nr3d/scene0565_00/scene.npz", INPUTS / "nr3d/scene0565_00/scene_instances.json",
              INPUTS / "nr3d/query.json", INPUTS / "categories/scene0565_00/objects_top5.json"]
-    glm = MODEL == GLM_MODEL
+    glm = MODEL in GLM_MODELS
     return {"candidate": "glm-three-level-visual-reports" if glm else "qwen-step2-three-level-visual-reports",
             "branch": "20261121_step3_glm" if glm else "20261120_step2",
             "baseline_commit": ("e4705403853c9163698cfc6c60ccaccb21968e35" if glm else
@@ -1409,8 +1681,8 @@ def build_frozen_manifest(*, include_single_sample_inputs=True):
                                        "annealing_reference_turns_not_a_cap": 17},
             "qwen_context_policy": {"policy": "strict-local-64k" if glm else "strict-local-32k",
                 f"local_{OUTPUT_LIMIT}_refusal_enforced": True, 'strict_operator': '<',
-                "provider_context_limit_verified": glm, 'private_count_contract_verified': False,
-                "server_tokenizes_text_before_generation": glm, "reference_bound": OUTPUT_LIMIT,
+                "provider_context_limit_verified": MODEL == GLM_MODEL, 'private_count_contract_verified': False,
+                "server_tokenizes_text_before_generation": MODEL == GLM_MODEL, "reference_bound": OUTPUT_LIMIT,
                 'requested_output_limits': {'parser': 1600, 'parser_repair': 1600, 'action': 4096,
                     'action_capacity_fallbacks': [3072, 2048, 1536], 'structural_repair': 3072, 'tentative': 3072,
                     'visual_coordinator_plan': 1024, 'visual_coordinator_review': 3072, 'visual_worker': 1024},
@@ -1420,7 +1692,8 @@ def build_frozen_manifest(*, include_single_sample_inputs=True):
                 'framing': '1024 base +128/message +16/part; engineering allowance only; no provider absolute proof'},
             "model_visibility": "Three levels use the same model. Main and visual coordinator receive text only. Each visual worker reads one original image. The coordinator groups original findings by ID and flags conflict or gaps. The main receives reviewed textual reports and raw measurements. Complete original evidence stays local.",
             "decision_protocol": f"Native local Schema/Monitor and verbatim source quotes remain enforced. Main can ask for image rechecks independently of inspect/measure/finish. Visual calls are counted in R; B/R/T are record-only. Every request has a strict local {OUTPUT_LIMIT}-token preflight and responses have provider usage audits.",
-            "credential_policy": ("Loopback vLLM service via SSH" if glm else
+            "credential_policy": ("BigModel standard paid API; per-process Bearer key; schema prompted and validated locally"
+                                  if MODEL == BIGMODEL_MODEL else "Loopback vLLM service via SSH" if glm else
                                   "Git-external Token Plan config or run-scoped key override; key contents excluded from frozen metadata."),
             "scope": "Diagnostic new single run; not strict B10/R6/T17 comparison, formal score or paper update.",
             "fresh_start": True, "old_runtime_source_imports": [], "inherited_dag_answers_predictions": [],
@@ -1442,6 +1715,10 @@ def run(root, batch_request=None, bootstrap_check=False):
         shared = json.loads(shared_path.read_text())
         if shared['protocol']['model'] == GLM_MODEL:
             configure_glm(shared['protocol']['endpoint'])
+        elif shared['protocol']['model'] == BIGMODEL_MODEL:
+            configure_bigmodel()
+            if shared['protocol']['endpoint'] != BASE_URL:
+                raise ValueError('Invalid frozen BigModel endpoint')
         manifest = {**shared["protocol"], "source_closure": shared["source_closure"],
                     "shared_manifest": str(shared_path),
                     "shared_manifest_sha256": sha256(shared_path),
@@ -1451,7 +1728,14 @@ def run(root, batch_request=None, bootstrap_check=False):
                 raise ValueError(f"Worker input changed: {name}")
     else:
         manifest = build_frozen_manifest()
-    API_KEY = '' if bootstrap_check or MODEL == GLM_MODEL else private_qwen_config()
+    if bootstrap_check or MODEL == GLM_MODEL:
+        API_KEY = ''
+    elif MODEL == BIGMODEL_MODEL:
+        API_KEY = os.environ.pop(BIGMODEL_KEY_ENV, '').strip()
+        if not API_KEY:
+            raise ValueError(f'Missing {BIGMODEL_KEY_ENV}')
+    else:
+        API_KEY = private_qwen_config()
     calls = DirectCalls(root, visual_reports=True, visual_levels=manifest.get('visual_levels', 3))
     calls.bootstrap_only = bootstrap_check
     calls.console_progress = request is not None
@@ -1500,9 +1784,28 @@ def run(root, batch_request=None, bootstrap_check=False):
     NativeMonitor = dag_module.DagMonitor
 
     class RegisteredMonitor(NativeMonitor):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
+        def __init__(self, query, parsed, known, allowed, available):
+            super().__init__(query, parsed, known, allowed, available)
+            self.observer = parsed.get('Observer', {})
             calls.monitor = self
+
+        def check_exclusion_evidence(self, plan, observations, action):
+            if MODEL == BIGMODEL_MODEL and calls.context_state is not None:
+                state = calls.context_state
+                if action.get('predicted_id') is not None:
+                    calls.check_visual_conflict(self.allowed, action['predicted_id'], state)
+                else:
+                    for node in plan['nodes']:
+                        excluded = set(node['excluded_target_ids'])
+                        remaining = (set(node['bound_object_ids']) & self.allowed) - excluded
+                        if node['status'] == 'completed' and excluded and len(remaining) == 1:
+                            calls.check_visual_conflict(excluded | remaining, next(iter(remaining)), state)
+
+                check_measured_exclusions(
+                    self.requirements, self.allowed, plan, observations,
+                    state.get('reference_category_bindings', []),
+                    state.get('parsed_target_categories', []), observer=self.observer,
+                )
 
     dag_module.DagMonitor = RegisteredMonitor
     query_parser.chat = calls.parser_chat
@@ -1546,13 +1849,17 @@ def run(root, batch_request=None, bootstrap_check=False):
                               for hypothesis in obj.get("category_hypotheses", [])],
         )
         candidates = match_retrieval_categories(parsed["Target"], category_objects)
-        if generic_target_pool(parsed["Target"]):
+        generic_pool = generic_target_pool(parsed["Target"])
+        expanded_target_pool = (MODEL == BIGMODEL_MODEL and not candidates and bool(parsed["Target"])
+                                and not generic_pool)
+        if expanded_target_pool or generic_pool:
             candidates = list(category_objects)
         if not candidates:
             raise RuntimeError("Fresh parser produced no candidate pool")
         prediction = react.ground(
             query, parsed, geometry_objects, candidates,
             xyz, rgb, ids, root, ledger, trace, None if calls.record_only else 10,
+            expanded_target_pool=expanded_target_pool,
         )
         status = "completed" if prediction.get("predicted_id") is not None else "abstained"
     except BootstrapReady:
