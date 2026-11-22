@@ -36,6 +36,12 @@ BIGMODEL_MODEL = "glm-4.5v"
 BIGMODEL_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4"
 BIGMODEL_KEY_ENV = "EVIGROUND_BIGMODEL_API_KEY"
 GLM_MODELS = (GLM_MODEL, BIGMODEL_MODEL)
+SILICONFLOW_MODEL = "Qwen/Qwen3-VL-32B-Instruct"
+SILICONFLOW_ENDPOINT = "https://api.siliconflow.cn/v1"
+SILICONFLOW_KEY_ENV = "SILICONFLOW_API_KEY"
+SILICONFLOW_CONTEXT = 65536
+PROMPTED_SCHEMA_MODELS = (BIGMODEL_MODEL, SILICONFLOW_MODEL)
+NATIVE_FINISH_MODELS = (*GLM_MODELS, SILICONFLOW_MODEL)
 # Deployed processor maximum: 9,633,792 pixels / (14 * 2)^2, plus template markers.
 GLM_IMAGE_BOUND = 12288 + 16
 OUTPUT_RESERVE = 4096
@@ -108,6 +114,11 @@ def configure_glm(endpoint):
 def configure_bigmodel():
     global MODEL, BASE_URL, OUTPUT_LIMIT
     MODEL, BASE_URL, OUTPUT_LIMIT = BIGMODEL_MODEL, BIGMODEL_ENDPOINT, GLM_CONTEXT
+
+
+def configure_siliconflow():
+    global MODEL, BASE_URL, OUTPUT_LIMIT
+    MODEL, BASE_URL, OUTPUT_LIMIT = SILICONFLOW_MODEL, SILICONFLOW_ENDPOINT, SILICONFLOW_CONTEXT
 
 
 def check_glm_service():
@@ -214,8 +225,10 @@ def qwen_preflight(messages, response_format, reserve, allow_legacy_image_fields
         "limit": OUTPUT_LIMIT,
         "image_bound_source": ("Public GLM-4.5V processor settings, used as a local estimate" if MODEL == BIGMODEL_MODEL
                                else "Deployed GLM-4.5V-AWQ preprocessor_config.json" if MODEL == GLM_MODEL
+                               else "Qwen3-VL-32B-Instruct preprocessor_config.json, unverified on SiliconFlow" if MODEL == SILICONFLOW_MODEL
                                else "https://help.aliyun.com/zh/model-studio/vision"),
         "image_bound_contract": ("GLM processor maximum 12288 image patches plus 16 markers" if MODEL in GLM_MODELS else
+                                 "Qwen3-VL public preprocessing bounds; 32-pixel spatial merge with marker allowance" if MODEL == SILICONFLOW_MODEL else
                                  "Conditional Qwen-style smart resize bound, factor32, conservative minimum512*512, max_pixels2621440 and two image markers; exact private endpoint preprocessing not verified"),
         "provider_count_contract_verified": False,
         'historical_legacy_image_param_audit': allow_legacy_image_fields,
@@ -228,6 +241,9 @@ def qwen_preflight(messages, response_format, reserve, allow_legacy_image_fields
 def image_token_bound(width, height):
     if MODEL in GLM_MODELS:
         return GLM_IMAGE_BOUND
+    if MODEL == SILICONFLOW_MODEL:
+        # The public processor permits larger images than the Token Plan profile.
+        return max(256, math.ceil(width / 32) * math.ceil(height / 32)) + 16
     factor, minimum, maximum = 32, 512 * 512, IMAGE_MAX_PIXELS
     h = max(factor, round(height / factor) * factor)
     w = max(factor, round(width / factor) * factor)
@@ -563,6 +579,10 @@ class BigModelRequestError(RuntimeError):
     """The paid endpoint returned an HTTP error."""
 
 
+class SiliconFlowRequestError(RuntimeError):
+    """SiliconFlow returned a definite non-200 response."""
+
+
 class PreparedCall(Exception):
     """Offline-only final payload capture, before journal/HTTP; no model response."""
     def __init__(self, payload, preflight, packing):
@@ -578,7 +598,7 @@ def prepare_qwen_payload(messages, schema, role, reserve, state=None, wire_schem
         for part in message['content']:
             if part.get('type') == 'image_url':
                 part['image_url'].pop('max_pixels', None)
-                if MODEL in GLM_MODELS:
+                if MODEL in NATIVE_FINISH_MODELS:
                     part.pop('max_pixels', None)
                 else:
                     part['max_pixels'] = IMAGE_MAX_PIXELS
@@ -586,15 +606,15 @@ def prepare_qwen_payload(messages, schema, role, reserve, state=None, wire_schem
                                     state if role == 'semantic_consultant' else None,
                                     text_visual_reports=text_visual_reports,
                                     compact_replacement=visual_report_rows,
-                                    native_finish=MODEL in GLM_MODELS)
-    if MODEL in GLM_MODELS and text_visual_reports and 'action' in generated.get('properties', {}):
+                                    native_finish=MODEL in NATIVE_FINISH_MODELS)
+    if MODEL in NATIVE_FINISH_MODELS and text_visual_reports and 'action' in generated.get('properties', {}):
         visible[0]['content'] += (
             "\nUse ready_node_ids for the next tool. If you switch to a dependent node, complete its "
             "prerequisites with cited evidence in the same action. For a missing visual reference, "
             "inspect a scene view containing the plausible reference IDs and the target candidates. "
             "For unresolved size, distance or position, measure the remaining candidates and their "
             "common reference in one request. A null finish requires a nonempty unresolved list.")
-    if MODEL in GLM_MODELS and role == 'semantic_consultant' and 'main_rivals' in generated.get('properties', {}):
+    if MODEL in NATIVE_FINISH_MODELS and role == 'semantic_consultant' and 'main_rivals' in generated.get('properties', {}):
         fields = generated['properties']
         original = schema['properties']
         targets = [target for target in original['predicted_id'].get('enum', []) if target is not None]
@@ -631,7 +651,7 @@ def prepare_qwen_payload(messages, schema, role, reserve, state=None, wire_schem
     generated = provider_schema(factor_schema(generated))
     Draft202012Validator.check_schema(generated)
     response_format = {'type': 'json_schema', 'json_schema': {'name': role + '_answer', 'strict': True, 'schema': generated}}
-    if MODEL == BIGMODEL_MODEL:
+    if MODEL in PROMPTED_SCHEMA_MODELS:
         visible[0]['content'] += (
             '\nReturn only JSON matching this JSON Schema. Do not include Markdown or extra text.\n'
             + packed(generated))
@@ -644,7 +664,7 @@ def prepare_qwen_payload(messages, schema, role, reserve, state=None, wire_schem
     preflight = qwen_preflight(visible, response_format, reserve)
     visible, packing, preflight = original_resolution_pack(visible, response_format, reserve, packing,
         preflight, qwen_preflight, OUTPUT_LIMIT)
-    preflight.update(enforced=True, context_policy='strict-local-64k' if MODEL in GLM_MODELS else 'strict-local-32k',
+    preflight.update(enforced=True, context_policy=f'strict-local-{OUTPUT_LIMIT // 1024}k',
                      provider_context_limit=GLM_CONTEXT if MODEL in GLM_MODELS else None)
     payload = {'model': MODEL, 'messages': visible, 'max_tokens': reserve, 'temperature': 0}
     if response_format is not None:
@@ -653,7 +673,7 @@ def prepare_qwen_payload(messages, schema, role, reserve, state=None, wire_schem
         payload['chat_template_kwargs'] = {'enable_thinking': False}
     elif MODEL == BIGMODEL_MODEL:
         payload['thinking'] = {'type': 'disabled'}
-    else:
+    elif MODEL != SILICONFLOW_MODEL:
         payload.update(enable_thinking=False, vl_high_resolution_images=False)
     packing['visible_native_evidence_ids'] = ['initial'] + packing.get('all_raw_evidence_ids', []) if state is not None else []
     packing['readback_ids'] = list(readback_ids)
@@ -705,7 +725,7 @@ class DirectCalls:
         self.root = root
         self.key = API_KEY
         self.record_only = True
-        self.qwen_context_policy = "strict-local-64k" if MODEL in GLM_MODELS else "strict-local-32k"
+        self.qwen_context_policy = f"strict-local-{OUTPUT_LIMIT // 1024}k"
         self.context_state = None
         self.session = requests.Session()
         self.session.trust_env = False
@@ -883,7 +903,7 @@ class DirectCalls:
                                       visible, schema, reserve=OUTPUT_RESERVE)
                 answer = json.loads(response["_content"], object_pairs_hook=unique_json_object)
                 validate_tentative_answer(answer, schema, targets)
-                if MODEL == BIGMODEL_MODEL and answer["predicted_id"] is not None:
+                if MODEL in PROMPTED_SCHEMA_MODELS and answer["predicted_id"] is not None:
                     self.check_visual_conflict(state["allowed_target_ids"], answer["predicted_id"], state)
                     self.check_tentative_measurements(state, answer)
                 if snapshot != {"plan": self.monitor.plan, "history": self.monitor.history, "active_target_ids": self.monitor.active_ids()}:
@@ -1033,7 +1053,7 @@ class DirectCalls:
             return self._qwen(tag, role, messages, schema, reserve=reserve, answer_check=answer_check)
         except (ValueError, ValidationError, EvidenceSelectionError) as exc:
             failed = self.ledger[-1] if self.ledger else {}
-            if (MODEL != BIGMODEL_MODEL or failed.get('tag') != tag or failed.get('role') != role
+            if (MODEL not in PROMPTED_SCHEMA_MODELS or failed.get('tag') != tag or failed.get('role') != role
                     or failed.get('http_status') != 200 or failed.get('status') != 'failed'
                     or not failed.get('usage')):
                 raise
@@ -1047,7 +1067,7 @@ class DirectCalls:
     def _visual_call(self, tag, role, messages, schema, reserve):
         try:
             answer_check = None
-            if MODEL == BIGMODEL_MODEL and role == WORKER:
+            if MODEL in PROMPTED_SCHEMA_MODELS and role == WORKER:
                 request = json.loads(messages[1]['content'][0]['text'])
                 known = set(request['known_object_ids'])
                 marked = set(request['view'].get('marked_ids', []))
@@ -1172,7 +1192,7 @@ class DirectCalls:
                                     archived_evidence_ids=projected['archived_evidence_ids'],
                                     archived_visual_report_ids=projected['archived_visual_report_ids'],
                                     native_state_unchanged=True)
-            if MODEL in GLM_MODELS and 'main_rivals' in schema.get('properties', {}):
+            if MODEL in NATIVE_FINISH_MODELS and 'main_rivals' in schema.get('properties', {}):
                 prepared.packing['tentative_evidence_objects'] = projected['supporting_evidence_objects']
             if prepared.preflight['maximum'] < OUTPUT_LIMIT:
                 return prepared
@@ -1237,7 +1257,7 @@ class DirectCalls:
                 'dependencies': {name: version(name) for name in ('spacy', 'en_core_web_sm', 'requests', 'numpy', 'Pillow', 'jsonschema')},
                 'original_scene_and_category_loaded': True,
                 'worker_sample_fields': ['scene', 'csv_row', 'query'],
-                'annotation_target_supplied': False, 'real_provider_schema_validated': MODEL != BIGMODEL_MODEL,
+                'annotation_target_supplied': False, 'real_provider_schema_validated': MODEL not in PROMPTED_SCHEMA_MODELS,
                 'strict_local_bound_passed': True, 'preflight': preflight,
                 'provider_count_contract_verified': False, 'local_capacity_ready': True})
             check = json.loads((self.root / 'bootstrap-check.json').read_text())
@@ -1334,14 +1354,16 @@ class DirectCalls:
             save(folder / 'receipt.json', record)
             if MODEL == BIGMODEL_MODEL and response.status_code != 200:
                 raise BigModelRequestError(f'BigModel HTTP {response.status_code}; see {folder / "provider-response.json"}')
+            if MODEL == SILICONFLOW_MODEL and response.status_code != 200:
+                raise SiliconFlowRequestError(f'SiliconFlow HTTP {response.status_code}; see {folder / "provider-response.json"}')
             value = read_response(response, MODEL, preflight, preflight['output_reserved'], enforce_32k=preflight['enforced'])
             if 'server_prompt_count' in record and value['usage']['prompt_tokens'] != record['server_prompt_count']:
                 raise ProviderCapacityViolation('GLM completion prompt usage differs from pre-send tokenization')
             content = value['choices'][0]['message'].get('content') or ''
-            if MODEL == BIGMODEL_MODEL:
+            if MODEL in PROMPTED_SCHEMA_MODELS:
                 content = bigmodel_json_text(content)
             answer = json.loads(content, object_pairs_hook=unique_json_object)
-            if MODEL == BIGMODEL_MODEL and lift_bigmodel_action_version(answer, schema):
+            if MODEL in PROMPTED_SCHEMA_MODELS and lift_bigmodel_action_version(answer, schema):
                 record['response_normalization'] = 'lifted_matching_action_state_version'
                 content = packed(answer)
             if role == WORKER and isinstance(answer, list):
@@ -1436,12 +1458,12 @@ class DirectCalls:
             "To replan, explicitly use the native complete replace_plan form. Legal null finish "
             "states missing evidence; no forced target. "
             "This record-only protocol is exploratory, not strict B10/R6/T17 comparison.")
-        if MODEL in GLM_MODELS:
+        if MODEL in NATIVE_FINISH_MODELS:
             visible[0]["content"] += (
                 "\nFor inspect, set elevation_deg to null for the default view, or choose a value "
                 "from 10 to 75 degrees inclusive. Set azimuth_deg to null or a value from 0 up to "
                 "but excluding 360 degrees.")
-        if MODEL == BIGMODEL_MODEL:
+        if MODEL in PROMPTED_SCHEMA_MODELS:
             visible[0]["content"] += (
                 "\nKeep comparison nodes pending until you can cite a measure observation containing "
                 "the proposed winner, each rival excluded by that comparison, and the same named "
@@ -1518,7 +1540,7 @@ class DirectCalls:
                         action["monitor"] = canonical_initial_monitor(action["monitor"])
                     validate(answer, direct_schema)
                     validate(action, native_schema)
-                    if MODEL in GLM_MODELS:
+                    if MODEL in NATIVE_FINISH_MODELS:
                         check_glm_abstention(action, self.monitor, state)
                         if self.visual is not None:
                             self.check_glm_evidence_action(action, state, native_schema)
@@ -1669,9 +1691,11 @@ def build_frozen_manifest(*, include_single_sample_inputs=True):
     files = [INPUTS / "nr3d/scene0565_00/scene.npz", INPUTS / "nr3d/scene0565_00/scene_instances.json",
              INPUTS / "nr3d/query.json", INPUTS / "categories/scene0565_00/objects_top5.json"]
     glm = MODEL in GLM_MODELS
-    return {"candidate": "glm-three-level-visual-reports" if glm else "qwen-step2-three-level-visual-reports",
-            "branch": "20261121_step3_glm" if glm else "20261120_step2",
-            "baseline_commit": ("e4705403853c9163698cfc6c60ccaccb21968e35" if glm else
+    siliconflow = MODEL == SILICONFLOW_MODEL
+    return {"candidate": ("qwen3vl-three-level-visual-reports" if siliconflow else
+                          "glm-three-level-visual-reports" if glm else "qwen-step2-three-level-visual-reports"),
+            "branch": ("20261121_step3_qwen3vl" if siliconflow else "20261121_step3_glm" if glm else "20261120_step2"),
+            "baseline_commit": ("5347dd3" if siliconflow else "e4705403853c9163698cfc6c60ccaccb21968e35" if glm else
                                 "8a44a23897687d8fb35a766b71bf67c008767940"),
             "model": MODEL, "endpoint": BASE_URL, "scheduler_sha256": sha256(Path(__file__)),
             "source_closure": {str(p.relative_to(PROJECT)): sha256(p) for p in sources},
@@ -1679,7 +1703,7 @@ def build_frozen_manifest(*, include_single_sample_inputs=True):
             "python": sys.version, "packages": {d.metadata["Name"]: d.version for d in distributions() if d.metadata.get("Name")},
             "resource_budget_policy": {"mode": "record-only", "B_limit": None, "R_limit": None, "T_limit": None,
                                        "annealing_reference_turns_not_a_cap": 17},
-            "qwen_context_policy": {"policy": "strict-local-64k" if glm else "strict-local-32k",
+            "qwen_context_policy": {"policy": f"strict-local-{OUTPUT_LIMIT // 1024}k",
                 f"local_{OUTPUT_LIMIT}_refusal_enforced": True, 'strict_operator': '<',
                 "provider_context_limit_verified": MODEL == GLM_MODEL, 'private_count_contract_verified': False,
                 "server_tokenizes_text_before_generation": MODEL == GLM_MODEL, "reference_bound": OUTPUT_LIMIT,
@@ -1693,7 +1717,9 @@ def build_frozen_manifest(*, include_single_sample_inputs=True):
             "model_visibility": "Three levels use the same model. Main and visual coordinator receive text only. Each visual worker reads one original image. The coordinator groups original findings by ID and flags conflict or gaps. The main receives reviewed textual reports and raw measurements. Complete original evidence stays local.",
             "decision_protocol": f"Native local Schema/Monitor and verbatim source quotes remain enforced. Main can ask for image rechecks independently of inspect/measure/finish. Visual calls are counted in R; B/R/T are record-only. Every request has a strict local {OUTPUT_LIMIT}-token preflight and responses have provider usage audits.",
             "credential_policy": ("BigModel standard paid API; per-process Bearer key; schema prompted and validated locally"
-                                  if MODEL == BIGMODEL_MODEL else "Loopback vLLM service via SSH" if glm else
+                                  if MODEL == BIGMODEL_MODEL else
+                                  "SiliconFlow API; per-process Bearer key; schema prompted and validated locally"
+                                  if siliconflow else "Loopback vLLM service via SSH" if glm else
                                   "Git-external Token Plan config or run-scoped key override; key contents excluded from frozen metadata."),
             "scope": "Diagnostic new single run; not strict B10/R6/T17 comparison, formal score or paper update.",
             "fresh_start": True, "old_runtime_source_imports": [], "inherited_dag_answers_predictions": [],
@@ -1719,6 +1745,10 @@ def run(root, batch_request=None, bootstrap_check=False):
             configure_bigmodel()
             if shared['protocol']['endpoint'] != BASE_URL:
                 raise ValueError('Invalid frozen BigModel endpoint')
+        elif shared['protocol']['model'] == SILICONFLOW_MODEL:
+            configure_siliconflow()
+            if shared['protocol']['endpoint'] != BASE_URL:
+                raise ValueError('Invalid frozen SiliconFlow endpoint')
         manifest = {**shared["protocol"], "source_closure": shared["source_closure"],
                     "shared_manifest": str(shared_path),
                     "shared_manifest_sha256": sha256(shared_path),
@@ -1730,10 +1760,11 @@ def run(root, batch_request=None, bootstrap_check=False):
         manifest = build_frozen_manifest()
     if bootstrap_check or MODEL == GLM_MODEL:
         API_KEY = ''
-    elif MODEL == BIGMODEL_MODEL:
-        API_KEY = os.environ.pop(BIGMODEL_KEY_ENV, '').strip()
+    elif MODEL in PROMPTED_SCHEMA_MODELS:
+        key_name = SILICONFLOW_KEY_ENV if MODEL == SILICONFLOW_MODEL else BIGMODEL_KEY_ENV
+        API_KEY = os.environ.pop(key_name, '').strip()
         if not API_KEY:
-            raise ValueError(f'Missing {BIGMODEL_KEY_ENV}')
+            raise ValueError(f'Missing {key_name}')
     else:
         API_KEY = private_qwen_config()
     calls = DirectCalls(root, visual_reports=True, visual_levels=manifest.get('visual_levels', 3))
@@ -1790,7 +1821,7 @@ def run(root, batch_request=None, bootstrap_check=False):
             calls.monitor = self
 
         def check_exclusion_evidence(self, plan, observations, action):
-            if MODEL == BIGMODEL_MODEL and calls.context_state is not None:
+            if MODEL in PROMPTED_SCHEMA_MODELS and calls.context_state is not None:
                 state = calls.context_state
                 if action.get('predicted_id') is not None:
                     calls.check_visual_conflict(self.allowed, action['predicted_id'], state)
@@ -1850,7 +1881,7 @@ def run(root, batch_request=None, bootstrap_check=False):
         )
         candidates = match_retrieval_categories(parsed["Target"], category_objects)
         generic_pool = generic_target_pool(parsed["Target"])
-        expanded_target_pool = (MODEL == BIGMODEL_MODEL and not candidates and bool(parsed["Target"])
+        expanded_target_pool = (MODEL in PROMPTED_SCHEMA_MODELS and not candidates and bool(parsed["Target"])
                                 and not generic_pool)
         if expanded_target_pool or generic_pool:
             candidates = list(category_objects)

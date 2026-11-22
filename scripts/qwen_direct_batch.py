@@ -193,7 +193,7 @@ def source_closure():
 
 def freeze_run(output, selection, assets_path, sample_rows=None, visual_levels=3, reuse_from=None,
                resume_frozen=False, reuse_correct_from=None, continue_from=None):
-    from qwen_direct_fresh import GLM_MODELS, build_frozen_manifest
+    from qwen_direct_fresh import GLM_MODELS, SILICONFLOW_MODEL, build_frozen_manifest
     assets = read(assets_path)
     if not assets['ready'] or assets['selection_sha256'] != sha(selection):
         raise ValueError('Missing/stale asset preflight; use --preflight first')
@@ -222,7 +222,8 @@ def freeze_run(output, selection, assets_path, sample_rows=None, visual_levels=3
     # Single-sample local input IDs do not describe this run; shared asset hashes do.
     for key in ('source_closure', 'inputs', 'scheduler_sha256'):
         protocol.pop(key, None)
-    family = 'glm' if protocol['model'] in GLM_MODELS else 'qwen-step2'
+    family = ('qwen3vl' if protocol['model'] == SILICONFLOW_MODEL else
+              'glm' if protocol['model'] in GLM_MODELS else 'qwen-step2')
     protocol.update(candidate=f'{family}-{visual_levels}-level-visual-reports', visual_levels=visual_levels,
                     full_selection=sample_rows is None,
                     scope='Full Nr3D research run' if sample_rows is None else 'Selected Nr3D diagnostic rows',
@@ -519,10 +520,11 @@ class StopState:
 
 
 def worker_environment(command):
-    environment = {k: v for k, v in os.environ.items() if not k.startswith(('EVIGROUND_', 'SEEGROUND_'))}
+    environment = {k: v for k, v in os.environ.items()
+                   if not k.startswith(('EVIGROUND_', 'SEEGROUND_')) and k != 'SILICONFLOW_API_KEY'}
     key_names = ('EVIGROUND_DIRECT_QWEN_TOKEN_PLAN_KEY',)
     if '--bootstrap-check' not in command:
-        key_names += ('EVIGROUND_BIGMODEL_API_KEY',)
+        key_names += ('EVIGROUND_BIGMODEL_API_KEY', 'SILICONFLOW_API_KEY')
     for name in key_names:
         if name in os.environ:
             environment[name] = os.environ[name]
@@ -762,9 +764,10 @@ def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluat
               f" | 已完成 {summary['completed']}/{len(rows)} | " + json.dumps(details, ensure_ascii=False), flush=True)
         with (output/'progress.jsonl').open('a') as log:
             log.write(json.dumps(details, ensure_ascii=False)+'\n'); log.flush(); os.fsync(log.fileno())
-        if value.get('failure_type') == 'BigModelRequestError':
-            checkpoint('attention_bigmodel_http_error')
-            print('[ATTENTION] BigModel returned an HTTP error. Scheduling paused. ' + str(value['error']), flush=True)
+        if value.get('failure_type') in ('BigModelRequestError', 'SiliconFlowRequestError'):
+            provider = 'siliconflow' if value['failure_type'] == 'SiliconFlowRequestError' else 'bigmodel'
+            checkpoint(f'attention_{provider}_http_error')
+            print('[ATTENTION] Provider returned an HTTP error. Scheduling paused. ' + str(value['error']), flush=True)
             return results
         if value['status'] in pause_statuses:
             evidence_failed = value['status'] == 'evidence_selection_failed'
@@ -809,6 +812,7 @@ def main():
     provider = parser.add_mutually_exclusive_group()
     provider.add_argument('--glm-url', help='GLM-4.5V vLLM endpoint through a local SSH tunnel, ending in /v1')
     provider.add_argument('--bigmodel', action='store_true', help='Use the paid BigModel China glm-4.5v API')
+    provider.add_argument('--siliconflow', action='store_true', help='Use SiliconFlow Qwen/Qwen3-VL-32B-Instruct')
     args = parser.parse_args()
     if args.preflight:
         report = asset_preflight(args.manifest, args.scene_root, args.category_cache, args.prediction_export, args.assets_file)
@@ -825,6 +829,12 @@ def main():
         if not args.prepare_only and not os.environ.get(fresh.BIGMODEL_KEY_ENV, '').strip():
             parser.error(f'Set {fresh.BIGMODEL_KEY_ENV} before running a BigModel batch')
         fresh.configure_bigmodel()
+    if args.siliconflow:
+        if args.output == OUTPUT:
+            parser.error('--siliconflow requires a separate --output directory')
+        if not args.prepare_only and not os.environ.get(fresh.SILICONFLOW_KEY_ENV, '').strip():
+            parser.error(f'Set {fresh.SILICONFLOW_KEY_ENV} before running a SiliconFlow batch')
+        fresh.configure_siliconflow()
     output = args.output.resolve(); ensure_run_writable(output); output.mkdir(parents=True, exist_ok=True)
     with (output/'.batch.lock').open('a') as lock:
         try:

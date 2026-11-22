@@ -33,6 +33,50 @@ def native_fixture_image_adapter(monkeypatch):
     monkeypatch.setattr(fresh, 'compact_call', adapt)
 
 
+def test_siliconflow_uses_original_image_data_url_and_local_schema(tmp_path, monkeypatch):
+    for name in ('MODEL', 'BASE_URL', 'OUTPUT_LIMIT'):
+        monkeypatch.setattr(fresh, name, getattr(fresh, name))
+    fresh.configure_siliconflow()
+    monkeypatch.setattr(fresh, 'API_KEY', 'unit-siliconflow-key')
+    pixels = io.BytesIO()
+    Image.new('RGB', (64, 64)).save(pixels, format='PNG')
+    url = 'data:image/png;base64,' + base64.b64encode(pixels.getvalue()).decode()
+    messages = [{'role': 'system', 'content': 'Return JSON about the image.'},
+                {'role': 'user', 'content': [{'type': 'image_url',
+                                              'image_url': {'url': url}, 'max_pixels': 12345}]}]
+    schema = fresh.obj({'answer': {'type': 'string'}})
+    direct = fresh.DirectCalls(tmp_path)
+    status_code = 200
+    content = '{"answer":"blue"}'
+
+    def post(endpoint, *, json, headers, **kwargs):
+        assert endpoint == 'https://api.siliconflow.cn/v1/chat/completions'
+        assert headers == {'Authorization': 'Bearer unit-siliconflow-key'}
+        assert kwargs['allow_redirects'] is False
+        assert set(json) == {'model', 'messages', 'max_tokens', 'temperature'}
+        assert json['model'] == 'Qwen/Qwen3-VL-32B-Instruct'
+        assert '"required":["answer"]' in json['messages'][0]['content']
+        assert json['messages'][1]['content'] == [{'type': 'image_url', 'image_url': {'url': url}}]
+        value = {'model': fresh.MODEL, 'usage': {'prompt_tokens': 80, 'completion_tokens': 15},
+                 'choices': [{'message': {'content': content}, 'finish_reason': 'stop'}]}
+        return SimpleNamespace(status_code=status_code, headers={}, json=lambda: value, text=fresh.packed(value))
+
+    monkeypatch.setattr(direct.session, 'post', post)
+    result = direct._qwen('accepted', 'visual_worker', messages, schema)
+    assert json.loads(result['_content']) == {'answer': 'blue'}
+    assert result['_request']['preflight']['limit'] == fresh.SILICONFLOW_CONTEXT
+    call = tmp_path / 'calls/001-accepted-visual_worker'
+    assert (call / 'input-image-00.png').read_bytes() == pixels.getvalue()
+    assert 'unit-siliconflow-key' not in (call / 'request-redacted.json').read_text()
+    content = '{"answer":1}'
+    with pytest.raises(fresh.ValidationError):
+        direct._qwen('invalid', 'visual_worker', messages, schema)
+    status_code = 401
+    with pytest.raises(fresh.SiliconFlowRequestError, match='HTTP 401'):
+        direct._qwen('unauthorized', 'visual_worker', messages, schema)
+    assert direct.ledger[-1]['http_status'] == 401
+
+
 def test_bigmodel_visual_request_uses_bearer_and_keeps_local_schema_validation(tmp_path, monkeypatch):
     for name in ('MODEL', 'BASE_URL', 'OUTPUT_LIMIT'):
         monkeypatch.setattr(fresh, name, getattr(fresh, name))

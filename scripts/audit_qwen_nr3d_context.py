@@ -272,7 +272,10 @@ def main():
         frozen.configure_glm(protocol['endpoint'])
     elif protocol['model'] == 'glm-4.5v':
         frozen.configure_bigmodel()
-    expected_limit = {'qwen3.8-max': 32768, 'GLM-4.5V': 65536, 'glm-4.5v': 65536}.get(protocol['model'])
+    elif protocol['model'] == 'Qwen/Qwen3-VL-32B-Instruct':
+        frozen.configure_siliconflow()
+    expected_limit = {'qwen3.8-max': 32768, 'GLM-4.5V': 65536, 'glm-4.5v': 65536,
+                      'Qwen/Qwen3-VL-32B-Instruct': 65536}.get(protocol['model'])
     require(levels in (2, 3) and protocol['model'] == frozen.MODEL
             and protocol['endpoint'] == frozen.BASE_URL and frozen.OUTPUT_LIMIT == expected_limit
             and protocol['qwen_context_policy']['reference_bound'] == expected_limit,
