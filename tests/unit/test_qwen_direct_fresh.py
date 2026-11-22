@@ -1,15 +1,35 @@
 """One-model integration checks against original native controller contracts."""
+import base64
+import io
 import json
 from pathlib import Path
 import sys
 import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
+from PIL import Image
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
 import qwen_direct_fresh as fresh
 from tests.unit import test_dag_delta as fixtures
 from tests.unit.test_dag_monitor import action
+
+
+def image_url(color):
+    image = io.BytesIO()
+    Image.new('RGB', (16, 16), color).save(image, format='PNG')
+    return 'data:image/png;base64,' + base64.b64encode(image.getvalue()).decode('ascii')
+
+
+def with_fixture_images(messages):
+    messages = fresh.deepcopy(messages)
+    for message in messages:
+        if isinstance(message['content'], list):
+            message['content'] = [
+                {'type': 'image_url', 'image_url': {'url': image_url('blue')}} if 'image' in part else part
+                for part in message['content']]
+    return messages
 
 
 def test_single_qwen_explicit_native_action_roundtrip_no_laya():
@@ -28,17 +48,53 @@ def test_single_qwen_explicit_native_action_roundtrip_no_laya():
         direct = fresh.DirectCalls(Path(root)); direct.monitor = h.new_monitor(); direct.key = 'unit-mock'
         direct.r_used = 8; direct.t_used = 20
         with patch.object(direct.session, 'post', return_value=response) as post:
-            result = direct.choose(request.args[0], **request.kwargs)
+            result = direct.choose(with_fixture_images(request.args[0]), **request.kwargs)
         assert post.call_count == 1
         assert fresh.BASE_URL in post.call_args.args[0]
         assert json.loads(result['_content']) == native_action
         assert direct.r_used == 9 and direct.t_used == 21
-        assert direct.ledger[0]['preflight']['enforced'] is False
+        assert direct.ledger[0]['preflight']['enforced'] is True
+        assert direct.ledger[0]['preflight']['limit'] == 262144
         assert not list(Path(root).glob('*laya*'))
         wire = post.call_args.kwargs['json']
-        assert 'options' not in wire['response_format']['json_schema']['schema']['properties']
-        assert 'action' in wire['response_format']['json_schema']['schema']['properties']
+        prompt_schema = json.loads(wire['messages'][0]['content'].rsplit('extra text.\n', 1)[1])
+        assert 'options' not in prompt_schema['properties']
+        assert 'action' in prompt_schema['properties']
         assert json.loads((Path(root)/'controller-contracts/t21/selected-model-action.json').read_text()) == native_action
+
+
+def test_siliconflow_direct_images_and_context_limit(tmp_path):
+    content = [{'type': 'image_url', 'image_url': {'url': image_url(color)}} for color in ('red', 'blue')]
+    messages = [{'role': 'system', 'content': 'Return JSON.'}, {'role': 'user', 'content': content}]
+    schema = {'type': 'object', 'properties': {'answer': {'const': 'red and blue'}}, 'required': ['answer']}
+    direct = fresh.DirectCalls(tmp_path)
+    direct.key = 'offline-test'
+    value = {'model': fresh.MODEL, 'usage': {'prompt_tokens': 100, 'completion_tokens': 5},
+             'choices': [{'finish_reason': 'stop', 'message': {'content': '{"answer":"red and blue"}'}}]}
+    response = SimpleNamespace(status_code=200, text=json.dumps(value), json=lambda: value, headers={})
+    with patch.object(direct.session, 'post', return_value=response) as post:
+        direct._qwen('both-images', 'semantic_consultant', messages, schema)
+        assert post.call_args.args[0] == 'https://api.siliconflow.cn/v1/chat/completions'
+        wire = post.call_args.kwargs['json']
+        assert wire['model'] == 'Qwen/Qwen3-VL-32B-Instruct'
+        assert wire['messages'][1]['content'] == content
+        assert set(wire) == {'model', 'messages', 'temperature', 'max_tokens'}
+        assert wire['max_tokens'] == 8192
+        assert len(direct.ledger[0]['preflight']['images']) == 2
+        preflight = direct.ledger[0]['preflight']
+        padding = 262144 - preflight['maximum']
+        padded = fresh.deepcopy(messages)
+        padded[0]['content'] += 'x' * padding
+        direct._qwen('boundary', 'semantic_consultant', padded, schema)
+        assert direct.ledger[-1]['preflight']['maximum'] == 262144
+        padded[0]['content'] += 'x'
+        with pytest.raises(fresh.ContextCapacityExceeded, match='262145 > 262144'):
+            direct._qwen('overflow', 'semantic_consultant', padded, schema)
+        assert post.call_count == 2
+        assert direct.ledger[-1]['http_sent'] is False
+        value['usage']['prompt_tokens'] = 262144 - 8192 + 1
+        with pytest.raises(fresh.ProviderCapacityViolation):
+            direct._qwen('provider-overflow', 'semantic_consultant', messages, schema)
 
 
 def test_latest_native_feedback_visible_and_exact_repeat_schedules_tentative_without_budget_cap():
@@ -47,7 +103,7 @@ def test_latest_native_feedback_visible_and_exact_repeat_schedules_tentative_wit
     _, calls = h.run_ground([native_action,
         action('finish', 1) | {'monitor': fixtures.delta(h.finished(), {'n1', 'n11'})}])
     request = calls[0]
-    messages = fresh.deepcopy(request.args[0])
+    messages = with_fixture_images(request.args[0])
     messages[-1]['content'].append({'type': 'text', 'text': json.dumps({'observations': [
         {'tool': 'monitor_check', 'error': 'Original native rejection: active rivals remain', 'no_evidence_acquired': True}]})})
     state = fresh.extract_state(messages)
@@ -63,7 +119,8 @@ def test_latest_native_feedback_visible_and_exact_repeat_schedules_tentative_wit
             direct.choose(messages, **request.kwargs)
         assert post.call_count == 2
         payload = post.call_args.kwargs['json']
-        assert 'Original native rejection: active rivals remain' in payload['messages'][-1]['content']
+        assert any('Original native rejection: active rivals remain' in message['content']
+                   for message in payload['messages'] if isinstance(message['content'], str))
         assert direct.r_used == 3 and direct.t_used == 2
         assert (Path(root)/'controller-contracts/t02/no-progress-stop.json').exists()
         assert direct.pending_tentative_progress == direct.last_progress_identity

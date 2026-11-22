@@ -1,4 +1,4 @@
-"""Offline asset preflight and user-started sequential batch for the frozen direct-Qwen protocol."""
+"""Offline asset preflight and sequential Nr3D with direct Qwen3-VL on SiliconFlow."""
 from __future__ import annotations
 import argparse
 from collections import Counter
@@ -199,12 +199,11 @@ def freeze_run(output, selection, assets_path):
         if i % 20 == 0 or i == len(assets['scene_entries']):
             print(f'[startup input integrity] {i}/{len(assets["scene_entries"])} scenes; no inference yet', flush=True)
     closure = source_closure()
-    protocol = build_frozen_manifest()
+    protocol = build_frozen_manifest(include_single_sample_inputs=False)
     # Single-sample local input IDs do not describe this run; shared asset hashes do.
     for key in ('source_closure', 'inputs', 'scheduler_sha256'):
         protocol.pop(key, None)
-    protocol.update(candidate='qwen-direct-full-v3-historical-coverage-explicit-replanning',
-                    scope='User-started full7805 Nr3D local exploration; diagnostic only, not official/paper score',
+    protocol.update(scope='User-started full7805 Nr3D local exploration; diagnostic only, not official/paper score',
                     shared_scene_storage='Read-only public scene refs checked against asset hashes',
                     worker_isolation='One fresh subprocess per sample; workers=1; no shared monkeypatch/Monitor',
                     scoring='Parent evaluator after immutable per-sample prediction/failure freeze; null/errors count wrong',
@@ -304,7 +303,11 @@ class StopState:
 
 
 def worker_environment(command):
+    from qwen_direct_fresh import SILICONFLOW_KEY_ENV
+
     environment = {k: v for k, v in os.environ.items() if not k.startswith(('EVIGROUND_', 'SEEGROUND_'))}
+    if '--bootstrap-check' in command:
+        environment.pop(SILICONFLOW_KEY_ENV, None)
     environment.update(PYTHONPATH=str(Path(command[1]).parents[1] / 'src'), PYTHONUNBUFFERED='1',
                        PYTHON_DOTENV_DISABLED='1', PYTHONDONTWRITEBYTECODE='1')
     return environment
@@ -391,7 +394,8 @@ def totals(results, total, state):
             'strict': sum(bool(r['strict']) for r in results),
             'tentative': sum(r['terminal_mode'] == 'tentative' for r in results),
             'abstained': sum(r['predicted_id'] is None and r['status'] in ('abstained', 'tentative_abstained') for r in results),
-            'failed': statuses['failed'],
+            'failed': statuses['failed'] + statuses['capacity_rejected'],
+            'capacity_rejected': statuses['capacity_rejected'],
             'client_attempts_known': sum(r['usage'].get('client_attempts') or 0 for r in results),
             'http_responses_known': sum(r['usage'].get('http_responses') or 0 for r in results),
             'structural_repairs': sum(r['usage'].get('structural_repairs', 0) for r in results),
@@ -446,6 +450,10 @@ def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluat
             break
         if row['csv_row'] in done_ids:
             continue
+        if shutil.disk_usage(output).free < 512 * 1024**2:
+            checkpoint('attention_output_storage')
+            print('[STORAGE; scheduling paused] Less than 512 MiB free on the output volume.', flush=True)
+            return results
         directory = output / f"q{row['csv_row']:05d}"
         result_path = directory / 'result.json'
         directory.mkdir(parents=True, exist_ok=True)
@@ -503,6 +511,12 @@ def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluat
               f" | 已完成 {summary['completed']}/{len(rows)} | " + json.dumps(details, ensure_ascii=False), flush=True)
         with (output/'progress.jsonl').open('a') as log:
             log.write(json.dumps(details, ensure_ascii=False)+'\n'); log.flush(); os.fsync(log.fileno())
+        if value.get('failure_type') in ('SiliconFlowRequestError', 'ProviderCapacityViolation'):
+            state = ('attention_siliconflow_http_error' if value['failure_type'] == 'SiliconFlowRequestError'
+                     else 'attention_provider_capacity')
+            checkpoint(state)
+            print('[ATTENTION] Scheduling paused. ' + str(value['error']), flush=True)
+            return results
         if value['status'] == 'failed' and value['usage'].get('client_attempts') == 0:
             checkpoint('attention_global_zero_api_startup_failure')
             print('[FATAL STARTUP; scheduling paused] ' + json.dumps({
@@ -519,6 +533,8 @@ def run_batch(output, manifest, rows, assets, worker_command=run_worker, evaluat
 
 
 def main():
+    from qwen_direct_fresh import SILICONFLOW_KEY_ENV
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--preflight', action='store_true', help='Offline only: verify7805 queries/scenes/categories and prepare missing category tables; no model calls')
     parser.add_argument('--prepare-only', action='store_true', help='Verify all input hashes and freeze shared output/source, but do NOT start workers or call any model')
@@ -534,6 +550,8 @@ def main():
         report = asset_preflight(args.manifest, args.scene_root, args.category_cache, args.prediction_export, args.assets_file)
         print(json.dumps({k: v for k, v in report.items() if k != 'scene_entries'}, ensure_ascii=False), flush=True)
         return
+    if not args.prepare_only and not os.environ.get(SILICONFLOW_KEY_ENV, '').strip():
+        parser.error(f'Set {SILICONFLOW_KEY_ENV} or use scripts/run_step1_qwen3vl.py')
     output = args.output.resolve(); ensure_run_writable(output); output.mkdir(parents=True, exist_ok=True)
     with (output/'.batch.lock').open('a') as lock:
         try:

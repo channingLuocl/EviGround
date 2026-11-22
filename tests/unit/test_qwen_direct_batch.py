@@ -110,7 +110,7 @@ def test_worker_rejects_annotation_fields_without_model_calls(tmp_path):
     request = tmp_path/'unsafe.json'
     batch.save(request, {'sample': {'scene': 'scene_fake', 'query': 'x', 'csv_row': 1, 'target_id': 7},
                          'scene_dir': 'x', 'category_path': 'x', 'shared_manifest': 'x', 'input_hashes': {}})
-    with patch.object(fresh, 'private_qwen_config', return_value='mock-private'), patch.object(fresh.requests.Session, 'post', side_effect=AssertionError('offline test cannot call model')):
+    with patch.dict(fresh.os.environ, {fresh.SILICONFLOW_KEY_ENV: 'mock-private'}), patch.object(fresh.requests.Session, 'post', side_effect=AssertionError('offline test cannot call model')):
         with pytest.raises(ValueError, match='forbidden'):
             fresh.run(tmp_path/'bad-worker', request)
 
@@ -157,7 +157,8 @@ def test_freeze_resume_identity_and_gt_not_in_worker_selection(tmp_path, monkeyp
     monkeypatch.setattr(batch, 'inference_selection', lambda p: original_selection(p, expected=1))
     monkeypatch.setattr(batch, 'source_closure', lambda: {'pyproject.toml': batch.sha(batch.ROOT/'pyproject.toml')})
     import qwen_direct_fresh
-    monkeypatch.setattr(qwen_direct_fresh, 'build_frozen_manifest', lambda: {'model': 'fake', 'source_closure': {}, 'inputs': {}})
+    monkeypatch.setattr(qwen_direct_fresh, 'build_frozen_manifest',
+                        lambda **kwargs: {'model': 'fake', 'source_closure': {}, 'inputs': {}})
     one, selected, _ = batch.freeze_run(output, selection, assets_path)
     two, _, _ = batch.freeze_run(output, selection, assets_path)
     assert one == two and selected == rows

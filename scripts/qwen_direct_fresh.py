@@ -11,7 +11,7 @@ import json
 import math
 import os
 from pathlib import Path
-import shlex
+import re
 import sys
 import time
 import requests
@@ -20,11 +20,12 @@ from jsonschema import Draft202012Validator, ValidationError, validate
 
 PROJECT = Path(__file__).resolve().parents[1]
 INPUTS = PROJECT / "data/qwen_direct"
-MODEL = "qwen3.8-max"
-BASE_URL = "https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1"
-OUTPUT_LIMIT = 32768  # reference only, no local context gate
+MODEL = "Qwen/Qwen3-VL-32B-Instruct"
+BASE_URL = "https://api.siliconflow.cn/v1"
+SILICONFLOW_KEY_ENV = "SILICONFLOW_API_KEY"
+OUTPUT_LIMIT = 262144
 OUTPUT_RESERVE = 8192
-IMAGE_MAX_PIXELS = 2621440
+CONTEXT_POLICY = "strict-local-256k"
 API_KEY = ""
 sys.path.insert(0, str(PROJECT / "src"))
 from eviground.evaluation.run_storage import write_json
@@ -58,23 +59,6 @@ def sha256(path: Path) -> str:
             h.update(chunk)
     return h.hexdigest()
 
-def private_qwen_config():
-    path = Path.home() / ".config/seeground/laya-joint-20261120/token-plan.env"
-    values = {}
-    for line in path.read_text().splitlines():
-        text = line.strip()
-        if not text or text.startswith("#"):
-            continue
-        key, sep, raw = text.removeprefix("export ").partition("=")
-        if sep:
-            parsed = shlex.split(raw, comments=True)
-            values[key.strip()] = parsed[0] if parsed else ""
-    if values.get("SEEGROUND_BASE_URL", "").rstrip("/") != BASE_URL:
-        raise ValueError("Existing Token Plan configuration has an unexpected base URL")
-    if not values.get("SEEGROUND_API_KEY"):
-        raise ValueError("Existing Token Plan API key is missing")
-    return values["SEEGROUND_API_KEY"]
-
 def redact(value):
     if isinstance(value, dict):
         return {
@@ -88,68 +72,68 @@ def redact(value):
         return value.replace(API_KEY, "[REDACTED]") if API_KEY else value
     return value
 
-def qwen_preflight(messages, response_format, reserve):
-    clean_messages = deepcopy(messages)
+def qwen_preflight(messages, reserve):
     images = []
-    for message in clean_messages:
+    text_bytes = 0
+    parts = 0
+    for message in messages:
         content = message.get("content")
-        if not isinstance(content, list):
+        if isinstance(content, str):
+            parts += 1
+            text_bytes += len(content.encode("utf-8"))
             continue
+        parts += len(content)
         for part in content:
-            if part.get("type") != "image_url":
+            if part["type"] == "text":
+                text_bytes += len(part["text"].encode("utf-8"))
                 continue
+            if part["type"] != "image_url":
+                raise ValueError("Only text and static image attachments are supported")
             url = part["image_url"]["url"]
             if not url.startswith("data:image/") or ";base64," not in url:
                 raise ValueError("Only frozen local image attachments are allowed")
             raw = base64.b64decode(url.split(",", 1)[1], validate=True)
             with Image.open(io.BytesIO(raw)) as image:
                 width, height = image.size
-                if width < 1 or height < 1:
-                    raise ValueError("Invalid image dimensions")
+                if getattr(image, "n_frames", 1) != 1 or max(width, height) / min(width, height) > 200:
+                    raise ValueError("Only static images with aspect ratio <= 200 are supported")
             images.append({
                 "sha256": hashlib.sha256(raw).hexdigest(),
                 "width": width,
                 "height": height,
                 "visual_tokens_upper_bound": image_token_bound(width, height),
             })
-            part["image_url"]["url"] = "[actual image bytes counted separately]"
-    # Count the actual text strings, not their doubly escaped HTTP JSON envelope.
-    text_bytes = len(packed(response_format).encode("utf-8"))
-    for message in clean_messages:
-        content = message.get("content")
-        if isinstance(content, str):
-            text_bytes += len(content.encode("utf-8"))
-        elif isinstance(content, list):
-            text_bytes += sum(len(part["text"].encode("utf-8"))
-                              for part in content if part.get("type") == "text")
     image_bound = sum(row["visual_tokens_upper_bound"] for row in images)
-    maximum = text_bytes + 1024 + image_bound + reserve
+    framing = 1024 + 128 * len(messages) + 16 * parts
+    maximum = text_bytes + framing + image_bound + reserve
     return {
-        "method": "UTF-8 byte text upper bound + full per-image patch ceiling",
+        "method": "Conservative local UTF-8 and image-grid estimate",
         "text_bytes": text_bytes,
-        "framing_allowance": 1024,
+        "framing_allowance": framing,
         "image_tokens_upper_bound": image_bound,
         "images": images,
         "output_reserved": reserve,
         "maximum": maximum,
         "limit": OUTPUT_LIMIT,
-        "image_bound_source": "https://help.aliyun.com/zh/model-studio/vision",
-        "image_bound_contract": "Official Qwen3.8 smart resize: factor=32, min_pixels=512*512, max_pixels=2621440; resized pixels/1024 plus two markers; vl_high_resolution_images=false",
+        "enforced": True,
+        "context_policy": CONTEXT_POLICY,
     }
 
 def image_token_bound(width, height):
-    factor, minimum, maximum = 32, 512 * 512, IMAGE_MAX_PIXELS
-    h = max(factor, round(height / factor) * factor)
-    w = max(factor, round(width / factor) * factor)
-    if h * w > maximum:
-        beta = math.sqrt(height * width / maximum)
-        h = math.floor(height / beta / factor) * factor
-        w = math.floor(width / beta / factor) * factor
-    elif h * w < minimum:
-        beta = math.sqrt(minimum / (height * width))
-        h = math.ceil(height * beta / factor) * factor
-        w = math.ceil(width * beta / factor) * factor
-    return h * w // (factor * factor) + 2
+    # Round original dimensions up conservatively without assuming server downsampling.
+    return max(256, math.ceil(width / 28) * math.ceil(height / 28)) + 16
+
+
+class ContextCapacityExceeded(RuntimeError):
+    """The request was rejected before HTTP."""
+
+
+class ProviderCapacityViolation(RuntimeError):
+    """Provider usage violated the local request or context bound."""
+
+
+class SiliconFlowRequestError(RuntimeError):
+    """The endpoint returned a definite non-200 response."""
 
 def factor_schema(schema):
     """Share repeated JSON Schema objects while retaining existing local references."""
@@ -270,23 +254,27 @@ def expand_history_references(state):
 
     return expand(state)
 
-def read_response(response, model, preflight, reserve, enforce_32k=True):
+def read_response(response, model, preflight, reserve):
     if response.status_code != 200:
-        raise RuntimeError(f"Qwen HTTP {response.status_code}; stopped without retry")
+        raise SiliconFlowRequestError(f"SiliconFlow HTTP {response.status_code}; stopped without retry")
     value = response.json()
     if value.get("model") != model:
         raise RuntimeError(f"Unexpected Qwen response model: {value.get('model')}")
     choice = value["choices"][0]
-    usage = value.get("usage") or {}
+    usage = value.get("usage")
+    if not isinstance(usage, dict) or any(
+            type(usage.get(name)) is not int or usage[name] < 0
+            for name in ("prompt_tokens", "completion_tokens")):
+        raise ProviderCapacityViolation("Provider did not report valid prompt/completion token usage")
+    prompt_tokens, completion_tokens = usage["prompt_tokens"], usage["completion_tokens"]
+    if prompt_tokens + reserve > OUTPUT_LIMIT or completion_tokens > reserve:
+        raise ProviderCapacityViolation("Provider usage exceeded the reserved context window or output budget")
+    if prompt_tokens > preflight["maximum"] - reserve:
+        raise ProviderCapacityViolation("Provider usage exceeded the conservative local input estimate")
+    if choice.get("finish_reason") == "length":
+        raise ValueError("Output reached max_tokens. Return compact JSON within the same schema.")
     if choice.get("finish_reason") != "stop":
         raise RuntimeError(f"Qwen response incomplete: {choice.get('finish_reason')}")
-    prompt_tokens = usage.get("prompt_tokens")
-    if type(prompt_tokens) is not int:
-        raise RuntimeError("Provider did not report integer prompt_tokens")
-    if enforce_32k and prompt_tokens + reserve > OUTPUT_LIMIT:
-        raise RuntimeError("Provider usage exceeded the reserved context window")
-    if prompt_tokens > preflight["maximum"] - reserve:
-        raise RuntimeError("Provider usage exceeded the preflight input upper bound")
     return value
 
 def progress_identity(state, accepted_plan):
@@ -368,7 +356,6 @@ class DirectCalls:
         self.root = root
         self.key = API_KEY
         self.record_only = True
-        self.qwen_context_policy = "provider"
         self.session = requests.Session()
         self.session.trust_env = False
         self.ledger = []
@@ -498,20 +485,19 @@ class DirectCalls:
                 visible = deepcopy(original_visible) + [{"role": "user", "content": packed(feedback)}]
     def _qwen(self, tag, role, messages, schema, reserve=OUTPUT_RESERVE, wire_schema=None, quote_registry=None):
         messages = deepcopy(messages)
-        for message in messages:
-            if isinstance(message.get('content'), list):
-                for part in message['content']:
-                    if part.get('type') == 'image_url':
-                        part['image_url']['max_pixels'] = IMAGE_MAX_PIXELS
-        response_schema = {'name': role + '_answer', 'strict': True, 'schema': schema}
         wire_schema = provider_schema(factor_schema(wire_schema if wire_schema is not None else schema))
         Draft202012Validator.check_schema(wire_schema)
-        response_format = {'type': 'json_schema', 'json_schema': {**response_schema, 'schema': wire_schema}}
-        preflight = qwen_preflight(messages, response_format, reserve)
-        preflight['enforced'] = self.qwen_context_policy == 'certified-32k'
-        preflight['context_policy'] = self.qwen_context_policy
-        preflight['provider_context_limit'] = None
+        messages[0]['content'] += ('\nReturn only a JSON object matching this JSON Schema. '
+                                   'Do not use Markdown or extra text.\n' + packed(wire_schema))
+        if 'action' in schema.get('properties', {}) and 'state_version' in schema['properties']:
+            version = schema['properties']['state_version']['const']
+            messages.append({'role': 'user', 'content': (
+                f'Use exactly two top-level keys: "state_version" set to "{version}", '
+                'and "action" containing the complete action object.')})
+        preflight = qwen_preflight(messages, reserve)
         if self.bootstrap_only:
+            if preflight['maximum'] > OUTPUT_LIMIT:
+                raise ContextCapacityExceeded('Offline parser request exceeds the local context bound')
             from eviground.query.query_syntax import syntax_settings
             from importlib.metadata import version
             save(self.root / 'bootstrap-check.json', {
@@ -523,7 +509,8 @@ class DirectCalls:
                 'dependencies': {name: version(name) for name in ('spacy', 'en_core_web_sm', 'requests', 'numpy', 'Pillow', 'jsonschema')},
                 'original_scene_and_category_loaded': True,
                 'worker_sample_fields': ['scene', 'csv_row', 'query'],
-                'annotation_target_supplied': False, 'real_provider_schema_validated': True})
+                'annotation_target_supplied': False, 'real_provider_schema_validated': False,
+                'preflight': preflight})
             check = json.loads((self.root / 'bootstrap-check.json').read_text())
             check['actual_inputs'] = self.bootstrap_inputs
             save(self.root / 'bootstrap-check.json', check)
@@ -532,10 +519,15 @@ class DirectCalls:
         self.ledger.append(record)
         folder = self.root / 'calls' / f"{record['index']:03d}-{tag}-{role}"
         folder.mkdir(parents=True, exist_ok=False)
-        payload = {'model': MODEL, 'messages': messages, 'max_tokens': reserve, 'temperature': 0, 'enable_thinking': False, 'vl_high_resolution_images': False, 'response_format': response_format}
+        payload = {'model': MODEL, 'messages': messages, 'max_tokens': reserve, 'temperature': 0}
         save(folder / 'request-redacted.json', redact(payload))
         save(folder / 'original-response-schema.json', schema)
         record['input_images'] = []
+        if preflight['maximum'] > OUTPUT_LIMIT:
+            record.update(status='rejected_preflight', error='capacity_bound_exceeds_limit')
+            save(folder / 'receipt.json', record)
+            save(self.root / 'model-ledger.json', self.ledger)
+            raise ContextCapacityExceeded(f"Local context estimate {preflight['maximum']} > {OUTPUT_LIMIT}; no request sent")
         for message in messages:
             if not isinstance(message.get('content'), list):
                 continue
@@ -557,28 +549,33 @@ class DirectCalls:
                 save(self.root / 'model-ledger.json', self.ledger)
                 raise RuntimeError('R budget exhausted before Qwen request')
             self.r_used += 1
-        if preflight['enforced'] and preflight['maximum'] > OUTPUT_LIMIT:
-            record.update(status='rejected_preflight', error='capacity_bound_exceeds_limit')
-            save(folder / 'receipt.json', record)
-            save(self.root / 'model-ledger.json', self.ledger)
-            raise RuntimeError(f"Qwen preflight {preflight['maximum']} > {OUTPUT_LIMIT}; no request sent")
         started = time.monotonic()
         record['http_sent'] = True
         record['status'] = 'sent'
         save(folder / 'receipt.json', record)
-        self.progress("request_sent", call=record['index'], role=role)
+        self.progress("request_sent", call=record['index'], role=role,
+                      context_bound=preflight['maximum'], context_limit=OUTPUT_LIMIT)
         try:
             response = self.session.post(BASE_URL + '/chat/completions', json=payload, headers={'Authorization': 'Bearer ' + self.key}, timeout=(45, 180), allow_redirects=False)
-            (folder / 'provider-response.json').write_text(response.text.replace(self.key, '[REDACTED]'))
+            (folder / 'provider-response.json').write_text(redact(response.text))
             record['http_status'] = response.status_code
             try:
                 record['usage'] = response.json().get('usage')
             except (ValueError, AttributeError):
                 record['usage'] = None
             save(folder / 'receipt.json', record)
-            value = read_response(response, MODEL, preflight, reserve, enforce_32k=preflight['enforced'])
-            content = value['choices'][0]['message'].get('content') or ''
+            value = read_response(response, MODEL, preflight, reserve)
+            content = (value['choices'][0]['message'].get('content') or '').strip()
+            fence = re.fullmatch(r'```(?:json)?\s*\n(.*?)\n\s*```', content, re.IGNORECASE | re.DOTALL)
+            if fence:
+                content = fence[1].strip()
             answer = json.loads(content, object_pairs_hook=unique_json_object)
+            version = schema.get("properties", {}).get("state_version", {}).get("const")
+            if (version is not None and isinstance(answer, dict) and set(answer) == {"action"}
+                    and isinstance(answer["action"], dict) and answer["action"].get("state_version") == version):
+                answer["state_version"] = answer["action"].pop("state_version")
+                content = packed(answer)
+                record['response_normalization'] = 'lifted_matching_action_state_version'
             validate(answer, schema)
             record.update(status='completed', usage=value.get('usage'), finish_reason=value['choices'][0].get('finish_reason'), request_id=response.headers.get('x-request-id'))
             (folder / 'response.json').write_text(content)
@@ -589,7 +586,7 @@ class DirectCalls:
                           completion_tokens=(value.get('usage') or {}).get('completion_tokens'))
             return {'_content': content, 'usage': value.get('usage'), '_finish_reason': value['choices'][0].get('finish_reason'), '_request': {'model': MODEL, 'response_model': value.get('model'), 'http_status': response.status_code, 'request_id': record.get('request_id'), 'latency_s': round(time.monotonic() - started, 4), 'preflight': preflight}}
         except Exception as exc:
-            record.update(status='failed', error_type=type(exc).__name__, error=str(exc).replace(self.key, '[REDACTED]')[:1000], latency_s=round(time.monotonic() - started, 4))
+            record.update(status='failed', error_type=type(exc).__name__, error=redact(str(exc))[:1000], latency_s=round(time.monotonic() - started, 4))
             save(folder / 'receipt.json', record)
             save(self.root / 'model-ledger.json', self.ledger)
             self.progress("request_failed", call=record['index'], role=role, error_type=type(exc).__name__)
@@ -736,7 +733,7 @@ def validate_tentative_answer(answer, schema, targets):
             raise ValueError("Rival list contains predicted target")
 
 
-def build_frozen_manifest():
+def build_frozen_manifest(*, include_single_sample_inputs=True):
     sources = sorted([*PROJECT.glob("src/**/*.py"), Path(__file__),
                       PROJECT / "tests/unit/test_qwen_direct_fresh.py",
                       PROJECT / "tests/fixtures/qwen_direct_q00171_progress.json",
@@ -745,19 +742,21 @@ def build_frozen_manifest():
                       PROJECT / "docs/qwen-direct-source-provenance.json", PROJECT / "pyproject.toml"])
     files = [INPUTS / "nr3d/scene0565_00/scene.npz", INPUTS / "nr3d/scene0565_00/scene_instances.json",
              INPUTS / "nr3d/query.json", INPUTS / "categories/scene0565_00/objects_top5.json"]
-    return {"candidate": "single-qwen-direct-v3-historical-coverage", "branch": "codex/qwen-direct-fresh-20261120",
-            "baseline_commit": "7004d3cc5e33a00ec9f46ba11117a9bbf49864b6",
+    return {"candidate": "single-qwen3vl-siliconflow-256k", "branch": "20261121_step1_qwen3vl",
+            "baseline_commit": "8a44a23897687d8fb35a766b71bf67c008767940",
             "model": MODEL, "endpoint": BASE_URL, "scheduler_sha256": sha256(Path(__file__)),
             "source_closure": {str(p.relative_to(PROJECT)): sha256(p) for p in sources},
-            "inputs": {str(p.relative_to(PROJECT)): sha256(p) for p in files},
+            "inputs": {str(p.relative_to(PROJECT)): sha256(p) for p in files} if include_single_sample_inputs else {},
             "python": sys.version, "packages": {d.metadata["Name"]: d.version for d in distributions() if d.metadata.get("Name")},
             "resource_budget_policy": {"mode": "record-only", "B_limit": None, "R_limit": None, "T_limit": None,
                                        "annealing_reference_turns_not_a_cap": 17},
-            "qwen_context_policy": {"policy": "provider", "local_32768_refusal_enforced": False,
-                                    "provider_context_limit_verified": False, "reference_bound": 32768, "output_reserve": OUTPUT_RESERVE},
+            "qwen_context_policy": {"policy": CONTEXT_POLICY, "local_262144_refusal_enforced": True,
+                                    "reference_bound": OUTPUT_LIMIT, "output_reserve": OUTPUT_RESERVE,
+                                    "input_count_policy": "Conservative text/image estimate before sending, provider usage checked after response",
+                                    "overflow_policy": "Record capacity rejection and retain source evidence without truncation"},
             "model_visibility": "Full original native text/history and ALL actual attached original images per consultation; no Laya cap, selector or extra reviewer. Each image copied with SHA in receipt. Current native Monitor plan/revision and latest rejection/rollback in one candidate block; full original observation/action history remains delivered.",
             "decision_protocol": "Same Qwen direct native action/Monitor with exact compact delta/replace_plan schema visible and strict path unchanged. Historical acquisition coverage (sorted groups/context/15-degree bins/new visible IDs/raw measurement facts and frames) plus accepted Monitor states detects three consecutive no-progress transitions; engineering proxy only. Then, or on exact repeated native rejection, same Qwen once selects a tentative target from allowed∩active with at most one structural repair. No call cap. Native Monitor untouched, tentative accepted=false.",
-            "credential_policy": "Existing independent Git-external route config; secret never copied, printed or frozen; original shared config untouched.",
+            "credential_policy": "SiliconFlow per-process Bearer key, excluded from saved artifacts. JSON Schema in the prompt, validated locally.",
             "scope": "Diagnostic new single run; not strict B10/R6/T17 comparison, formal score or paper update.",
             "fresh_start": True, "old_runtime_source_imports": [], "inherited_dag_answers_predictions": [],
             "server_model_requests": 0, "gt_read_before_prediction": False}
@@ -765,7 +764,9 @@ def build_frozen_manifest():
 
 def run(root, batch_request=None, bootstrap_check=False):
     global API_KEY
-    API_KEY = '' if bootstrap_check else private_qwen_config()
+    API_KEY = '' if bootstrap_check else os.environ.pop(SILICONFLOW_KEY_ENV, '').strip()
+    if not bootstrap_check and not API_KEY:
+        raise ValueError(f'Missing {SILICONFLOW_KEY_ENV}')
     if root.exists():
         raise FileExistsError(f"Run directory already exists: {root}")
     root.mkdir(parents=True)
@@ -777,6 +778,10 @@ def run(root, batch_request=None, bootstrap_check=False):
         if set(request) != {"sample", "scene_dir", "category_path", "shared_manifest", "input_hashes"} or set(request["sample"]) != {"scene", "csv_row", "query"}:
             raise ValueError("Unexpected worker input fields; target annotations are forbidden")
         shared = json.loads(Path(request["shared_manifest"]).read_text())
+        protocol = shared["protocol"]
+        if (protocol.get("model") != MODEL or protocol.get("endpoint") != BASE_URL
+                or protocol.get("qwen_context_policy", {}).get("reference_bound") != OUTPUT_LIMIT):
+            raise ValueError("Frozen worker model, endpoint or context limit does not match this branch")
         manifest = {**shared["protocol"], "source_closure": shared["source_closure"],
                     "shared_manifest": str(Path(request["shared_manifest"]).resolve()),
                     "shared_manifest_sha256": sha256(Path(request["shared_manifest"])),
@@ -821,7 +826,7 @@ def run(root, batch_request=None, bootstrap_check=False):
         "EVIGROUND_DAG_REPAIR_LIMIT": "6",
         "EVIGROUND_DECISION_MAX_TOKENS": str(OUTPUT_RESERVE),
         "EVIGROUND_SUCCESSFUL_TOOL_BUDGET": "1",
-        "EVIGROUND_CONTEXT_LIMIT": "32768",
+        "EVIGROUND_CONTEXT_LIMIT": str(OUTPUT_LIMIT),
         "EVIGROUND_DIALOGUE_HISTORY": "0",
     }.items():
         os.environ[name] = value
@@ -903,6 +908,9 @@ def run(root, batch_request=None, bootstrap_check=False):
         status = "interrupted"
         prediction = {"predicted_id": None, "failure_type": "KeyboardInterrupt",
                       "failure": "User interruption; started-only requests may have unknown remote execution. Do not automatically retry."}
+    except ContextCapacityExceeded as exc:
+        status = "capacity_rejected"
+        prediction = {"predicted_id": None, "failure_type": type(exc).__name__, "failure": str(exc)}
     except Exception as exc:
         status = "failed"
         prediction = {"predicted_id": None, "failure_type": type(exc).__name__,
